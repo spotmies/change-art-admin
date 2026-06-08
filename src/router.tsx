@@ -52,6 +52,7 @@ import { QCHistoryPage } from '@routes/qc/QCHistoryPage';
 // Admin panel
 import { AdminDashboardPage } from '@routes/admin/AdminDashboardPage';
 import { AdminJobsPage } from '@routes/admin/AdminJobsPage';
+import { AdminJobDetailPage } from '@routes/admin/AdminJobDetailPage';
 import { AdminNewJobsPage } from '@routes/admin/AdminNewJobsPage';
 import { AdminNewQuotesPage } from '@routes/admin/AdminNewQuotesPage';
 import { AdminClientsPage } from '@routes/admin/AdminClientsPage';
@@ -211,6 +212,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <AdminDashboardPage /> },
       { path: 'jobs', element: <AdminJobsPage /> },
+      { path: 'jobs/:jobCardId', element: <AdminJobDetailPage /> },
       { path: 'new-jobs', element: <AdminNewJobsPage /> },
       { path: 'new-quotes', element: <AdminNewQuotesPage /> },
       { path: 'clients', element: <AdminClientsPage /> },
