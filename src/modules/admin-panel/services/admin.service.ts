@@ -114,6 +114,10 @@ export const adminService = {
     });
   },
 
+  getJobCard(id: string): Promise<IJobCard> {
+    return apiClient.get<IJobCard>(`/api/v1/job-cards/${id}`);
+  },
+
   /**
    * Batch-resolve one presigned thumbnail URL per job in a single round-trip.
    * Keyed by job-card UUID (`IJobCard.id`), NOT the human `job_id`. Returns a

@@ -48,6 +48,31 @@ export function useUpdateJobCard() {
   });
 }
 
+export function useAdminJobById(id: string) {
+  const jobQuery = useQuery({
+    queryKey: queryKeys.jobs.byId(id),
+    queryFn: () => adminService.getJobCard(id),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+  });
+  const clientsQuery = useAdminClients();
+
+  const clientsMap = useMemo(() => {
+    const map = new Map<string, ClientInfo>();
+    for (const c of clientsQuery.data?.items ?? []) {
+      map.set(c.id, { name: c.company_name ?? c.client_name, clientId: c.client_id });
+    }
+    return map;
+  }, [clientsQuery.data]);
+
+  const job = useMemo(() => {
+    if (!jobQuery.data) return null;
+    return adaptJobCard(jobQuery.data, clientsMap, new Map());
+  }, [jobQuery.data, clientsMap]);
+
+  return { data: job, isLoading: jobQuery.isLoading, isError: jobQuery.isError };
+}
+
 export function useAdminJobViews(filters: JobCardFilters = {}): {
   jobs: Job[];
   total: number;
