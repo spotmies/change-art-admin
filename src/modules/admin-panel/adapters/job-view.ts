@@ -17,6 +17,7 @@ import type {
   JobStage,
   JobStatus as JobStatusDisplay,
 } from '@modules/shared-ui';
+import { normalizeRefNumber } from '@lib/utils';
 
 const ORDER_DISPLAY: Record<OrderType, JobOrderType> = {
   [OrderType.ARTWORK]: 'Artwork',
@@ -134,7 +135,7 @@ export function adaptJobCard(
     id: card.job_id,
     uuid: card.id,
     version: card.version,
-    ref: card.reference_number,
+    ref: normalizeRefNumber(card.reference_number),
     client: clientInfo?.name ?? card.mail,
     clientId: clientInfo?.clientId ?? card.client_id,
     design: card.design_name,

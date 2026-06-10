@@ -28,6 +28,7 @@ const FIELD_LABEL: Record<string, string> = {
   date: 'Client Since',
   location: 'Location',
   address: 'Address',
+  avatar_url: 'Profile Photo',
 };
 
 function renderValue(val: unknown): string {
@@ -192,11 +193,19 @@ export function ProfileChangeRequestsTab({ search }: Props) {
                       <td>
                         <div className="flex flex-col gap-0.5">
                           {Object.entries(r.changes).map(([k, v]) => (
-                            <div key={k} className="text-[12px] whitespace-pre-wrap break-words max-w-[60ch]">
+                            <div key={k} className="text-[12px] whitespace-pre-wrap break-words max-w-[60ch] flex items-center gap-2">
                               <span className="text-text-faint">
                                 {FIELD_LABEL[k] ?? k}:
                               </span>{' '}
-                              <span className="font-semibold">{renderValue(v)}</span>
+                              {k === 'avatar_url' && v ? (
+                                <img
+                                  src={String(v)}
+                                  alt="New profile photo"
+                                  className="w-8 h-8 rounded-full object-cover border border-glass-border"
+                                />
+                              ) : (
+                                <span className="font-semibold">{renderValue(v)}</span>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -336,7 +345,15 @@ function RequestDetailsModal({ request, onClose, onApprove, onReject, busy }: De
             changeEntries.map(([k, v]) => (
               <div key={k} className="f-row">
                 <div className="f-key">{FIELD_LABEL[k] ?? k}</div>
-                <div className="f-val" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '60ch' }}>{renderValue(v)}</div>
+                <div className="f-val" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '60ch' }}>
+                  {k === 'avatar_url' && v ? (
+                    <img
+                      src={String(v)}
+                      alt="New profile photo"
+                      style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  ) : renderValue(v)}
+                </div>
               </div>
             ))
           )}

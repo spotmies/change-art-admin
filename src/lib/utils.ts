@@ -52,6 +52,18 @@ export function plural(count: number, singular: string, pluralForm?: string): st
   return count === 1 ? `1 ${singular}` : `${count} ${pluralForm ?? `${singular}s`}`;
 }
 
+/**
+ * Normalise a reference number to the DDMMYYYY-ClientID-JobNo-Suffix format.
+ * Handles legacy DD-MM-YYYY-... strings stored before the format change.
+ */
+export function normalizeRefNumber(ref: string | null | undefined): string {
+  if (!ref) return '—';
+  // Legacy format: DD-MM-YYYY-rest  →  DDMMYYYY-rest
+  const legacy = ref.match(/^(\d{2})-(\d{2})-(\d{4})-(.+)$/);
+  if (legacy) return `${legacy[1]}${legacy[2]}${legacy[3]}-${legacy[4]}`;
+  return ref;
+}
+
 /** Tailwind classname for a numeric trend delta. */
 export function deltaToneClass(delta: number): string {
   if (delta > 0) return 'text-status-green';
