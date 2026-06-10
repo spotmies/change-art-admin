@@ -1,0 +1,1589 @@
+32c32
+<   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+---
+>   --glass-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+48,49c48,49
+<   --radius: 16px;
+<   --radius-pill: 24px;
+---
+>   --radius: 12px;
+>   --radius-pill: 20px;
+53c53
+<   --topbar-h: 64px;
+---
+>   --topbar-h: 58px;
+66c66
+<   --glass-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+---
+>   --glass-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
+178,208d177
+<   /*
+<    * Client portal — match the prototype's chrome + backdrop EXACTLY.
+<    *
+<    * The app's global --color-navy is a bright royal blue (#002868, USA theme),
+<    * but the demo uses a deep navy (#0A1628) with a DARKENED flag fixed behind
+<    * everything (its #flag-bg + .flag-overlay). We recreate that backdrop for the
+<    * client portal only (scoped to `.portal-client`, set by DashboardLayout for
+<    * the client role), so the demo's exact translucent glass reads as deep,
+<    * frosted navy — not bright/see-through. Internal portals are untouched.
+<    */
+<   html:not([data-theme='light']) .portal-client {
+<     background:
+<       linear-gradient(180deg, rgba(10, 22, 40, 0.4) 0%, rgba(5, 10, 22, 0.78) 100%),
+<       url('/flag.png') center / cover no-repeat fixed,
+<       #0a1628;
+<   }
+< 
+<   /* Content sits over the portal backdrop instead of its own flag tile. */
+<   html:not([data-theme='light']) .portal-client .page {
+<     background: transparent;
+<   }
+< 
+<   /* Demo-exact translucent glass chrome over the darkened-flag backdrop. */
+<   .portal-client>aside {
+<     background: rgba(8, 14, 28, 0.45);
+<   }
+< 
+<   .portal-client header.glass {
+<     background: rgba(16, 25, 43, 0.35);
+<   }
+< 
+210c179
+<     @apply text-[10.5px] font-bold uppercase tracking-[0.1em] text-text-muted pb-2 mb-3 flex items-center gap-1.5;
+---
+>     @apply text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted pb-2 mb-3 flex items-center gap-1.5;
+435,442d403
+<   }
+< 
+<   /* Navy CTA — the demo's quote/order wizard Continue + Submit buttons. */
+<   .btn-navy {
+<     background: linear-gradient(135deg, rgba(20, 40, 80, 0.6), rgba(10, 22, 40, 0.8));
+<     color: white;
+<     border-color: var(--glass-border-bright);
+<     backdrop-filter: blur(8px);
+445,570d405
+<   .btn-navy:hover:not(:disabled) {
+<     border-color: var(--color-crimson);
+<     transform: translateY(-1px);
+<   }
+< 
+<   /* ─ Quote / Order wizard phase stepper (ported from the prototype) ─ */
+<   .form-phase-stepper {
+<     display: flex;
+<     align-items: center;
+<     justify-content: space-between;
+<     gap: 12px;
+<     padding: 16px 24px;
+<     border-bottom: 1px solid var(--glass-border);
+<     background: rgba(0, 0, 0, 0.08);
+<   }
+< 
+<   /* Left: title block */
+<   .fps-title-block {
+<     display: flex;
+<     flex-direction: column;
+<     gap: 2px;
+<     min-width: 0;
+<   }
+< 
+<   .fps-mode-label {
+<     font-size: 15px;
+<     font-weight: 700;
+<     color: var(--text-main);
+<     line-height: 1.2;
+<   }
+< 
+<   .fps-service-label {
+<     font-size: 11.5px;
+<     font-weight: 500;
+<     color: var(--text-faint);
+<     line-height: 1.2;
+<     letter-spacing: 0.01em;
+<   }
+< 
+<   /* Right: column containing tracker + required note */
+<   .fps-right-col {
+<     display: flex;
+<     flex-direction: column;
+<     align-items: flex-end;
+<     gap: 6px;
+<     flex-shrink: 0;
+<   }
+< 
+<   /* Right: tracker (step bubbles + connector) */
+<   .fps-tracker {
+<     display: flex;
+<     align-items: center;
+<     gap: 0;
+<   }
+< 
+<   /* Required note — sits below the tracker, right-aligned */
+<   .fps-required-note {
+<     font-size: 11px;
+<     color: var(--text-faint);
+<     white-space: nowrap;
+<   }
+< 
+<   .fps-step {
+<     display: flex;
+<     align-items: center;
+<     gap: 9px;
+<     font-size: 12.5px;
+<     font-weight: 600;
+<     color: var(--text-faint);
+<     transition: color 0.2s;
+<   }
+< 
+<   .fps-step.active {
+<     color: var(--text-main);
+<   }
+< 
+<   .fps-step.done {
+<     color: var(--color-green);
+<   }
+< 
+<   .fps-num {
+<     width: 24px;
+<     height: 24px;
+<     border-radius: 50%;
+<     border: 2px solid currentColor;
+<     display: flex;
+<     align-items: center;
+<     justify-content: center;
+<     font-size: 11px;
+<     font-weight: 700;
+<     flex-shrink: 0;
+<     transition: background 0.2s, border-color 0.2s;
+<   }
+< 
+<   .fps-step.active .fps-num {
+<     background: var(--color-crimson);
+<     border-color: var(--color-crimson);
+<     color: white;
+<   }
+< 
+<   .fps-step.done .fps-num {
+<     background: var(--color-green);
+<     border-color: var(--color-green);
+<     color: white;
+<   }
+< 
+<   .fps-connector {
+<     width: 52px;
+<     height: 2px;
+<     background: var(--glass-border);
+<     margin: 0 12px;
+<     border-radius: 1px;
+<   }
+< 
+<   .fps-connector.done {
+<     background: var(--color-green);
+<   }
+< 
+<   .phase-nav {
+<     display: flex;
+<     align-items: center;
+<     gap: 10px;
+<     justify-content: flex-end;
+<     padding-top: 8px;
+<   }
+< 
+588a424,435
+>   }
+> 
+>   /* Role pill — shows active role label below the brand logo */
+>   .role-pill {
+>     margin: 8px 10px 0;
+>     padding: 5px 10px;
+>     background: linear-gradient(135deg, rgba(196, 30, 58, 0.12), rgba(10, 26, 58, 0.3));
+>     border: 1px solid rgba(196, 30, 58, 0.25);
+>     border-radius: 8px;
+>     display: flex;
+>     align-items: center;
+>     gap: 8px;
+590a438,459
+>   .role-pill-dot {
+>     width: 6px;
+>     height: 6px;
+>     border-radius: 50%;
+>     background: var(--color-crimson);
+>     animation: rolePulse 2s infinite;
+>     flex-shrink: 0;
+>   }
+> 
+>   @keyframes rolePulse {
+>     0%, 100% { opacity: 1; }
+>     50% { opacity: 0.4; }
+>   }
+> 
+>   .role-pill-text {
+>     font-size: 10.5px;
+>     font-weight: 600;
+>     color: rgba(255, 100, 100, 0.9);
+>     letter-spacing: 0.08em;
+>     text-transform: uppercase;
+>   }
+> 
+593c462,464
+<     @apply relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-0.5 text-[12.5px] font-medium cursor-pointer transition;
+---
+>     @apply relative flex items-center gap-2.5 px-3 rounded-lg mb-px text-[12.5px] font-medium cursor-pointer transition;
+>     padding-top: 6px;
+>     padding-bottom: 6px;
+719c590
+<     padding: 24px 0 16px;
+---
+>     padding: 8px 0 6px;
+722,731d592
+<   /* Client portal mirrors change_artwork_client_portal_v5.html. Drop the hero's
+<      own top padding and pull the whole greeting block up so the date row
+<      ("TUESDAY, MAY 26 …") lines up with the brand stripe below the sidebar
+<      logo. The brand stripe sits ~80px from the top; topbar (64) + .page
+<      padding (24) put the date at 88px, so a -16px margin lands it on the line. */
+<   .portal-client .greeting-hero {
+<     padding-top: 0;
+<     margin-top: -16px;
+<   }
+< 
+734,735c595,596
+<     color: var(--text-muted);
+<     font-weight: 500;
+---
+>     color: #94a3b8;
+>     font-weight: 600;
+743,744c604,605
+<     font-size: 26px;
+<     font-weight: 700;
+---
+>     font-size: 22px;
+>     font-weight: 600;
+747,748c608,609
+<     line-height: 1.05;
+<     margin-bottom: 4px;
+---
+>     line-height: 1.1;
+>     margin-bottom: 2px;
+753c614
+<       font-size: 34px;
+---
+>       font-size: 26px;
+758c619
+<     font-size: 15px;
+---
+>     font-size: 13px;
+761c622
+<     line-height: 1.5;
+---
+>     line-height: 1.4;
+774,775c635,636
+<     padding: 16px;
+<     margin-bottom: 14px;
+---
+>     padding: 12px 14px;
+>     margin-bottom: 10px;
+787,788c648,649
+<     gap: 12px;
+<     margin-bottom: 20px;
+---
+>     gap: 8px;
+>     margin-bottom: 10px;
+790a652,654
+>   /* ─ Section header ─ */
+>   /* (override the sec-header below to tighten demo-match spacing) */
+> 
+807c671
+<     padding: 18px 16px;
+---
+>     padding: 10px 12px 10px 16px;
+812c676
+<     transform: translateY(-2px);
+---
+>     transform: translateY(-1px);
+814c678
+<     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+---
+>     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+817,818c681
+<   /* Original left-stripe accent — kept for reference */
+<   /* .stat-card::after {
+---
+>   .stat-card::after {
+826,834d688
+<   } */
+<   .stat-card::after {
+<     content: '';
+<     position: absolute;
+<     top: 0;
+<     left: 0;
+<     right: 0;
+<     height: 4px;
+<     border-radius: var(--radius) var(--radius) 0 0;
+842c696
+<     background: linear-gradient(180deg, var(--color-gold), rgba(212, 168, 67, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-gold), rgba(212, 168, 67, 0.5));
+846c700
+<     background: linear-gradient(180deg, var(--color-teal), rgba(45, 212, 191, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-teal), rgba(45, 212, 191, 0.5));
+850c704
+<     background: linear-gradient(180deg, var(--color-green), rgba(34, 197, 94, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-green), rgba(34, 197, 94, 0.5));
+854c708
+<     background: linear-gradient(180deg, var(--color-blue), rgba(59, 130, 246, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-blue), rgba(59, 130, 246, 0.5));
+858c712
+<     background: linear-gradient(180deg, var(--color-purple), rgba(168, 85, 247, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-purple), rgba(168, 85, 247, 0.5));
+862c716
+<     background: linear-gradient(180deg, var(--color-amber), rgba(245, 158, 11, 0.4));
+---
+>     background: linear-gradient(180deg, var(--color-amber), rgba(245, 158, 11, 0.5));
+871,872c725
+<     margin-bottom: 10px;
+<     padding-left: 8px;
+---
+>     margin-bottom: 6px;
+877,878c730,731
+<     font-size: 32px;
+<     font-weight: 800;
+---
+>     font-size: 26px;
+>     font-weight: 700;
+881,882c734
+<     margin-bottom: 5px;
+<     padding-left: 8px;
+---
+>     margin-bottom: 3px;
+887c739
+<     font-size: 11px;
+---
+>     font-size: 10.5px;
+889d740
+<     padding-left: 8px;
+912,917c763,767
+<     right: 16px;
+<     top: 50%;
+<     transform: translateY(-50%);
+<     width: 28px;
+<     height: 28px;
+<     opacity: 0.25;
+---
+>     right: 14px;
+>     top: 14px;
+>     width: 20px;
+>     height: 20px;
+>     opacity: 0.15;
+926c776,819
+<   /* ─ Section header ─ */
+---
+>   /* Per-accent value tints — mirrors the demo's inline color scheme */
+>   .stat-card.crimson .stat-value { color: #ff8a95; }
+>   .stat-card.amber   .stat-value { color: #fcd34d; }
+>   .stat-card.gold    .stat-value { color: var(--color-gold); }
+>   .stat-card.teal    .stat-value { color: #5eead4; }
+>   .stat-card.green   .stat-value { color: #86efac; }
+>   .stat-card.blue    .stat-value { color: #93c5fd; }
+>   .stat-card.purple  .stat-value { color: #c4b5fd; }
+> 
+>   /* 3-column grid variant */
+>   .stats-grid-3 {
+>     grid-template-columns: repeat(3, 1fr);
+>   }
+> 
+>   @media (max-width: 900px) {
+>     .stats-grid-3 {
+>       grid-template-columns: repeat(2, 1fr);
+>     }
+>   }
+> 
+>   @media (max-width: 580px) {
+>     .stats-grid-3 {
+>       grid-template-columns: 1fr;
+>     }
+>   }
+> 
+>   /* 6-column single-row variant — admin dashboard */
+>   .stats-grid-6 {
+>     grid-template-columns: repeat(6, 1fr);
+>   }
+> 
+>   @media (max-width: 1200px) {
+>     .stats-grid-6 {
+>       grid-template-columns: repeat(3, 1fr);
+>     }
+>   }
+> 
+>   @media (max-width: 640px) {
+>     .stats-grid-6 {
+>       grid-template-columns: repeat(2, 1fr);
+>     }
+>   }
+> 
+>   /* ─ Section header ─ (margin-bottom: 12px matches demo) */
+931c824
+<     margin-bottom: 12px;
+---
+>     margin-bottom: 8px;
+937,938c830,831
+<     font-weight: 700;
+<     letter-spacing: 0.02em;
+---
+>     font-weight: 600;
+>     letter-spacing: 0.04em;
+944a838,849
+>   .sec-action-link {
+>     font-size: 11.5px;
+>     color: var(--color-crimson);
+>     font-weight: 600;
+>     transition: opacity 0.2s;
+>     text-decoration: none;
+>   }
+> 
+>   .sec-action-link:hover {
+>     opacity: 0.7;
+>   }
+> 
+962c867,871
+<     grid-template-columns: 1fr 340px;
+---
+>     /* `minmax(0, 1fr)` lets the left column shrink below its intrinsic
+>        min-content. Without this, a dense job-card grid in the left column
+>        can force the layout wider than the viewport and trigger an
+>        unwanted horizontal scrollbar (visible on narrower Mac viewports). */
+>     grid-template-columns: minmax(0, 1fr) 340px;
+963a873
+>     min-width: 0;
+966c876,880
+<   @media (max-width: 900px) {
+---
+>   .two-col > * {
+>     min-width: 0;
+>   }
+> 
+>   @media (max-width: 1100px) {
+968c882
+<       grid-template-columns: 1fr;
+---
+>       grid-template-columns: minmax(0, 1fr);
+980c894
+<     margin-bottom: 24px;
+---
+>     margin-bottom: 12px;
+992c906
+<     padding: 16px 12px;
+---
+>     padding: 7px 12px;
+1019c933
+<     padding: 18px 12px;
+---
+>     padding: 7px 12px;
+1049c963
+<     padding: 12px 16px;
+---
+>     padding: 10px 14px;
+1057c971
+<     margin-bottom: 20px;
+---
+>     margin-bottom: 12px;
+1061c975
+<     flex: 0 1 320px;
+---
+>     flex: 1;
+1066c980
+<     border-radius: 12px;
+---
+>     border-radius: 8px;
+1085,1088c999,1002
+<     background: rgba(255, 255, 255, 0.04);
+<     border: 1px solid var(--glass-border);
+<     border-radius: 9px;
+<     padding: 7px 12px;
+---
+>     background: transparent;
+>     border: none;
+>     border-radius: 0;
+>     padding: 6px 4px;
+1124,1228d1037
+<     background: rgba(255, 255, 255, 0.08);
+<   }
+< 
+<   .btn-filter.on {
+<     background: rgba(196, 30, 58, 0.15);
+<     border-color: rgba(196, 30, 58, 0.4);
+<     color: #fff;
+<     box-shadow: 0 0 0 2px var(--color-crimson-glow);
+<   }
+< 
+<   .btn-filter-pip {
+<     width: 6px;
+<     height: 6px;
+<     border-radius: 50%;
+<     background: var(--color-crimson);
+<     box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.35);
+<     margin-left: 2px;
+<   }
+< 
+<   /* Collapsible Status / Order / Priority filter panel attached to a JobTable. */
+<   .filter-panel {
+<     max-height: 0;
+<     overflow: hidden;
+<     transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+<       padding 0.3s ease, margin 0.3s ease, border-color 0.3s ease;
+<     background: var(--glass-bg);
+<     backdrop-filter: var(--glass-blur);
+<     -webkit-backdrop-filter: var(--glass-blur);
+<     border: 1px solid transparent;
+<     border-radius: var(--radius);
+<     padding: 0 14px;
+<     display: flex;
+<     flex-wrap: wrap;
+<     gap: 12px;
+<     align-items: flex-end;
+<     margin: 0;
+<   }
+< 
+<   .filter-panel.open {
+<     max-height: 400px;
+<     padding: 12px 14px;
+<     margin-top: 10px;
+<     margin-bottom: 10px;
+<     border-color: var(--glass-border);
+<     box-shadow: var(--glass-shadow);
+<   }
+< 
+<   .filter-group {
+<     display: flex;
+<     flex-direction: column;
+<     gap: 4px;
+<     min-width: 140px;
+<     flex: 1;
+<   }
+< 
+<   .filter-group-label {
+<     font-size: 10px;
+<     font-weight: 700;
+<     color: var(--text-faint);
+<     text-transform: uppercase;
+<     letter-spacing: 0.08em;
+<   }
+< 
+<   .filter-select {
+<     background: rgba(255, 255, 255, 0.04);
+<     border: 1px solid var(--glass-border);
+<     border-radius: 6px;
+<     color: var(--text-main);
+<     font-family: inherit;
+<     font-size: 12px;
+<     padding: 7px 10px;
+<     outline: none;
+<     cursor: pointer;
+<     appearance: auto;
+<     transition: border-color 0.15s;
+<   }
+< 
+<   .filter-select:focus {
+<     border-color: var(--color-crimson);
+<     background: rgba(196, 30, 58, 0.06);
+<   }
+< 
+<   .filter-select option {
+<     background: #0a1426;
+<     color: var(--text-main);
+<   }
+< 
+<   .filter-panel .btn-reset {
+<     height: 32px;
+<     padding: 0 14px;
+<     border-radius: 6px;
+<     font-size: 11.5px;
+<     font-weight: 600;
+<     color: var(--text-muted);
+<     background: rgba(255, 255, 255, 0.04);
+<     border: 1px solid var(--glass-border);
+<     cursor: pointer;
+<     transition: all 0.18s;
+<     display: inline-flex;
+<     align-items: center;
+<     justify-content: center;
+<     gap: 6px;
+<   }
+< 
+<   .filter-panel .btn-reset:hover:not(:disabled) {
+1230,1231d1038
+<     color: var(--text-main);
+<     border-color: var(--glass-border-bright);
+1234,1238d1040
+<   .filter-panel .btn-reset:disabled {
+<     opacity: 0.4;
+<     cursor: not-allowed;
+<   }
+< 
+1281c1083
+<     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+---
+>     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+1287c1089,1090
+<     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+---
+>     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+>     border-color: var(--glass-border-bright);
+1293a1097,1104
+>   .jc-img::after {
+>     content: '';
+>     position: absolute;
+>     inset: 0;
+>     background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 35%, rgba(10, 22, 40, 0.1));
+>     pointer-events: none;
+>   }
+> 
+1296c1107
+<     height: 140px;
+---
+>     height: 110px;
+1302,1314c1113,1121
+<   /* Order-type + status badges overlaying the top-right of the card image.
+<      A uniform dark-glass fill keeps every badge legible over any thumbnail
+<      (translucent accent fills rendered light-on-light — see client feedback),
+<      while the badge's coloured dot + text stay as the colour cue. */
+<   .jc-card-badge {
+<     background: rgba(8, 16, 30, 0.82);
+<     border: 1px solid rgba(255, 255, 255, 0.12);
+<     padding: 3px 9px;
+<     font-size: 10px;
+<     letter-spacing: 0.01em;
+<     backdrop-filter: blur(10px);
+<     -webkit-backdrop-filter: blur(10px);
+<     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+---
+>   /* Status badge overlaying the top-right of the card image. */
+>   .jc-status-overlay {
+>     position: absolute;
+>     top: 10px;
+>     right: 10px;
+>     background: rgba(255, 255, 255, 0.92);
+>     backdrop-filter: blur(6px);
+>     -webkit-backdrop-filter: blur(6px);
+>     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+1355c1162
+<     line-height: 1.35;
+---
+>     line-height: 1.4;
+1365,1366c1172,1173
+<     box-shadow: 0 10px 28px rgba(245, 158, 11, 0.18),
+<       0 0 0 1px rgba(245, 158, 11, 0.35) inset;
+---
+>     box-shadow: 0 2px 8px rgba(245, 158, 11, 0.10),
+>       0 0 0 1px rgba(245, 158, 11, 0.25) inset;
+1370c1177
+<     padding: 13px 12px 14px;
+---
+>     padding: 10px 10px 12px;
+1373,1374c1180
+<     gap: 8px;
+<     min-height: 140px;
+---
+>     gap: 6px;
+1378,1379c1184,1185
+<     font-size: 13px;
+<     font-weight: 700;
+---
+>     font-size: 12.5px;
+>     font-weight: 600;
+1384c1190
+<     font-size: 11.5px;
+---
+>     font-size: 11px;
+1386c1192,1193
+<     line-height: 1.45;
+---
+>     line-height: 1.4;
+>     font-weight: 400;
+1390c1197
+<     font-size: 12px;
+---
+>     font-size: 11px;
+1393c1200
+<     gap: 8px;
+---
+>     gap: 6px;
+1632c1439
+<     border-radius: 12px;
+---
+>     border-radius: 8px;
+1649,1688d1455
+<   }
+< 
+<   /* ─ Native <select> dropdowns ─
+<      The browser paints <option> lists with the control's colours, which on a
+<      dark UI defaults to white-on-white and reads as broken. Force the popup
+<      list (and any optgroup) to solid dark navy with light text so every native
+<      select in the app — range pickers, form selects — matches the glass UI.
+<      Popups can't be translucent, so a solid colour is used. */
+<   select option,
+<   select optgroup {
+<     background-color: #0e1a30;
+<     color: rgba(255, 255, 255, 0.92);
+<   }
+< 
+<   html[data-theme='light'] select option,
+<   html[data-theme='light'] select optgroup {
+<     background-color: #ffffff;
+<     color: rgba(15, 23, 42, 0.94);
+<   }
+< 
+<   /* Glass select control — drop the native chrome and match the outline pills.
+<      A custom chevron replaces the OS arrow; pair with `pr-10` for clearance. */
+<   .select-glass {
+<     appearance: none;
+<     -webkit-appearance: none;
+<     -moz-appearance: none;
+<     background-color: rgba(255, 255, 255, 0.04);
+<     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa8c7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+<     background-repeat: no-repeat;
+<     background-position: right 14px center;
+<     background-size: 14px;
+<     border: 1px solid var(--glass-border);
+<     color: var(--text-main);
+<     cursor: pointer;
+<     transition: var(--transition);
+<   }
+< 
+<   .select-glass:hover {
+<     border-color: var(--glass-border-bright);
+<     background-color: rgba(255, 255, 255, 0.08);
+1691,1696d1457
+<   .select-glass:focus {
+<     outline: none;
+<     border-color: var(--color-crimson);
+<     box-shadow: 0 0 0 3px var(--color-crimson-glow);
+<   }
+< 
+1857,1975d1617
+<   /* ─ Client profile (dark glass — ported 1:1 from the prototype) ─ */
+<   .profile-hero {
+<     background: linear-gradient(135deg, rgba(10, 22, 40, 0.7) 0%, rgba(196, 30, 58, 0.15) 100%);
+<     border-radius: 18px 18px 0 0;
+<     padding: 28px 28px 22px;
+<     position: relative;
+<     overflow: hidden;
+<     border-bottom: 1px solid var(--glass-border);
+<   }
+< 
+<   .profile-hero::after {
+<     content: '';
+<     position: absolute;
+<     right: -30px;
+<     top: -30px;
+<     width: 140px;
+<     height: 140px;
+<     border-radius: 50%;
+<     background: rgba(255, 255, 255, 0.04);
+<   }
+< 
+<   .profile-av-lg {
+<     width: 64px;
+<     height: 64px;
+<     border-radius: 50%;
+<     background: linear-gradient(135deg, var(--color-crimson), var(--color-crimson-dim));
+<     display: flex;
+<     align-items: center;
+<     justify-content: center;
+<     font-size: 24px;
+<     font-weight: 700;
+<     color: white;
+<     border: 3px solid rgba(255, 255, 255, 0.2);
+<     margin-bottom: 14px;
+<     position: relative;
+<     z-index: 1;
+<   }
+< 
+<   .profile-name {
+<     font-size: 22px;
+<     font-weight: 700;
+<     color: white;
+<     margin-bottom: 4px;
+<     position: relative;
+<     z-index: 1;
+<   }
+< 
+<   .profile-company {
+<     font-size: 12.5px;
+<     color: var(--text-muted);
+<     position: relative;
+<     z-index: 1;
+<   }
+< 
+<   .profile-since {
+<     display: inline-flex;
+<     align-items: center;
+<     gap: 5px;
+<     margin-top: 10px;
+<     padding: 4px 10px;
+<     border-radius: 99px;
+<     background: rgba(255, 255, 255, 0.08);
+<     border: 1px solid var(--glass-border);
+<     font-size: 11px;
+<     color: var(--text-muted);
+<     position: relative;
+<     z-index: 1;
+<   }
+< 
+<   .pf-row {
+<     display: flex;
+<     align-items: center;
+<     justify-content: space-between;
+<     padding: 10px 0;
+<     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+<   }
+< 
+<   .pf-row:last-child {
+<     border-bottom: none;
+<   }
+< 
+<   .pf-key {
+<     font-size: 12px;
+<     font-weight: 600;
+<     color: var(--text-muted);
+<     letter-spacing: 0.04em;
+<   }
+< 
+<   .pf-val {
+<     font-size: 12.5px;
+<     font-weight: 500;
+<     color: var(--text-main);
+<     text-align: right;
+<   }
+< 
+<   .pf-val.mono {
+<     font-family: 'IBM Plex Mono', monospace;
+<     font-size: 11.5px;
+<     color: #93c5fd;
+<   }
+< 
+<   .readonly-notice {
+<     margin-top: 14px;
+<     padding: 11px 13px;
+<     background: rgba(196, 30, 58, 0.08);
+<     border: 1px solid rgba(196, 30, 58, 0.2);
+<     border-radius: 12px;
+<     display: flex;
+<     align-items: flex-start;
+<     gap: 10px;
+<     font-size: 12px;
+<     color: #ff8a95;
+<   }
+< 
+<   .readonly-notice svg {
+<     flex-shrink: 0;
+<     margin-top: 1px;
+<   }
+< 
+2163,2166c1805,1807
+<     /* Bleed past the <main> wrapper's px-4 / py-6 padding so the light
+<        surface reaches the viewport edges (md: px-6). */
+<     margin: -24px -16px;
+<     padding: 24px 16px;
+---
+>     /* Bleed to viewport edges, matching demo's content-area: 22px 24px */
+>     margin: -22px -16px;
+>     padding: 22px 16px;
+2290a1932,1940
+>   html[data-theme='light'] .role-pill {
+>     background: linear-gradient(135deg, rgba(196, 30, 58, 0.07), rgba(30, 58, 95, 0.06));
+>     border-color: rgba(196, 30, 58, 0.18);
+>   }
+> 
+>   html[data-theme='light'] .role-pill-text {
+>     color: var(--color-crimson);
+>   }
+> 
+2340,2386d1989
+<   html[data-theme='light'] .btn-filter.on {
+<     background: rgba(196, 30, 58, 0.08);
+<     border-color: rgba(196, 30, 58, 0.35);
+<     color: #0F172A;
+<     box-shadow: 0 0 0 2px rgba(196, 30, 58, 0.12);
+<   }
+< 
+<   html[data-theme='light'] .filter-panel {
+<     background: #FFFFFF;
+<   }
+< 
+<   html[data-theme='light'] .filter-panel.open {
+<     border-color: #E4E8F0;
+<     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+<   }
+< 
+<   html[data-theme='light'] .filter-group-label {
+<     color: rgba(71, 85, 105, 0.7);
+<   }
+< 
+<   html[data-theme='light'] .filter-select {
+<     background: #FFFFFF;
+<     border-color: #E4E8F0;
+<     color: #1F2937;
+<   }
+< 
+<   html[data-theme='light'] .filter-select:focus {
+<     background: rgba(196, 30, 58, 0.04);
+<   }
+< 
+<   html[data-theme='light'] .filter-select option {
+<     background: #FFFFFF;
+<     color: #1F2937;
+<   }
+< 
+<   html[data-theme='light'] .filter-panel .btn-reset {
+<     background: #F2F4F8;
+<     border-color: #E4E8F0;
+<     color: #475569;
+<   }
+< 
+<   html[data-theme='light'] .filter-panel .btn-reset:hover:not(:disabled) {
+<     background: #E2E8F0;
+<     border-color: #CBD5E1;
+<     color: #0F172A;
+<   }
+< 
+2467c2070
+<     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05), 0 6px 18px rgba(15, 23, 42, 0.06);
+---
+>     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.04);
+2471c2074,2075
+<     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08), 0 10px 28px rgba(15, 23, 42, 0.1);
+---
+>     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+>     border-color: rgba(15, 23, 42, 0.12);
+2477c2081
+<     box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08), 0 6px 20px rgba(245, 158, 11, 0.14);
+---
+>     box-shadow: 0 1px 3px rgba(245, 158, 11, 0.06), 0 2px 8px rgba(245, 158, 11, 0.08);
+2481c2085
+<     box-shadow: 0 2px 6px rgba(245, 158, 11, 0.12), 0 10px 28px rgba(245, 158, 11, 0.18);
+---
+>     box-shadow: 0 1px 4px rgba(245, 158, 11, 0.08), 0 2px 10px rgba(245, 158, 11, 0.10);
+2502,2507c2106,2107
+<   /* ── Card overlay badges sit on a photo in every theme, so keep the dark
+<      legible fill (do not flip to a light frosted bg). ── */
+<   html[data-theme='light'] .jc-card-badge {
+<     background: rgba(8, 16, 30, 0.82);
+<     border-color: rgba(255, 255, 255, 0.12);
+<     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+---
+>   html[data-theme='light'] .jc-img::after {
+>     display: none;
+2509a2110,2115
+>   /* ── Status overlay badge on card image ─ keep frosted white bg ── */
+>   html[data-theme='light'] .jc-status-overlay {
+>     background: rgba(255, 255, 255, 0.94);
+>     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+>   }
+> 
+2527a2134,2239
+> 
+>   /* ── Stat cards: solid white + dark ink values ── */
+>   html[data-theme='light'] .stat-card {
+>     background: #FFFFFF;
+>     backdrop-filter: none;
+>     -webkit-backdrop-filter: none;
+>     border-color: #E4E8F0;
+>     border-top-color: #E4E8F0;
+>     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+>   }
+> 
+>   html[data-theme='light'] .stat-card:hover {
+>     border-color: #CDD3E0;
+>     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+>   }
+> 
+>   html[data-theme='light'] .stat-card.crimson .stat-value,
+>   html[data-theme='light'] .stat-card.amber .stat-value,
+>   html[data-theme='light'] .stat-card.gold .stat-value,
+>   html[data-theme='light'] .stat-card.teal .stat-value,
+>   html[data-theme='light'] .stat-card.green .stat-value,
+>   html[data-theme='light'] .stat-card.blue .stat-value,
+>   html[data-theme='light'] .stat-card.purple .stat-value {
+>     color: #0D1B2A;
+>   }
+> 
+>   html[data-theme='light'] .stat-label {
+>     color: #9CA3AF;
+>   }
+> 
+>   html[data-theme='light'] .stat-delta {
+>     color: #6B7585;
+>   }
+> 
+>   html[data-theme='light'] .stat-delta.up {
+>     color: #059669;
+>   }
+> 
+>   html[data-theme='light'] .stat-delta.down {
+>     color: #DC2626;
+>   }
+> 
+>   /* ── Panel: solid white ── */
+>   html[data-theme='light'] .panel {
+>     background: #FFFFFF;
+>     backdrop-filter: none;
+>     -webkit-backdrop-filter: none;
+>     border-color: #E4E8F0;
+>     border-top-color: #E4E8F0;
+>     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+>   }
+> 
+>   html[data-theme='light'] .panel:hover {
+>     border-color: #CDD3E0;
+>   }
+> 
+>   html[data-theme='light'] .panel-title {
+>     border-bottom-color: #E4E8F0;
+>   }
+> 
+>   /* ── Topbar: solid white ── */
+>   html[data-theme='light'] header.glass {
+>     background: #FFFFFF;
+>     backdrop-filter: none;
+>     -webkit-backdrop-filter: none;
+>     border-bottom-color: #E4E8F0;
+>     box-shadow: 0 1px 0 #E4E8F0;
+>   }
+> 
+>   /* ── Buttons: readable on white ── */
+>   html[data-theme='light'] .btn-green {
+>     background: #ECFDF5;
+>     border-color: rgba(5, 150, 105, 0.2);
+>     color: #059669;
+>   }
+> 
+>   html[data-theme='light'] .btn-green:hover:not(:disabled) {
+>     background: #D1FAE5;
+>     border-color: rgba(5, 150, 105, 0.35);
+>   }
+> 
+>   html[data-theme='light'] .btn-red {
+>     background: #FDF0F2;
+>     border-color: rgba(178, 34, 52, 0.2);
+>     color: #B22234;
+>   }
+> 
+>   html[data-theme='light'] .btn-red:hover:not(:disabled) {
+>     background: #FBE0E4;
+>     border-color: rgba(178, 34, 52, 0.35);
+>   }
+> 
+>   /* ── Scrollbar visible on light backgrounds ── */
+>   html[data-theme='light'] ::-webkit-scrollbar-thumb {
+>     background: rgba(0, 0, 0, 0.14);
+>   }
+> 
+>   html[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+>     background: var(--color-crimson);
+>   }
+> 
+>   /* ── tbl-search-wrap light mode: readable bg ── */
+>   html[data-theme='light'] .tbl-search-wrap {
+>     background: #F8F9FB;
+>     border-color: #E4E8F0;
+>   }
+2637c2349
+<     grid-template-columns: repeat(5, 1fr);
+---
+>     grid-template-columns: repeat(4, 1fr);
+2649d2360
+<     position: relative;
+2652c2363
+<     border-radius: 16px;
+---
+>     border-radius: 12px;
+2661,2663c2372,2373
+<     border-color: rgba(196, 30, 58, 0.4);
+<     background: rgba(196, 30, 58, 0.05);
+<     transform: translateY(-1px);
+---
+>     border-color: var(--glass-border-bright);
+>     background: rgba(255, 255, 255, 0.06);
+2666d2375
+<   /* Selected service type — clear crimson accent so the choice is obvious. */
+2668,2670c2377,2378
+<     border: 1.5px solid var(--color-crimson);
+<     background: linear-gradient(135deg, rgba(196, 30, 58, 0.16), rgba(196, 30, 58, 0.05));
+<     box-shadow: 0 0 0 3px var(--color-crimson-glow), 0 10px 24px rgba(196, 30, 58, 0.14);
+---
+>     border: 1.5px solid rgba(30, 58, 95, 0.5);
+>     background: rgba(30, 58, 95, 0.1);
+2673,2689d2380
+<   .qf-order-card.active .qf-order-label {
+<     color: var(--color-crimson);
+<   }
+< 
+<   /* Crimson check badge in the top-right corner of the selected card. */
+<   .qf-order-card.active::after {
+<     content: '';
+<     position: absolute;
+<     top: 8px;
+<     right: 8px;
+<     width: 18px;
+<     height: 18px;
+<     border-radius: 50%;
+<     background: var(--color-crimson) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 11px no-repeat;
+<     box-shadow: 0 2px 6px rgba(196, 30, 58, 0.4);
+<   }
+< 
+2702,2704c2393,2395
+<     border-color: var(--color-crimson);
+<     background: rgba(196, 30, 58, 0.06);
+<     box-shadow: 0 0 0 3px var(--color-crimson-glow);
+---
+>     border-color: rgba(30, 58, 95, 0.38);
+>     background: rgba(30, 58, 95, 0.07);
+>     box-shadow: 0 0 0 1px rgba(30, 58, 95, 0.12);
+2729,2732c2420,2423
+<     font-size: 11px;
+<     color: var(--text-faint);
+<     margin-top: 6px;
+<     line-height: 1.4;
+---
+>     font-size: 11.5px;
+>     color: var(--text-muted);
+>     margin-bottom: 14px;
+>     margin-top: -6px;
+2738c2429
+<     border-radius: 16px;
+---
+>     border-radius: 12px;
+2794c2485
+<     color: #F26A8D;
+---
+>     color: rgba(196, 30, 58, 0.75);
+2941d2631
+< }
+2943,2948c2633,2635
+< /* ═══════════════════════════════════════════════════════════
+<    AUTH SCREENS — LIGHT THEME (scoped)
+<    The app is dark-only globally (see ThemeProvider), but the
+<    sign-in / sign-up / forgot-password / OTP screens use the light
+<    "Welcome Back" treatment from the role-select mock: soft blue
+<    page wash, solid-white card, crimson CTA, light-grey inputs.
+---
+>   /* ══════════════════════════════════════════
+>      JOB DETAIL MODAL
+>   ══════════════════════════════════════════ */
+2950,2958c2637,2655
+<    Everything here is scoped to `.auth-light` (set on AuthLayout's
+<    root) so the rest of the app is untouched. Re-mapping the
+<    --glass-* / --text-* tokens makes every descendant that reads
+<    them (`.inp`, `.lbl`, `.btn-outline`, `text-text-muted`, the
+<    "or" divider, …) render light automatically. Written OUTSIDE
+<    @layer so it wins over the dark component/utility defaults. */
+< .auth-light {
+<   /* Soft blue-lavender page wash behind the card. */
+<   background: linear-gradient(160deg, #edf1fa 0%, #f5f7fc 52%, #eaeff9 100%);
+---
+>   .modal-overlay {
+>     position: fixed;
+>     inset: 0;
+>     z-index: 500;
+>     background: rgba(3, 6, 15, 0.78);
+>     backdrop-filter: blur(8px);
+>     -webkit-backdrop-filter: blur(8px);
+>     display: flex;
+>     /* `safe center` centers the modal when it fits the viewport but falls
+>        back to start-alignment when the modal is taller — without this,
+>        a tall modal gets its header clipped above the scroll origin. */
+>     align-items: safe center;
+>     justify-content: center;
+>     padding: 24px 16px;
+>     overflow-y: auto;
+>     opacity: 0;
+>     pointer-events: none;
+>     transition: opacity 0.22s;
+>   }
+2960,2968c2657,2659
+<   /* Light token overrides — scoped to the auth screens only. */
+<   --glass-bg: #ffffff;
+<   --glass-bg-light: #ffffff;
+<   --glass-border: rgba(15, 23, 42, 0.08);
+<   --glass-border-bright: rgba(15, 23, 42, 0.12);
+<   --glass-shadow: 0 24px 60px rgba(15, 23, 42, 0.1);
+<   --text-main: #0f1e36;
+<   --text-muted: #64748b;
+<   --text-faint: #94a3b8;
+---
+>   @media (max-width: 640px) {
+>     .modal-overlay { padding: 12px 8px; }
+>   }
+2970,2985c2661,2664
+<   color: var(--text-main);
+<   color-scheme: light;
+< }
+< 
+< /* Solid white card (drops the dark frosted glass for a crisp panel). */
+< .auth-light .glass-heavy {
+<   background: #ffffff;
+<   backdrop-filter: none;
+<   -webkit-backdrop-filter: none;
+<   border: 1px solid rgba(15, 23, 42, 0.06);
+<   border-top-color: rgba(15, 23, 42, 0.06);
+<   border-radius: 24px;
+<   box-shadow:
+<     0 24px 60px rgba(15, 23, 42, 0.1),
+<     0 2px 8px rgba(15, 23, 42, 0.04);
+< }
+---
+>   .modal-overlay.open {
+>     opacity: 1;
+>     pointer-events: all;
+>   }
+2987,2992c2666,2679
+< /* Light-grey filled inputs, crimson focus ring. */
+< .auth-light .inp {
+<   background: #f1f4f9;
+<   border-color: transparent;
+<   color: var(--text-main);
+< }
+---
+>   .modal {
+>     background: rgba(8, 14, 30, 0.95);
+>     backdrop-filter: blur(32px) saturate(180%);
+>     -webkit-backdrop-filter: blur(32px) saturate(180%);
+>     border: 1px solid var(--glass-border-bright);
+>     border-radius: 16px;
+>     width: 840px;
+>     max-width: 100%;
+>     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+>     transform: translateY(18px);
+>     transition: transform 0.22s;
+>     position: relative;
+>     overflow: hidden;
+>   }
+2994,2996c2681,2683
+< .auth-light .inp::placeholder {
+<   color: #94a3b8;
+< }
+---
+>   .modal-overlay.open .modal {
+>     transform: translateY(0);
+>   }
+2998,3002c2685,2691
+< .auth-light .inp:focus {
+<   background: #ffffff;
+<   border-color: var(--color-crimson);
+<   box-shadow: 0 0 0 3px var(--color-crimson-glow);
+< }
+---
+>   .modal::before {
+>     content: '';
+>     position: absolute;
+>     top: 0; left: 0; right: 0;
+>     height: 1px;
+>     background: linear-gradient(90deg, transparent, var(--color-crimson), var(--color-gold, #d4a843), transparent);
+>   }
+3004,3006c2693,2700
+< .auth-light .inp[aria-invalid='true'] {
+<   border-color: var(--color-red);
+< }
+---
+>   .modal-top {
+>     padding: 18px 22px;
+>     border-bottom: 1px solid var(--glass-border);
+>     display: flex;
+>     align-items: flex-start;
+>     gap: 14px;
+>     background: linear-gradient(135deg, rgba(196, 30, 58, 0.08), rgba(10, 26, 58, 0.3));
+>   }
+3008,3013c2702,2708
+< /* Secondary "Continue with Google" / "Back to sign in" buttons. */
+< .auth-light .btn-outline {
+<   background: #ffffff;
+<   border-color: rgba(15, 23, 42, 0.12);
+<   color: var(--text-main);
+< }
+---
+>   .modal-job-id {
+>     font-family: 'IBM Plex Mono', monospace;
+>     font-size: 11px;
+>     color: var(--color-crimson);
+>     font-weight: 500;
+>     margin-bottom: 4px;
+>   }
+3015,3018c2710,2717
+< .auth-light .btn-outline:hover:not(:disabled) {
+<   background: #f8fafc;
+<   border-color: rgba(15, 23, 42, 0.22);
+< }
+---
+>   .modal-title {
+>     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+>     font-size: 18px;
+>     font-weight: 600;
+>     letter-spacing: 0.02em;
+>     color: #fff;
+>     line-height: 1.2;
+>   }
+3020,3025c2719,2972
+< /* Server-error banner: the markup hard-codes a light-red text colour
+<    meant for the dark UI; re-tint it for a readable contrast on white. */
+< .auth-light div[role='alert'] {
+<   background: rgba(220, 38, 38, 0.07);
+<   border-color: rgba(220, 38, 38, 0.25);
+<   color: #b91c1c;
+---
+>   .modal-tags {
+>     display: flex;
+>     align-items: center;
+>     gap: 6px;
+>     margin-top: 8px;
+>     flex-wrap: wrap;
+>   }
+> 
+>   .modal-close {
+>     margin-left: auto;
+>     width: 28px;
+>     height: 28px;
+>     border-radius: 6px;
+>     border: 1px solid var(--glass-border);
+>     background: rgba(255, 255, 255, 0.05);
+>     color: var(--text-muted);
+>     cursor: pointer;
+>     display: flex;
+>     align-items: center;
+>     justify-content: center;
+>     flex-shrink: 0;
+>     transition: var(--transition);
+>   }
+> 
+>   .modal-close:hover {
+>     border-color: var(--color-crimson);
+>     color: var(--color-crimson);
+>   }
+> 
+>   .modal-body {
+>     padding: 20px 22px 4px;
+>   }
+> 
+>   .modal-gallery {
+>     display: grid;
+>     grid-template-columns: repeat(3, minmax(0, 1fr));
+>     gap: 10px;
+>     margin-bottom: 18px;
+>   }
+> 
+>   .modal-gallery img {
+>     width: 100%;
+>     height: 150px;
+>     object-fit: cover;
+>     display: block;
+>     border-radius: 10px;
+>     border: 1px solid rgba(255, 255, 255, 0.08);
+>     background: rgba(0, 0, 0, 0.06);
+>     cursor: pointer;
+>     transition: opacity 0.2s;
+>   }
+> 
+>   .modal-gallery img:hover { opacity: 0.88; }
+> 
+>   .modal-grid {
+>     display: grid;
+>     grid-template-columns: 1fr 1fr;
+>     gap: 18px;
+>     margin-bottom: 18px;
+>   }
+> 
+>   .m-sec-title {
+>     font-size: 10px;
+>     font-weight: 700;
+>     color: var(--text-muted);
+>     letter-spacing: 0.1em;
+>     text-transform: uppercase;
+>     margin-bottom: 10px;
+>     padding-bottom: 7px;
+>     border-bottom: 1px solid var(--glass-border);
+>     display: flex;
+>     align-items: center;
+>     gap: 6px;
+>   }
+> 
+>   .f-row {
+>     display: flex;
+>     justify-content: space-between;
+>     align-items: flex-start;
+>     padding: 4px 0;
+>     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+>   }
+> 
+>   .f-row:last-child { border-bottom: none; }
+> 
+>   .f-key {
+>     font-size: 11.5px;
+>     color: var(--text-muted);
+>     font-weight: 500;
+>   }
+> 
+>   .f-val {
+>     font-size: 12px;
+>     color: var(--text-main);
+>     font-weight: 500;
+>     text-align: right;
+>     max-width: 58%;
+>   }
+> 
+>   .f-val.mono {
+>     font-family: 'IBM Plex Mono', monospace;
+>     font-size: 10.5px;
+>     color: var(--color-crimson);
+>   }
+> 
+>   .modal-notes {
+>     background: rgba(255, 255, 255, 0.03);
+>     border: 1px solid var(--glass-border);
+>     border-radius: 8px;
+>     padding: 12px;
+>     font-size: 12.5px;
+>     color: var(--text-muted);
+>     margin-bottom: 4px;
+>     line-height: 1.7;
+>     font-weight: 400;
+>   }
+> 
+>   .modal-actions {
+>     padding: 14px 22px;
+>     border-top: 1px solid var(--glass-border);
+>     display: flex;
+>     gap: 8px;
+>     justify-content: flex-end;
+>     flex-wrap: wrap;
+>     background: rgba(0, 0, 0, 0.18);
+>   }
+> 
+>   /* ─ Workflow Stepper ─ */
+>   .wf-steps {
+>     display: flex;
+>     align-items: flex-start;
+>     margin-bottom: 18px;
+>     overflow-x: auto;
+>     padding-bottom: 4px;
+>   }
+> 
+>   .wf-step {
+>     flex: 1;
+>     min-width: 64px;
+>     text-align: center;
+>     position: relative;
+>   }
+> 
+>   .wf-step::before {
+>     content: '';
+>     position: absolute;
+>     top: 12px;
+>     left: 50%;
+>     right: -50%;
+>     height: 1px;
+>     background: rgba(255, 255, 255, 0.1);
+>     z-index: 0;
+>   }
+> 
+>   .wf-step:last-child::before { display: none; }
+> 
+>   .wf-dot {
+>     width: 24px;
+>     height: 24px;
+>     border-radius: 50%;
+>     border: 2px solid rgba(255, 255, 255, 0.14);
+>     background: rgba(255, 255, 255, 0.04);
+>     margin: 0 auto 5px;
+>     display: flex;
+>     align-items: center;
+>     justify-content: center;
+>     position: relative;
+>     z-index: 1;
+>     transition: all 0.3s;
+>     color: #fff;
+>   }
+> 
+>   .wf-step.done .wf-dot {
+>     background: var(--color-crimson);
+>     border-color: var(--color-crimson);
+>     box-shadow: 0 0 0 3px rgba(196, 30, 58, 0.2);
+>   }
+> 
+>   .wf-step.done::before {
+>     background: linear-gradient(90deg, var(--color-crimson), rgba(196, 30, 58, 0.35));
+>   }
+> 
+>   @keyframes pulseDot {
+>     0%, 100% { box-shadow: 0 0 0 3px rgba(196, 30, 58, 0.25); }
+>     50%       { box-shadow: 0 0 0 6px rgba(196, 30, 58, 0.07); }
+>   }
+> 
+>   .wf-step.cur .wf-dot {
+>     border-color: var(--color-crimson);
+>     background: rgba(196, 30, 58, 0.14);
+>     animation: pulseDot 2s infinite;
+>   }
+> 
+>   .wf-lbl {
+>     font-size: 10px;
+>     font-weight: 500;
+>     color: var(--text-faint);
+>     line-height: 1.3;
+>   }
+> 
+>   .wf-step.done .wf-lbl,
+>   .wf-step.cur .wf-lbl { color: var(--text-main); }
+> 
+>   /* ─ Modal light theme ─ */
+>   html[data-theme='light'] .modal {
+>     background: #fff;
+>     border-color: #E4E8F0;
+>     box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+>   }
+> 
+>   html[data-theme='light'] .modal-top {
+>     background: linear-gradient(135deg, rgba(196, 30, 58, 0.05), rgba(30, 58, 95, 0.06));
+>     border-bottom-color: #E4E8F0;
+>   }
+> 
+>   html[data-theme='light'] .modal-title { color: #0D1B2A; }
+> 
+>   html[data-theme='light'] .modal-close {
+>     border-color: #E4E8F0;
+>     background: #F8F9FB;
+>     color: #64748B;
+>   }
+> 
+>   html[data-theme='light'] .modal-gallery img {
+>     border-color: #E4E8F0;
+>     background: #F2F4F8;
+>   }
+> 
+>   html[data-theme='light'] .m-sec-title { color: #6B7585; border-bottom-color: #E4E8F0; }
+> 
+>   html[data-theme='light'] .f-row { border-bottom-color: #F1F5F9; }
+> 
+>   html[data-theme='light'] .f-key { color: #6B7585; }
+> 
+>   html[data-theme='light'] .f-val { color: #0D1B2A; }
+> 
+>   html[data-theme='light'] .modal-notes {
+>     background: #F8F9FB;
+>     border-color: #E4E8F0;
+>     color: #475569;
+>   }
+> 
+>   html[data-theme='light'] .modal-actions {
+>     background: #F8F9FB;
+>     border-top-color: #E4E8F0;
+>   }
+> 
+>   html[data-theme='light'] .wf-step::before { background: #E4E8F0; }
+> 
+>   html[data-theme='light'] .wf-dot {
+>     border-color: #CDD3E0;
+>     background: #fff;
+>     color: #6B7585;
+>   }

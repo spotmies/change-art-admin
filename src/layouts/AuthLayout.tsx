@@ -46,7 +46,7 @@ export function AuthLayout() {
           <img
             src="/ch-logo.png"
             alt="Change! Digitizing & Design Services"
-            className="h-11 w-auto dark:invert mb-2"
+            className="h-11 w-auto mb-2"
             draggable={false}
           />
           <p className="text-[11px] text-text-muted">{config.appName} · Production lifecycle for creative agencies</p>

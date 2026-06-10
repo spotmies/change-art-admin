@@ -1,0 +1,78 @@
+  .form-phase-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  /* Left: title block */
+  .fps-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .fps-mode-label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1.2;
+  }
+
+  .fps-service-label {
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-faint);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+  }
+
+  /* Right: column containing tracker + required note */
+  .fps-right-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  /* Right: tracker (step bubbles + connector) */
+  .fps-tracker {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Required note — sits below the tracker, right-aligned */
+  .fps-required-note {
+    font-size: 11px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .fps-step {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-faint);
+    transition: color 0.2s;
+  }
+
+  .fps-step.active {
+    color: var(--text-main);
+  }
+
+  .fps-step.done {
+    color: var(--color-green);
+  }
+
+  .fps-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;

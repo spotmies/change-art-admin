@@ -35,7 +35,7 @@ export function Topbar({ title, subtitle, onOpenMobileNav }: TopbarProps) {
 
       {/* AI search placeholder — premium pills-shaped component matching specifications */}
       <label className="hidden lg:flex items-center w-full max-w-[320px] relative" htmlFor="ai-search">
-        <Search aria-hidden className="w-4 h-4 text-text-muted dark:text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <Search aria-hidden className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           id="ai-search"
           type="text"
@@ -43,19 +43,19 @@ export function Topbar({ title, subtitle, onOpenMobileNav }: TopbarProps) {
           disabled
           aria-disabled="true"
           title="AI search is coming in a future release"
-          className="w-full bg-[#f1f5f9] dark:bg-navy-light/40 border border-slate-200/50 dark:border-glass-border rounded-full pl-10 pr-11 py-2 text-[12.5px] text-text-main placeholder-text-faint dark:placeholder-text-muted focus:outline-none disabled:cursor-not-allowed transition-all"
+          className="w-full bg-[#f1f5f9] border border-slate-200/50 rounded-full pl-10 pr-11 py-2 text-[12.5px] text-text-main placeholder-text-faint focus:outline-none disabled:cursor-not-allowed transition-all"
         />
         <button
           type="button"
           disabled
           aria-label="Send query"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-[#002868] dark:bg-crimson text-white absolute right-1.5 top-1/2 -translate-y-1/2 opacity-90 cursor-not-allowed hover:opacity-100 transition-opacity"
+          className="w-7 h-7 rounded-full flex items-center justify-center bg-[#002868] text-white absolute right-1.5 top-1/2 -translate-y-1/2 opacity-90 cursor-not-allowed hover:opacity-100 transition-opacity"
         >
           <SendHorizontal aria-hidden className="w-3.5 h-3.5" />
         </button>
       </label>
 
-      <div className="h-6 w-[1px] bg-slate-200 dark:bg-glass-border/40 mx-1 hidden md:block" />
+      <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden md:block" />
 
       <NotificationBell />
 

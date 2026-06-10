@@ -25,6 +25,7 @@ const FIELD_LABEL: Record<string, string> = {
   company_name: 'Company',
   contact_name: 'Contact Person',
   contact_number: 'Phone',
+  date: 'Client Since',
   location: 'Location',
   address: 'Address',
 };

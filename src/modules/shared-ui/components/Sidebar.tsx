@@ -98,7 +98,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
         <img
           src="/ch-logo.png"
           alt="Change! Digitizing & Design Services"
-          className="h-9 w-auto dark:invert"
+          className="h-9 w-auto"
           draggable={false}
         />
       </div>

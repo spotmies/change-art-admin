@@ -40,7 +40,7 @@ export function SectionHeader({ title, action, className }: SectionHeaderProps) 
     <div className={cn('sec-header flex items-center gap-4 w-full', className)}>
       <h2 className="sec-title whitespace-nowrap">{title}</h2>
       {showLine ? (
-        <div className="flex-grow border-t border-[#E4E8F0] dark:border-glass-border/40" />
+        <div className="flex-grow border-t border-[#E4E8F0]" />
       ) : null}
       {action ? (
         <div className={cn('sec-action whitespace-nowrap', !showLine && 'ml-auto')}>

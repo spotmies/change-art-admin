@@ -395,7 +395,7 @@ function GridView({
   className?: string;
 }) {
   return (
-    <div className={cn("grid-view grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 py-2", className)}>
+    <div className={cn("grid-view grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 py-2", className)}>
       {jobs.map((j) => {
         const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
         const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;
@@ -427,7 +427,7 @@ function GridView({
             </div>
             <div className="jc-body">
               <div className="jc-title">{j.design}</div>
-              <div className="jc-desc hidden md:block">{j.summary}</div>
+              <div className="jc-desc">{j.summary}</div>
               <div className="jc-meta">
                 <span className="truncate max-w-[90px]">{j.client}</span>
                 <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>

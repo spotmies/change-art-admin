@@ -22,6 +22,7 @@ const ORDER_DISPLAY: Record<OrderType, JobOrderType> = {
   [OrderType.ARTWORK]: 'Artwork',
   [OrderType.DIGITIZING]: 'Digitizing',
   [OrderType.DIGITIZING_SEWOUT]: 'Digitizing + Sewout',
+  [OrderType.OTHERS]: 'Other',
 };
 
 const PROJECT_DISPLAY: Record<ProjectType, JobProject> = {

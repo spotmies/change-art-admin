@@ -27,6 +27,7 @@ export enum OrderType {
   ARTWORK = 'ARTWORK',
   DIGITIZING = 'DIGITIZING',
   DIGITIZING_SEWOUT = 'DIGITIZING_SEWOUT',
+  OTHERS = 'OTHERS',
 }
 
 export enum ProjectType {

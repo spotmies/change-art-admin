@@ -1,0 +1,491 @@
+  /* ── Card wrapper ── */
+  .qf-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-top-color: var(--glass-border-bright);
+    border-radius: var(--radius);
+    box-shadow: var(--glass-shadow);
+    overflow: hidden;
+  }
+
+  html[data-theme='light'] .qf-card {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgba(15, 23, 42, 0.09);
+    border-top-color: rgba(15, 23, 42, 0.09);
+    box-shadow: 0 2px 20px rgba(15, 23, 42, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04);
+  }
+
+  /* ── Header bar ── */
+  .qf-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  html[data-theme='light'] .qf-header {
+    border-bottom-color: rgba(15, 23, 42, 0.09);
+  }
+
+  .qf-header-dot {
+    width: 9px;
+    height: 9px;
+    background: var(--color-crimson);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .qf-header-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    flex: 1;
+  }
+
+  .qf-required-note {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* ── Body padding ── */
+  .qf-body {
+    padding: 24px;
+  }
+
+  /* ── Section wrappers ── */
+  .qf-section {
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  html[data-theme='light'] .qf-section {
+    border-bottom-color: rgba(15, 23, 42, 0.09);
+  }
+
+  .qf-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .qf-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-navy-ink);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .qf-section-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  /* ── Order-type card grid ── */
+  .qf-order-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 580px) {
+    .qf-order-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .qf-order-card {
+    position: relative;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 16px;
+    padding: 18px 10px 14px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.03);
+    transition: var(--transition);
+    font-family: inherit;
+  }
+
+  .qf-order-card:hover:not(.active) {
+    border-color: rgba(196, 30, 58, 0.4);
+    background: rgba(196, 30, 58, 0.05);
+    transform: translateY(-1px);
+  }
+
+  /* Selected service type — clear crimson accent so the choice is obvious. */
+  .qf-order-card.active {
+    border: 1.5px solid var(--color-crimson);
+    background: linear-gradient(135deg, rgba(196, 30, 58, 0.16), rgba(196, 30, 58, 0.05));
+    box-shadow: 0 0 0 3px var(--color-crimson-glow), 0 10px 24px rgba(196, 30, 58, 0.14);
+  }
+
+  .qf-order-card.active .qf-order-label {
+    color: var(--color-crimson);
+  }
+
+  /* Crimson check badge in the top-right corner of the selected card. */
+  .qf-order-card.active::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-crimson) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 11px no-repeat;
+    box-shadow: 0 2px 6px rgba(196, 30, 58, 0.4);
+  }
+
+  html[data-theme='light'] .qf-order-card {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+
+  html[data-theme='light'] .qf-order-card:hover:not(.active) {
+    border-color: rgba(15, 23, 42, 0.2);
+    background: rgba(15, 23, 42, 0.02);
+  }
+
+  html[data-theme='light'] .qf-order-card.active {
+    border-color: var(--color-crimson);
+    background: rgba(196, 30, 58, 0.06);
+    box-shadow: 0 0 0 3px var(--color-crimson-glow);
+  }
+
+  .qf-order-icon {
+    font-size: 30px;
+    margin-bottom: 10px;
+    display: block;
+    line-height: 1;
+  }
+
+  .qf-order-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 3px;
+  }
+
+  .qf-order-sub {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* ── ETA helper note ── */
+  .qf-eta-note {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  /* ── Upload drop zone ── */
+  .qf-upload-zone {
+    border: 1.5px dashed var(--glass-border-bright);
+    border-radius: 16px;
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-bottom: 20px;
+  }
+
+  html[data-theme='light'] .qf-upload-zone {
+    border-color: rgba(15, 23, 42, 0.18);
+    background: transparent;
+  }
+
+  .qf-upload-zone:hover {
+    border-color: rgba(30, 58, 95, 0.4);
+  }
+
+  .qf-upload-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+  }
+
+  html[data-theme='light'] .qf-upload-icon-wrap {
+    background: rgba(15, 23, 42, 0.07);
+  }
+
+  .qf-upload-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 5px;
+  }
+
+  .qf-upload-browse {
+    color: var(--color-navy-ink);
+    cursor: pointer;
+  }
+
+  html[data-theme='light'] .qf-upload-browse {
+    color: #1e3a5f;
+  }
+
+  .qf-upload-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ── Cloud storage helper text ── */
+  .qf-cloud-hint {
+    font-size: 11px;
+    color: #F26A8D;
+    margin-top: 6px;
+  }
+
+  /* ── Output format chips ── */
+  .qf-formats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .qf-format-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+    font-family: inherit;
+  }
+
+  html[data-theme='light'] .qf-format-chip {
+    border-color: rgba(15, 23, 42, 0.12);
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  .qf-format-chip.checked {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text-main);
+  }
+
+  html[data-theme='light'] .qf-format-chip.checked {
+    border-color: rgba(15, 23, 42, 0.3);
+    color: var(--text-main);
+  }
+
+  .qf-format-chip-box {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid currentColor;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: var(--transition);
+  }
+
+  .qf-format-chip.checked .qf-format-chip-box {
+    background: var(--color-blue);
+    border-color: var(--color-blue);
+    color: #fff;
+  }
+
+  /* ── Footer button row ── */
+  .qf-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 20px;
+    margin-top: 20px;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  html[data-theme='light'] .qf-footer {
+    border-top-color: rgba(15, 23, 42, 0.09);
+  }
+
+  .qf-btn-draft {
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--glass-border);
+    color: var(--text-main);
+  }
+
+  html[data-theme='light'] .qf-btn-draft {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.14);
+    color: var(--text-main);
+  }
+
+  .qf-btn-draft:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--glass-border-bright);
+  }
+
+  html[data-theme='light'] .qf-btn-draft:hover:not(:disabled) {
+    background: rgba(15, 23, 42, 0.03);
+    border-color: rgba(15, 23, 42, 0.22);
+  }
+
+  .qf-btn-submit {
+    border-radius: 20px;
+    background: var(--color-navy-ink);
+    border-color: var(--color-navy-ink);
+    color: #fff;
+  }
+
+  .qf-btn-submit:hover:not(:disabled) {
+    background: #162d4a;
+    border-color: #162d4a;
+  }
+
+  /* ── .fi overrides scoped to qf-card (light theme only) ── */
+  html[data-theme='light'] .qf-card .fi {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.14);
+    color: var(--text-main);
+  }
+
+  html[data-theme='light'] .qf-card .fi::placeholder {
+    color: rgba(15, 23, 42, 0.3);
+  }
+
+  html[data-theme='light'] .qf-card .fi:focus {
+    border-color: var(--color-navy-ink);
+    background: rgba(30, 58, 95, 0.02);
+    box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.08);
+  }
+
+  /* Custom chevron for select in light theme */
+  html[data-theme='light'] .qf-card select.fi {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 13px center;
+    background-size: 13px;
+    padding-right: 36px;
+    cursor: pointer;
+  }
+
+  /* Suffix label for optional fields */
+  .qf-label-suffix {
+    font-weight: 500;
+    opacity: 0.6;
+    font-size: 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUTH SCREENS — LIGHT THEME (scoped)
+   The app is dark-only globally (see ThemeProvider), but the
+   sign-in / sign-up / forgot-password / OTP screens use the light
+   "Welcome Back" treatment from the role-select mock: soft blue
+   page wash, solid-white card, crimson CTA, light-grey inputs.
+
+   Everything here is scoped to `.auth-light` (set on AuthLayout's
+   root) so the rest of the app is untouched. Re-mapping the
+   --glass-* / --text-* tokens makes every descendant that reads
+   them (`.inp`, `.lbl`, `.btn-outline`, `text-text-muted`, the
+   "or" divider, …) render light automatically. Written OUTSIDE
+   @layer so it wins over the dark component/utility defaults. */
+.auth-light {
+  /* Soft blue-lavender page wash behind the card. */
+  background: linear-gradient(160deg, #edf1fa 0%, #f5f7fc 52%, #eaeff9 100%);
+
+  /* Light token overrides — scoped to the auth screens only. */
+  --glass-bg: #ffffff;
+  --glass-bg-light: #ffffff;
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border-bright: rgba(15, 23, 42, 0.12);
+  --glass-shadow: 0 24px 60px rgba(15, 23, 42, 0.1);
+  --text-main: #0f1e36;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+
+  color: var(--text-main);
+  color-scheme: light;
+}
+
+/* Solid white card (drops the dark frosted glass for a crisp panel). */
+.auth-light .glass-heavy {
+  background: #ffffff;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-top-color: rgba(15, 23, 42, 0.06);
+  border-radius: 24px;
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.1),
+    0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+/* Light-grey filled inputs, crimson focus ring. */
+.auth-light .inp {
+  background: #f1f4f9;
+  border-color: transparent;
+  color: var(--text-main);
+}
+
+.auth-light .inp::placeholder {
+  color: #94a3b8;
+}
+
+.auth-light .inp:focus {
+  background: #ffffff;
+  border-color: var(--color-crimson);
+  box-shadow: 0 0 0 3px var(--color-crimson-glow);
+}
+
+.auth-light .inp[aria-invalid='true'] {
+  border-color: var(--color-red);
+}
+
+/* Secondary "Continue with Google" / "Back to sign in" buttons. */
+.auth-light .btn-outline {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.12);
+  color: var(--text-main);
+}
+
+.auth-light .btn-outline:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+/* Server-error banner: the markup hard-codes a light-red text colour
+   meant for the dark UI; re-tint it for a readable contrast on white. */
+.auth-light div[role='alert'] {
+  background: rgba(220, 38, 38, 0.07);
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #b91c1c;
+}

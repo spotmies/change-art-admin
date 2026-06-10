@@ -9,7 +9,7 @@
 
 export type JobStage = 'quote' | 'junior' | 'senior' | 'sewout' | 'qc' | 'delivered';
 
-export type JobOrderType = 'Artwork' | 'Digitizing' | 'Digitizing + Sewout' | 'Sewout';
+export type JobOrderType = 'Artwork' | 'Digitizing' | 'Digitizing + Sewout' | 'Sewout' | 'Other';
 
 export type JobProject = 'Live' | 'Quote' | 'Amend';
 
