@@ -95,6 +95,12 @@ export interface AttendanceClockEvent {
   timestamp: IsoDateTime;
 }
 
+export interface JobAcknowledgedEvent {
+  jobId: string;
+  acknowledgedAt: IsoDateTime;
+  etaHours: number | null;
+}
+
 // ─── Client → Server events ──────────────────────────────────
 
 export interface JoinJobRoomEvent {
@@ -122,6 +128,7 @@ export const SOCKET_EVENTS = {
   QUOTE_UPDATED: 'quote-updated',
   MODIFICATION_REQUESTED: 'modification-requested',
   ATTENDANCE_CLOCK: 'attendance-clock',
+  JOB_ACKNOWLEDGED: 'job-acknowledged',
 
   JOIN_JOB_ROOM: 'join-job-room',
   LEAVE_JOB_ROOM: 'leave-job-room',
@@ -144,4 +151,5 @@ export interface ServerToClientEventMap {
   [SOCKET_EVENTS.QUOTE_UPDATED]: QuoteUpdatedEvent;
   [SOCKET_EVENTS.MODIFICATION_REQUESTED]: ModificationRequestedEvent;
   [SOCKET_EVENTS.ATTENDANCE_CLOCK]: AttendanceClockEvent;
+  [SOCKET_EVENTS.JOB_ACKNOWLEDGED]: JobAcknowledgedEvent;
 }

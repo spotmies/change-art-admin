@@ -51,3 +51,17 @@ export function useDispatchJob() {
     onError: (err) => toastApiError(err),
   });
 }
+
+export function useAcknowledgeJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, etaHours }: { jobId: string; etaHours?: number }) =>
+      csQuoteService.acknowledgeJob(jobId, etaHours),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(variables.jobId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Acknowledgement sent — ETA countdown has started.');
+    },
+    onError: (err) => toastApiError(err),
+  });
+}

@@ -70,7 +70,9 @@ export interface Job {
   process: string | null;
   priority: JobPriority;
   /** Numeric hours — matches backend `eta_hours`. Display as `${etaHours}h`. */
-  etaHours: number;
+  etaHours: number | null;
+  specificType?: string | null;
+  finalFiles?: string[];
   status: JobStatus;
   stage: JobStage;
   assignedTo: string | null;
@@ -93,6 +95,8 @@ export interface Job {
   height?: number;
   fabric?: string;
   stitchCount?: number;
+  /** ISO timestamp when admin sent the acknowledgement. Countdown starts from here. */
+  acknowledgedAt?: string | null;
   /** True when this job record is the admin-managed copy (not the original client submission). */
   isAdminCopy?: boolean;
   /** UUID of the original client job this was copied from (present when isAdminCopy = true). */

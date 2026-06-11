@@ -98,7 +98,7 @@ function KanbanColumn({
               <div className="k-item-meta">
                 <span>{j.client}</span>
                 <span>·</span>
-                <span>{j.etaHours}h</span>
+                {j.etaHours != null && <span>{j.etaHours}h</span>}
               </div>
             </div>
           </div>

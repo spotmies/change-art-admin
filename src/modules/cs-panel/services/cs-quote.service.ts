@@ -5,6 +5,7 @@ export interface SendQuotePriceBody {
   amount: number;          // required, positive
   currency?: string;       // optional, defaults to 'USD' server-side
   note?: string;           // optional, max 500 chars
+  etaHours?: number;       // optional, saved to eta_hours on the job card
 }
 
 export interface RejectQuoteBody {
@@ -39,6 +40,13 @@ export const csQuoteService = {
     return apiClient.post<IJobCard, DispatchJobBody>(
       `/api/v1/cs/jobs/${jobId}/dispatch`,
       body,
+    );
+  },
+
+  acknowledgeJob(jobId: string, etaHours?: number): Promise<IJobCard> {
+    return apiClient.post<IJobCard, { etaHours?: number }>(
+      `/api/v1/cs/jobs/${jobId}/acknowledge`,
+      etaHours != null ? { etaHours } : {},
     );
   },
 };

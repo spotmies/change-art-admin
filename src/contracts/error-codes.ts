@@ -66,6 +66,8 @@ export const ERROR_CODES = {
   JOB_NOT_READY_FOR_DISPATCH: 'JOB_NOT_READY_FOR_DISPATCH',
   NO_DELIVERABLE_FILES: 'NO_DELIVERABLE_FILES',
   JOB_ALREADY_DISPATCHED: 'JOB_ALREADY_DISPATCHED',
+  JOB_CANNOT_ACKNOWLEDGE: 'JOB_CANNOT_ACKNOWLEDGE',
+  JOB_ALREADY_ACKNOWLEDGED: 'JOB_ALREADY_ACKNOWLEDGED',
 
   // Attendance
   ALREADY_CLOCKED_IN: 'ALREADY_CLOCKED_IN',
@@ -138,6 +140,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   JOB_NOT_READY_FOR_DISPATCH: 'This job is not in QC yet.',
   NO_DELIVERABLE_FILES: 'Upload at least one completed file before dispatching.',
   JOB_ALREADY_DISPATCHED: 'This job was already delivered.',
+  JOB_CANNOT_ACKNOWLEDGE: 'This job cannot be acknowledged in its current state.',
+  JOB_ALREADY_ACKNOWLEDGED: 'This job has already been acknowledged.',
 
   ALREADY_CLOCKED_IN: "You're already clocked in.",
   NOT_CLOCKED_IN: 'You are not clocked in.',

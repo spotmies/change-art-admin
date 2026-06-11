@@ -90,6 +90,12 @@ export interface UpdateJobCardBody {
   eta_hours?: number;
   num_colors?: number;
   notes?: string;
+  specific_type?: string;
+  final_files?: string[];
+  placement?: string;
+  width_inches?: number;
+  height_inches?: number;
+  fabric?: string;
 }
 
 export interface CreateUserBody {

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   SOCKET_EVENTS,
+  type JobAcknowledgedEvent,
   type JobAssignedEvent,
   type JobCreatedEvent,
   type JobStatusChangedEvent,
@@ -140,6 +141,11 @@ export function SocketProvider({ children }: SocketProviderProps) {
       queryClient.invalidateQueries({ queryKey: queryKeys.attendance.history() });
     });
 
+    socket.on(SOCKET_EVENTS.JOB_ACKNOWLEDGED, (event: JobAcknowledgedEvent) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.byId(event.jobId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    });
+
     // Re-attach on tab focus — Chrome/Safari sometimes background-throttle the
     // socket and the auto-reconnect may have given up. This is idempotent.
     const onVisibilityChange = () => {
@@ -166,6 +172,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       socket.off(SOCKET_EVENTS.QUOTE_UPDATED);
       socket.off(SOCKET_EVENTS.MODIFICATION_REQUESTED);
       socket.off(SOCKET_EVENTS.ATTENDANCE_CLOCK);
+      socket.off(SOCKET_EVENTS.JOB_ACKNOWLEDGED);
     };
   }, [isAuthenticated, user, queryClient]);
 

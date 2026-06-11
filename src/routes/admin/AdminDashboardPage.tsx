@@ -49,7 +49,7 @@ export function AdminDashboardPage() {
   const missedDeadlines = useMemo(() => {
     const now = Date.now();
     return active.filter((j) => {
-      const deadline = new Date(j.created).getTime() + j.etaHours * 3_600_000;
+      const deadline = new Date(j.created).getTime() + (j.etaHours ?? 0) * 3_600_000;
       return deadline < now;
     }).length;
   }, [active]);

@@ -61,12 +61,18 @@ export function JobTable({
 }: JobTableProps) {
   const [view, setView] = useState<JobView>(defaultView);
   const [query, setQuery] = useState('');
-  const [viewJob, setViewJob] = useState<Job | null>(null);
+  // Store only the identifier, not a frozen copy — viewJob is derived from the live
+  // `jobs` prop so it auto-updates when the parent re-fetches (e.g. after ack sent).
+  const [viewJobId, setViewJobId] = useState<string | null>(null);
+  const viewJob = useMemo(
+    () => (viewJobId ? (jobs.find((j) => (j.uuid ?? j.id) === viewJobId) ?? null) : null),
+    [viewJobId, jobs],
+  );
   const [editJob, setEditJob] = useState<Job | null>(null);
   const [assignJob, setAssignJob] = useState<Job | null>(null);
 
   const handleOpen = useCallback((job: Job) => {
-    if (onOpen) { onOpen(job); } else { setViewJob(job); }
+    if (onOpen) { onOpen(job); } else { setViewJobId(job.uuid ?? job.id); }
   }, [onOpen]);
 
   const builtInActions = useCallback((j: Job) => (
@@ -74,7 +80,7 @@ export function JobTable({
       <button
         type="button"
         className="btn btn-outline"
-        onClick={() => setViewJob(j)}
+        onClick={() => setViewJobId(j.uuid ?? j.id)}
         aria-label={`View ${j.id}`}
       >
         View
@@ -179,15 +185,15 @@ export function JobTable({
       )}
       <JobDetailModal
         job={viewJob}
-        onClose={() => setViewJob(null)}
-        onEdit={(j) => { setViewJob(null); setEditJob(j); }}
-        onAssign={(j) => { setViewJob(null); setAssignJob(j); }}
+        onClose={() => setViewJobId(null)}
+        onEdit={(j) => { setViewJobId(null); setEditJob(j); }}
+        onAssign={(j) => { setViewJobId(null); setAssignJob(j); }}
         quoteView={quoteView}
       />
       <EditJobModal
         job={editJob}
         onClose={() => setEditJob(null)}
-        onBack={(j) => { setEditJob(null); setViewJob(j); }}
+        onBack={(j) => { setEditJob(null); setViewJobId(j.uuid ?? j.id); }}
       />
       <AssignJobModal
         job={assignJob}
@@ -493,7 +499,7 @@ function ListView({
             <div className="list-title">{j.design}</div>
             <div className="list-desc">{j.summary}</div>
             <div className="list-meta">
-              {j.ref || j.id} · {j.order} · {j.status}
+              {j.ref || j.id} · {j.order}{j.specificType ? ` · ${j.specificType}` : ''} · {j.status}
             </div>
             {renderRowActions ? renderRowActions(j) : null}
           </div>

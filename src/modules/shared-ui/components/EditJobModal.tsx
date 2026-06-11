@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { X, Save, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
-import { DesignComplexity, OrderType, Priority, ProcessType } from '@contracts';
+import { DesignComplexity, FinalFileFormat, OrderType, Placement, Priority, ProcessType } from '@contracts';
 import { useUpdateJobCard, useCreateAdminCopy } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { toastApiError } from '@lib/toast-error';
 import type { UpdateJobCardBody } from '@modules/admin-panel/services/admin.service';
@@ -14,15 +14,67 @@ import type {
   JobStatus,
 } from '../mocks/jobs';
 
-interface EditJobModalProps {
-  job: Job | null;
-  onClose: () => void;
-  /** "Back" — return to the read-only detail view. */
-  onBack?: (job: Job) => void;
-  /** Optional side-effect fired AFTER a successful save (the modal persists
-   *  the change itself). Receives the original job + the edited values. */
-  onSave?: (job: Job, changes: EditFields) => void;
-}
+// ── Service type data (mirrors ClientBriefForm) ──────────────────────────────
+
+const SPECIFIC_SERVICES: Record<string, string[]> = {
+  artwork: [
+    'Vector Artwork',
+    'Product / Virtual Mock Ups',
+    'Cut Contour',
+    'Color Separation',
+    'Creative Designs',
+    'Line Art Conversions',
+    'Image Rendering',
+    'Color Correction',
+    'Brochure Designing',
+    'Clipping Path',
+    'Channel Mask',
+    'Business Card Designs',
+    'Packaging Designs',
+    'Product Branding',
+    'Image Manipulation',
+    'Black & White To Color',
+  ],
+  digitizing: ['Embroidery Digitizing', 'Embroidery Digitizing - Sewout Swatches'],
+  others: [],
+};
+
+const PLACEMENT_OPTIONS: { label: string; value: Placement }[] = [
+  { label: 'Cap',          value: Placement.CAP },
+  { label: 'Front of Cap', value: Placement.FRONT_OF_CAP },
+  { label: 'Back of Cap',  value: Placement.BACK_OF_CAP },
+  { label: 'Side of Cap',  value: Placement.SIDE_OF_CAP },
+  { label: 'Visor',        value: Placement.VISOR },
+  { label: 'Beanie Cap',   value: Placement.BEANIE_CAP },
+  { label: 'Towel',        value: Placement.TOWEL },
+  { label: 'Bags',         value: Placement.BAGS },
+  { label: 'Left Chest',   value: Placement.LEFT_CHEST },
+  { label: 'Sleeve',       value: Placement.SLEEVE },
+  { label: 'Pocket',       value: Placement.POCKET },
+  { label: 'Full Back',    value: Placement.FULL_BACK },
+  { label: 'Full Front',   value: Placement.FULL_FRONT },
+  { label: 'Back Yoke',    value: Placement.BACK_YOKE },
+  { label: 'Other',        value: Placement.OTHER },
+];
+
+// Display string from adapter → Placement enum value
+const PLACEMENT_DISPLAY_TO_ENUM: Record<string, Placement> = {
+  Cap:           Placement.CAP,
+  'Front of Cap': Placement.FRONT_OF_CAP,
+  'Back of Cap':  Placement.BACK_OF_CAP,
+  'Side of Cap':  Placement.SIDE_OF_CAP,
+  Visor:          Placement.VISOR,
+  'Beanie Cap':   Placement.BEANIE_CAP,
+  Towel:          Placement.TOWEL,
+  Bags:           Placement.BAGS,
+  'Left Chest':   Placement.LEFT_CHEST,
+  Sleeve:         Placement.SLEEVE,
+  Pocket:         Placement.POCKET,
+  'Full Back':    Placement.FULL_BACK,
+  'Full Front':   Placement.FULL_FRONT,
+  'Back Yoke':    Placement.BACK_YOKE,
+  Other:          Placement.OTHER,
+};
 
 // ── Display → backend enum maps (reverse of job-view adapter) ───────────────
 const ORDER_TO_ENUM: Record<string, OrderType> = {
@@ -59,6 +111,93 @@ const COMPLEXITY_OPTIONS: JobComplexity[] = ['Simple', 'Medium', 'Super Medium',
 const PRIORITY_OPTIONS: JobPriority[] = ['Normal', 'Rush', 'Super Rush'];
 const STATUS_OPTIONS: JobStatus[] = ['Quote Submitted', 'In Production', 'Senior Review', 'Sewout', 'In QC', 'Delivered'];
 
+// ── Helper: map JobOrderType → client-form order id ─────────────────────────
+function getOrderTypeId(order: string): string {
+  if (order === 'Artwork') return 'artwork';
+  if (order === 'Digitizing' || order === 'Digitizing + Sewout' || order === 'Sewout') return 'digitizing';
+  return 'others';
+}
+
+// ── Helper: derive the "selected service" from order + specific type ─────────
+function deriveSelectedService(orderTypeId: string, specificType: string, order: string): string {
+  if (orderTypeId === 'others') return 'Others';
+  if (orderTypeId === 'digitizing') {
+    if (specificType === 'Embroidery Digitizing - Sewout Swatches') return 'Digitizing Sewout';
+    if (order === 'Digitizing + Sewout' || order === 'Sewout') return 'Digitizing Sewout';
+    return 'Digitizing';
+  }
+  if (orderTypeId === 'artwork') {
+    switch (specificType) {
+      case 'Vector Artwork':
+      case 'Color Separation':
+      case 'Cut Contour':
+      case 'Line Art Conversions':
+        return 'Vector Artwork';
+      case 'Creative Designs':
+      case 'Product Branding':
+        return 'Logo Designing';
+      case 'Product / Virtual Mock Ups':
+      case 'Image Rendering':
+      case 'Color Correction':
+      case 'Clipping Path':
+      case 'Channel Mask':
+      case 'Image Manipulation':
+      case 'Black & White To Color':
+        return 'Virtual Proof';
+      case 'Business Card Designs':
+        return 'Business Card';
+      case 'Brochure Designing':
+        return 'Brouchers';
+      case 'Packaging Designs':
+        return 'Carton Box Designing';
+      default:
+        return 'Vector Artwork';
+    }
+  }
+  return '';
+}
+
+// ── Helper: format options for a derived service ─────────────────────────────
+function getFormatOptions(selectedService: string): string[] {
+  switch (selectedService) {
+    case 'Vector Artwork':
+    case 'Business Card':
+    case 'Brouchers':
+    case 'Logo Designing':
+    case 'Carton Box Designing':
+    case 'Others':
+      return ['PDF, EPS', 'PDF, AI', 'PDF, EPS, AI', 'PDF, CDR', 'PDF, EPS, CDR', 'PDF, EPS, AI, CDR', 'OTHERS'];
+    case 'Digitizing':
+    case 'Digitizing Sewout':
+      return ['PDF, DST', 'DST, PDF, EMB', 'DST, PDF, PXF', 'DST, PDF, CND, EXP', 'DST, PDF, CND, EXP, EMB', 'OTHERS'];
+    case 'Virtual Proof':
+      return ['JPEG', 'SVG', 'PDF', 'TIFF', 'OTHERS'];
+    default:
+      return [];
+  }
+}
+
+// ── Helper: format option string → FinalFileFormat[] ────────────────────────
+function parseFinalFiles(option: string): FinalFileFormat[] {
+  if (!option || option === 'OTHERS') return [FinalFileFormat.OTHERS];
+  return option.split(',').map((s) => s.trim()).map((part) => {
+    if (part === 'PDF') return FinalFileFormat.PDF;
+    if (part === 'EPS') return FinalFileFormat.EPS;
+    if (part === 'AI') return FinalFileFormat.AI;
+    if (part === 'CDR') return FinalFileFormat.CDR;
+    return FinalFileFormat.OTHERS;
+  });
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface EditJobModalProps {
+  job: Job | null;
+  onClose: () => void;
+  onBack?: (job: Job) => void;
+  onSave?: (job: Job, changes: EditFields) => void;
+}
+
 export interface EditFields {
   design: string;
   client: string;
@@ -73,6 +212,12 @@ export interface EditFields {
   adminPrice: number | null;
   agreedPrice: number | null;
   notes: string;
+  specificType?: string | null;
+  finalFiles?: string[];
+  fabric?: string;
+  placement?: string;
+  widthInches?: number | null;
+  heightInches?: number | null;
 }
 
 interface FormState {
@@ -89,6 +234,12 @@ interface FormState {
   adminPrice: string;
   agreedPrice: string;
   notes: string;
+  specificType: string;
+  formatOption: string;
+  fabric: string;
+  placement: string; // Placement enum value
+  widthInches: string;
+  heightInches: string;
 }
 
 function toForm(job: Job): FormState {
@@ -106,8 +257,19 @@ function toForm(job: Job): FormState {
     adminPrice: job.adminPrice != null ? String(job.adminPrice) : '',
     agreedPrice: job.agreedPrice != null ? String(job.agreedPrice) : '',
     notes: job.notes ?? '',
+    specificType: job.specificType ?? '',
+    // Try to match stored finalFiles against a format option string.
+    // e.g. ['PDF','EPS'] → 'PDF, EPS' (matches artwork option).
+    // Digitizing formats stored as OTHERS won't match; user re-selects.
+    formatOption: (job.finalFiles ?? []).join(', '),
+    fabric: job.fabric ?? '',
+    placement: job.placement ? (PLACEMENT_DISPLAY_TO_ENUM[job.placement] ?? '') : '',
+    widthInches: job.width != null ? String(job.width) : '',
+    heightInches: job.height != null ? String(job.height) : '',
   };
 }
+
+// ── Pricing helpers ──────────────────────────────────────────────────────────
 
 function priorityClass(priority: string): string {
   const map: Record<string, string> = { Normal: 'normal', Rush: 'rush', 'Super Rush': 'super-rush' };
@@ -135,8 +297,6 @@ function statusAccent(status: string): string {
 const FIELD_CLS =
   'w-full rounded-lg px-3 py-2.5 text-[12.5px] outline-none transition border bg-white text-[#0D1B2A] border-[#E2E8F0] focus:border-[#B22234] focus:ring-2 focus:ring-[#B22234]/10';
 
-// ── Pricing display helpers ─────────────────────────────────
-
 type PriceCell = string | { text: string; muted?: boolean; warn?: boolean };
 
 function formatMoney(raw: string | number | null | undefined): string {
@@ -146,17 +306,6 @@ function formatMoney(raw: string | number | null | undefined): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
 
-/**
- * Whether the client has accepted the price and the job has moved past the
- * quote-approval stage. After this point, the agency's quoted price is the
- * agreed price — there's no separate negotiated-finalisation step today.
- *
- * Primary check is `stage`: the adapter maps every QUOTE_* status to
- * `'quote'`, so anything else (`junior`, `senior`, `sewout`, `qc`,
- * `delivered`) means the workflow has progressed past the quote handoff
- * and the price is locked in. We fall back to `rawStatus` in case a
- * caller hand-constructed a Job without a stage value.
- */
 function hasClientAccepted(job: Job): boolean {
   if (job.stage && job.stage !== 'quote') return true;
   const raw = (job.rawStatus ?? '').toUpperCase().replace(/\s+/g, '_');
@@ -170,29 +319,16 @@ function hasClientAccepted(job: Job): boolean {
 
 function resolveAgreedPrice(job: Job | null, adminPrice: string, agreedPrice: string): PriceCell {
   if (!job) return { text: '—', muted: true };
-  // Explicit final negotiated price wins (only set if the formal quotes module
-  // finalised something different from the flat admin_price).
   if (agreedPrice && parseFloat(agreedPrice) > 0) return formatMoney(agreedPrice);
-  // Once the client has accepted (status moved past QUOTE_APPROVED), the
-  // admin_price IS the agreed price — show it. Never say "waiting" or
-  // "pending" once we're past quote stage; if no value is on file (legacy
-  // job created before admin_price existed) just show a neutral dash.
   if (hasClientAccepted(job)) {
     return adminPrice && parseFloat(adminPrice) > 0
       ? formatMoney(adminPrice)
       : { text: '—', muted: true };
   }
-  // Quote stage: admin sent a price, client hasn't accepted yet.
   if (adminPrice) return { text: 'Waiting for client acceptance', warn: true };
-  // Quote stage: no price quoted yet.
   return { text: 'Pending — price not sent', muted: true };
 }
 
-/**
- * Resolve the Admin Counter-Offer row. Same idea as agreed-price: once the
- * client has accepted, never imply that no offer was made — the price
- * stored on the job IS the offer that locked the deal.
- */
 function resolveAdminOffer(job: Job | null, adminPrice: string): PriceCell {
   if (adminPrice && parseFloat(adminPrice) > 0) return formatMoney(adminPrice);
   if (job && hasClientAccepted(job)) return { text: '—', muted: true };
@@ -207,15 +343,9 @@ function PricingRow({ label, value }: { label: string; value: PriceCell }) {
   return (
     <div
       className="flex items-center justify-between rounded-lg"
-      style={{
-        background: '#F8FAFC',
-        border: '1px solid #E8EDF5',
-        padding: '10px 14px',
-      }}
+      style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', padding: '10px 14px' }}
     >
-      <span className="text-[12px]" style={{ color: '#64748B', fontWeight: 500 }}>
-        {label}
-      </span>
+      <span className="text-[12px]" style={{ color: '#64748B', fontWeight: 500 }}>{label}</span>
       <span
         className="text-[13px]"
         style={{
@@ -230,6 +360,8 @@ function PricingRow({ label, value }: { label: string; value: PriceCell }) {
     </div>
   );
 }
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps) {
   const [isIn, setIsIn] = useState(false);
@@ -267,6 +399,17 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
     return () => window.removeEventListener('keydown', onKey);
   }, [job, handleClose]);
 
+  // Derived service-type state from the form
+  const orderTypeId = useMemo(() => getOrderTypeId(form?.order ?? ''), [form?.order]);
+  const specificServices = useMemo(() => SPECIFIC_SERVICES[orderTypeId] ?? [], [orderTypeId]);
+  const derivedService = useMemo(
+    () => deriveSelectedService(orderTypeId, form?.specificType ?? '', form?.order ?? ''),
+    [orderTypeId, form?.specificType, form?.order],
+  );
+  const formatOptions = useMemo(() => getFormatOptions(derivedService), [derivedService]);
+
+  const isDigitizing = orderTypeId === 'digitizing';
+
   if (!job || !form) return null;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -277,16 +420,30 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
     return Number.isFinite(n) ? n : null;
   };
 
-  // Build a minimal PATCH body containing ONLY the fields that actually
-  // changed and that this endpoint accepts. Sending unchanged fields would
-  // needlessly trip the backend's per-role field RBAC (it rejects the whole
-  // request if any single field isn't editable by the caller's role). Status
-  // and pricing are intentionally excluded — status is workflow-driven and
-  // prices go through the CS quote flow.
+  // When order type changes, reset specific service if no longer valid; reset format
+  const handleOrderChange = (newOrder: JobOrderType) => {
+    const newId = getOrderTypeId(newOrder);
+    const newServices = SPECIFIC_SERVICES[newId] ?? [];
+    const specificStillValid = form.specificType ? newServices.includes(form.specificType) : false;
+    setForm((f) => f ? {
+      ...f,
+      order: newOrder,
+      specificType: specificStillValid ? f.specificType : '',
+      formatOption: '',
+    } : f);
+  };
+
+  // When specific service changes, reset format option
+  const handleSpecificTypeChange = (newValue: string) => {
+    setForm((f) => f ? { ...f, specificType: newValue, formatOption: '' } : f);
+  };
+
   const buildPatch = (): Omit<UpdateJobCardBody, 'version'> => {
     const patch: Omit<UpdateJobCardBody, 'version'> = {};
+
     const design = form.design.trim();
     if (design && design !== job.design) patch.design_name = design;
+
     if (form.order !== job.order && ORDER_TO_ENUM[form.order]) {
       patch.order_type = ORDER_TO_ENUM[form.order];
     }
@@ -299,11 +456,46 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
     if (form.priority !== job.priority && PRIORITY_TO_ENUM[form.priority]) {
       patch.priority = PRIORITY_TO_ENUM[form.priority];
     }
+
     const eta = num(form.etaHours);
     if (eta != null && eta > 0 && eta !== job.etaHours) patch.eta_hours = eta;
+
     const colors = num(form.colors);
     if (colors != null && colors >= 0 && colors !== job.colors) patch.num_colors = colors;
+
     if (form.notes !== (job.notes ?? '')) patch.notes = form.notes;
+
+    // Specific service
+    if (form.specificType !== (job.specificType ?? '')) {
+      patch.specific_type = form.specificType || undefined;
+    }
+
+    // Output formats: compare normalized arrays
+    if (form.formatOption) {
+      const newFiles = parseFinalFiles(form.formatOption);
+      const newStr = [...newFiles].sort().join(',');
+      const oldStr = [...(job.finalFiles ?? [])].sort().join(',');
+      if (newStr !== oldStr) patch.final_files = newFiles;
+    }
+
+    // Fabric
+    if (form.fabric !== (job.fabric ?? '')) {
+      patch.fabric = form.fabric || undefined;
+    }
+
+    // Placement: form stores enum value; job.placement is display string
+    const origPlacementEnum = job.placement ? (PLACEMENT_DISPLAY_TO_ENUM[job.placement] ?? '') : '';
+    if (form.placement !== origPlacementEnum) {
+      patch.placement = form.placement || undefined;
+    }
+
+    // Width / Height
+    const wi = num(form.widthInches);
+    if (wi != null && wi > 0 && wi !== (job.width ?? null)) patch.width_inches = wi;
+
+    const hi = num(form.heightInches);
+    if (hi != null && hi > 0 && hi !== (job.height ?? null)) patch.height_inches = hi;
+
     return patch;
   };
 
@@ -339,6 +531,12 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
         adminPrice: num(form.adminPrice),
         agreedPrice: num(form.agreedPrice),
         notes: form.notes,
+        specificType: form.specificType || null,
+        finalFiles: form.formatOption ? parseFinalFiles(form.formatOption) : [],
+        fabric: form.fabric,
+        placement: form.placement,
+        widthInches: num(form.widthInches),
+        heightInches: num(form.heightInches),
       });
       handleClose();
     };
@@ -379,7 +577,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
         role="dialog"
         aria-modal="true"
         aria-label={`Edit job: ${job.design}`}
-        className="relative w-full max-w-[660px] max-h-[92vh] rounded-2xl flex flex-col overflow-hidden"
+        className="relative w-full max-w-[720px] max-h-[92vh] rounded-2xl flex flex-col overflow-hidden"
         style={{
           background: '#fff',
           boxShadow: '0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.06)',
@@ -426,55 +624,158 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
         {/* ── BODY ── */}
         <div className="flex-1 overflow-y-auto px-6 py-5" style={{ background: '#fff' }}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0">
-            {/* JOB INFORMATION */}
+
+            {/* ── LEFT: JOB INFORMATION ── */}
             <div>
               <SectionLabel>JOB INFORMATION</SectionLabel>
               <div className="grid gap-3">
+
                 <Field label="Design Name">
                   <input className={FIELD_CLS} value={form.design} onChange={(e) => set('design', e.target.value)} />
                 </Field>
+
                 <Field label="Client">
                   <input className={FIELD_CLS} value={form.client} onChange={(e) => set('client', e.target.value)} />
                 </Field>
+
                 <Field label="Order Type">
-                  <select className={FIELD_CLS} value={form.order} onChange={(e) => set('order', e.target.value as JobOrderType)}>
+                  <select className={FIELD_CLS} value={form.order} onChange={(e) => handleOrderChange(e.target.value as JobOrderType)}>
                     {ORDER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
-                <Field label="Process Type">
-                  <select className={FIELD_CLS} value={form.process} onChange={(e) => set('process', e.target.value)}>
-                    <option value="">—</option>
-                    {PROCESS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </Field>
+
+                {/* Specific Service — dropdown with options matching the order type */}
+                {specificServices.length > 0 && (
+                  <Field label="Specific Service">
+                    <select
+                      className={FIELD_CLS}
+                      value={form.specificType}
+                      onChange={(e) => handleSpecificTypeChange(e.target.value)}
+                    >
+                      <option value="">— Select specific service —</option>
+                      {specificServices.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                {/* Output Formats — chips, options depend on derived service */}
+                {formatOptions.length > 0 && (
+                  <Field label="Output Formats">
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {formatOptions.map((opt) => {
+                        const active = form.formatOption === opt;
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => set('formatOption', active ? '' : opt)}
+                            className={cn(
+                              'px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide transition select-none cursor-pointer',
+                              active ? 'text-white' : 'text-[#64748B] hover:text-[#0D1B2A]',
+                            )}
+                            style={{
+                              border: `1.5px solid ${active ? '#B22234' : '#E2E8F0'}`,
+                              background: active ? '#B22234' : '#fff',
+                            }}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                )}
+
+                {/* Process Type — only for services that use a printing process (mirrors client form) */}
+                {(derivedService === 'Vector Artwork' || derivedService === 'Business Card' || derivedService === 'Brouchers' || derivedService === 'Logo Designing' || derivedService === 'Carton Box Designing') && (
+                  <Field label="Process Type">
+                    <select className={FIELD_CLS} value={form.process} onChange={(e) => set('process', e.target.value)}>
+                      <option value="">—</option>
+                      {PROCESS_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </Field>
+                )}
+
+                {/* Digitizing fields */}
+                {isDigitizing && (
+                  <>
+                    <Field label="Fabric">
+                      <input
+                        className={FIELD_CLS}
+                        value={form.fabric}
+                        placeholder="e.g. Cotton, Polyester, Denim"
+                        onChange={(e) => set('fabric', e.target.value)}
+                      />
+                    </Field>
+
+                    <Field label="Placement">
+                      <select className={FIELD_CLS} value={form.placement} onChange={(e) => set('placement', e.target.value)}>
+                        <option value="">— Select placement —</option>
+                        {PLACEMENT_OPTIONS.map(({ label, value }) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Width (inches)">
+                        <input
+                          className={FIELD_CLS}
+                          type="number"
+                          min={0.1}
+                          step="0.1"
+                          placeholder="e.g. 3.5"
+                          value={form.widthInches}
+                          onChange={(e) => set('widthInches', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Height (inches)">
+                        <input
+                          className={FIELD_CLS}
+                          type="number"
+                          min={0.1}
+                          step="0.1"
+                          placeholder="e.g. 2.5"
+                          value={form.heightInches}
+                          onChange={(e) => set('heightInches', e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  </>
+                )}
+
                 <Field label="Complexity">
                   <select className={FIELD_CLS} value={form.complexity} onChange={(e) => set('complexity', e.target.value as JobComplexity)}>
                     {COMPLEXITY_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </Field>
+
                 <Field label="Priority">
                   <select className={FIELD_CLS} value={form.priority} onChange={(e) => set('priority', e.target.value as JobPriority)}>
                     {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </Field>
+
                 <Field label="Status">
                   <select className={FIELD_CLS} value={form.status} onChange={(e) => set('status', e.target.value as JobStatus)}>
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
+
                 <Field label="ETA (hours)">
                   <input className={FIELD_CLS} type="number" min={1} value={form.etaHours} onChange={(e) => set('etaHours', e.target.value)} />
                 </Field>
+
                 <Field label="Number of Colors">
-                  <input className={FIELD_CLS} type="number" min={1} max={12} value={form.colors} onChange={(e) => set('colors', e.target.value)} />
+                  <input className={FIELD_CLS} type="number" min={1} max={20} value={form.colors} onChange={(e) => set('colors', e.target.value)} />
                 </Field>
+
               </div>
             </div>
 
-            {/* PRICING — set via the dedicated quote flow. Display is
-                status-aware: until the client accepts the price, the agreed
-                row shows "Waiting for client acceptance"; once they place
-                the job, it shows the locked-in amount. */}
+            {/* ── RIGHT: PRICING & NOTES ── */}
             <div>
               <SectionLabel>PRICING &amp; NOTES</SectionLabel>
               <div className="grid gap-2 mb-4">
@@ -504,6 +805,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                 />
               </Field>
             </div>
+
           </div>
         </div>
 

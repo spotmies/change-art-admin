@@ -11,10 +11,10 @@ import {
   StatGrid,
   DASH_METRICS,
   DASH_RANGES,
-  JOBS,
   type DashRange,
 } from '@modules/shared-ui';
 import { Inbox, Cog, CheckCircle2, Package } from 'lucide-react';
+import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 
 export function CSDashboardPage() {
   const user = useSessionUser();
@@ -23,13 +23,15 @@ export function CSDashboardPage() {
   const [range, setRange] = useState<DashRange>('This Month');
   const m = DASH_METRICS[range].cs;
 
+  const { jobs: allJobs } = useAdminJobViews({ per_page: 100 });
+
   const newJobs = useMemo(
-    () => JOBS.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered').slice(0, 4),
-    [],
+    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered').slice(0, 4),
+    [allJobs],
   );
   const pendingQuotes = useMemo(
-    () => JOBS.filter((j) => j.stage === 'quote' && j.status === 'Quote Submitted').slice(0, 4),
-    [],
+    () => allJobs.filter((j) => j.stage === 'quote' && j.status === 'Quote Submitted').slice(0, 4),
+    [allJobs],
   );
 
   return (

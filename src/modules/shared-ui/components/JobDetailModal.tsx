@@ -1,11 +1,45 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Download, Edit2, UserPlus, Send, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Download, Edit2, UserPlus, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
-import { useSendQuotePrice, useRejectQuote, useDispatchJob } from '@/modules/cs-panel/hooks/use-cs-quote';
+import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
+
+/** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
+function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
+  const startMs = new Date(acknowledgedAt).getTime();
+  const endMs = startMs + etaHours * 60 * 60 * 1000;
+  const remaining = Math.max(0, endMs - Date.now());
+  if (remaining === 0) return { display: 'Completed', expired: true };
+  const totalSec = Math.floor(remaining / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return {
+    display: `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`,
+    expired: false,
+  };
+}
+
+function useEtaCountdown(acknowledgedAt: string | null | undefined, etaHours: number | null | undefined) {
+  const active = !!(acknowledgedAt && etaHours != null && etaHours > 0);
+  const [state, setState] = useState(() =>
+    active ? computeEtaCountdown(acknowledgedAt!, etaHours!) : null,
+  );
+  useEffect(() => {
+    if (!active) { setState(null); return; }
+    setState(computeEtaCountdown(acknowledgedAt!, etaHours!));
+    const id = setInterval(() => {
+      const next = computeEtaCountdown(acknowledgedAt!, etaHours!);
+      setState(next);
+      if (next.expired) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active, acknowledgedAt, etaHours]);
+  return state;
+}
 
 interface JobDetailModalProps {
   job: Job | null;
@@ -124,6 +158,10 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
+  const [showAckPopover, setShowAckPopover] = useState(false);
+  const [ackEtaHours, setAckEtaHours] = useState(() =>
+    job?.etaHours != null ? String(job.etaHours) : '',
+  );
   // Toggle between admin-edited and original client data (admin copies only).
   const [viewMode, setViewMode] = useState<'admin' | 'client'>('admin');
   // Side-by-side compare mode (admin copies only).
@@ -145,7 +183,10 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const sendPrice = useSendQuotePrice();
   const rejectQuote = useRejectQuote();
   const dispatchJob = useDispatchJob();
+  const acknowledgeJob = useAcknowledgeJob();
   const isSubmitting = sendPrice.isPending || rejectQuote.isPending;
+
+  const etaCountdown = useEtaCountdown(job?.acknowledgedAt, job?.etaHours);
 
   // Subscribe to the job's room while the modal is open. Lets the backend
   // push per-job events (file uploads, reviews, etc.) to this admin
@@ -242,6 +283,8 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   // wrongly open the quote popup.
   const isQuote = quoteView && isQuoteStageStatus(job);
   const isReadyToDeliver = isReadyToDeliverStatus(job);
+  const canAcknowledge = normalizedStatus(job) === 'JOB_PLACED' && !job.acknowledgedAt;
+  const isAcknowledged = !!job.acknowledgedAt;
 
   // Workflow "current" node is blue ONLY on the quote popup; every other
   // popup keeps the original crimson so non-quote popups are unchanged.
@@ -298,12 +341,14 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
     const id = requireUuid('send price');
     if (!id) return;
     const amount = parseFloat(agencyPrice);
+    const etaHours = parseFloat(confirmedEta);
     sendPrice.mutate(
       {
         jobId: id,
         body: {
           amount,
           ...(noteToClient.trim() ? { note: noteToClient.trim() } : {}),
+          ...(Number.isFinite(etaHours) && etaHours > 0 ? { etaHours } : {}),
         },
       },
       {
@@ -312,15 +357,6 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
           handleClose();
         },
       },
-    );
-  };
-
-  const handleRejectQuote = () => {
-    const id = requireUuid('reject quote');
-    if (!id) return;
-    rejectQuote.mutate(
-      { jobId: id, body: {} },
-      { onSuccess: handleClose },
     );
   };
 
@@ -336,6 +372,15 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
         },
       },
     );
+  };
+
+  const handleAcknowledge = () => {
+    const id = requireUuid('acknowledge job');
+    if (!id) return;
+    const parsed = ackEtaHours ? parseFloat(ackEtaHours) : undefined;
+    const etaHours = parsed != null && !isNaN(parsed) && parsed > 0 ? parsed : undefined;
+    setShowAckPopover(false);
+    acknowledgeJob.mutate({ jobId: id, etaHours });
   };
 
   return (
@@ -390,17 +435,321 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition"
-              style={{ border: '1px solid #E8EDF5', color: '#94A3B8' }}
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
+                onMouseOver={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                  (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+                }}
+                onMouseOut={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                  (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                }}
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Trigger button — opens the ack popover. While pending: show spinner chip instead. */}
+              {canAcknowledge ? (
+                acknowledgeJob.isPending ? (
+                  /* In-flight: replace button with a muted sending chip so it can't be clicked again */
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      padding: '7px 15px',
+                      borderRadius: 10,
+                      background: 'rgba(178,34,52,0.07)',
+                      border: '1.5px solid rgba(178,34,52,0.20)',
+                      color: '#B22234',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    <span>Sending…</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAckPopover(true)}
+                    style={{
+                      background: 'linear-gradient(135deg,#B22234,#8B1A28)',
+                      border: '1.5px solid rgba(255,255,255,0.18)',
+                      color: '#fff',
+                      padding: '7px 15px',
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      letterSpacing: '0.01em',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)',
+                      transition: 'all 0.18s ease',
+                    }}
+                    onMouseOver={(e) => {
+                      const btn = e.currentTarget as HTMLButtonElement;
+                      btn.style.background = 'linear-gradient(135deg,#991B2A,#7F1521)';
+                      btn.style.boxShadow = '0 6px 22px rgba(178,34,52,0.55), inset 0 1px 0 rgba(255,255,255,0.14)';
+                      btn.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseOut={(e) => {
+                      const btn = e.currentTarget as HTMLButtonElement;
+                      btn.style.background = 'linear-gradient(135deg,#B22234,#8B1A28)';
+                      btn.style.boxShadow = '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)';
+                      btn.style.transform = 'translateY(0)';
+                    }}
+                    aria-label="Open acknowledgement panel"
+                  >
+                    <Timer className="w-3.5 h-3.5" aria-hidden />
+                    <span>Send Acknowledgement</span>
+                  </button>
+                )
+              ) : isAcknowledged && etaCountdown ? (
+                /* Live ETA countdown chip — replaces button once ack + ETA exist */
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: etaCountdown.expired
+                      ? 'linear-gradient(135deg,rgba(5,150,105,0.10),rgba(5,150,105,0.05))'
+                      : 'linear-gradient(135deg,rgba(37,99,235,0.10),rgba(37,99,235,0.05))',
+                    border: `1.5px solid ${etaCountdown.expired ? 'rgba(5,150,105,0.28)' : 'rgba(37,99,235,0.22)'}`,
+                    borderRadius: 10,
+                    padding: '6px 12px',
+                    boxShadow: etaCountdown.expired
+                      ? '0 2px 8px rgba(5,150,105,0.12)'
+                      : '0 2px 8px rgba(37,99,235,0.12)',
+                  }}
+                >
+                  <Timer
+                    className="w-3.5 h-3.5 shrink-0"
+                    style={{ color: etaCountdown.expired ? '#059669' : '#2563EB' }}
+                    aria-hidden
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
+                    <span
+                      style={{
+                        fontFamily: 'IBM Plex Mono, monospace',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        color: etaCountdown.expired ? '#059669' : '#1D4ED8',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {etaCountdown.display}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 600,
+                        color: etaCountdown.expired ? '#10B981' : '#60A5FA',
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {etaCountdown.expired ? 'ETA reached' : 'ETA remaining'}
+                    </span>
+                  </div>
+                </div>
+              ) : isAcknowledged ? (
+                /* Acknowledged but no ETA was set — simple confirmed chip */
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    background: 'linear-gradient(135deg,rgba(5,150,105,0.10),rgba(5,150,105,0.05))',
+                    border: '1.5px solid rgba(5,150,105,0.28)',
+                    borderRadius: 10,
+                    padding: '6px 11px',
+                    boxShadow: '0 2px 8px rgba(5,150,105,0.10)',
+                  }}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: '#059669' }} aria-hidden />
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#059669', whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
+                    Acknowledged
+                  </span>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
+
+        {/* ── ACK POPOVER ── */}
+        {showAckPopover && canAcknowledge && (() => {
+          const etaParsed = ackEtaHours ? parseFloat(ackEtaHours) : NaN;
+          const etaValid = !isNaN(etaParsed) && etaParsed > 0;
+          const isDisabled = acknowledgeJob.isPending || !etaValid;
+          return (
+            <>
+              {/* Backdrop — clicking outside closes */}
+              <div
+                style={{ position: 'absolute', inset: 0, zIndex: 10 }}
+                onClick={() => { if (!acknowledgeJob.isPending) setShowAckPopover(false); }}
+                aria-hidden
+              />
+              {/* Popover card */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 68,
+                  right: 24,
+                  zIndex: 11,
+                  width: 280,
+                  background: '#fff',
+                  border: '1.5px solid #E2E8F0',
+                  borderRadius: 14,
+                  boxShadow: '0 8px 32px rgba(15,23,42,0.13), 0 2px 8px rgba(15,23,42,0.06)',
+                  overflow: 'hidden',
+                }}
+                role="dialog"
+                aria-label="Send acknowledgement"
+              >
+                {/* Header strip */}
+                <div style={{ background: 'linear-gradient(135deg,#B22234,#8B1A28)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Timer className="w-4 h-4 shrink-0" style={{ color: '#fff' }} aria-hidden />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '0.01em' }}>
+                    Send Acknowledgement
+                  </span>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: '16px 16px 14px' }}>
+                  <p style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.5, margin: '0 0 14px' }}>
+                    Set the ETA and notify the client that production has started. The countdown begins the moment you confirm.
+                  </p>
+
+                  {/* ETA input */}
+                  <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
+                    ETA (hours) <span style={{ color: '#B22234' }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={ackEtaHours}
+                      onChange={(e) => {
+                        // allow digits, one decimal point, nothing else
+                        const v = e.target.value.replace(/[^\d.]/g, '').replace(/^(\d*\.?\d*).*$/, '$1');
+                        setAckEtaHours(v);
+                      }}
+                      placeholder="e.g. 4"
+                      disabled={acknowledgeJob.isPending}
+                      autoFocus
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      style={{
+                        flex: 1,
+                        border: `1.5px solid ${etaValid ? '#B22234' : '#E2E8F0'}`,
+                        borderRadius: 8,
+                        padding: '8px 10px',
+                        fontSize: 14,
+                        fontFamily: 'IBM Plex Mono, monospace',
+                        fontWeight: 700,
+                        color: '#0F172A',
+                        background: acknowledgeJob.isPending ? '#F8FAFC' : '#fff',
+                        outline: 'none',
+                        transition: 'border-color 0.15s',
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#B22234'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = etaValid ? '#B22234' : '#E2E8F0'; }}
+                    />
+                    <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap' }}>hrs</span>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAckPopover(false)}
+                      disabled={acknowledgeJob.isPending}
+                      style={{
+                        flex: 1,
+                        padding: '8px 0',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        border: '1.5px solid #E2E8F0',
+                        background: '#fff',
+                        color: '#64748B',
+                        cursor: acknowledgeJob.isPending ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseOver={(e) => { if (!acknowledgeJob.isPending) (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC'; }}
+                      onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { handleAcknowledge(); setShowAckPopover(false); }}
+                      disabled={isDisabled}
+                      style={{
+                        flex: 2,
+                        padding: '8px 0',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        borderRadius: 8,
+                        border: 'none',
+                        background: isDisabled
+                          ? 'linear-gradient(135deg,#9CA3AF,#6B7280)'
+                          : 'linear-gradient(135deg,#B22234,#8B1A28)',
+                        color: '#fff',
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        opacity: isDisabled ? 0.65 : 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        boxShadow: isDisabled ? 'none' : '0 3px 10px rgba(178,34,52,0.35)',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseOver={(e) => {
+                        if (isDisabled) return;
+                        const btn = e.currentTarget as HTMLButtonElement;
+                        btn.style.background = 'linear-gradient(135deg,#991B2A,#7F1521)';
+                        btn.style.boxShadow = '0 4px 14px rgba(178,34,52,0.50)';
+                      }}
+                      onMouseOut={(e) => {
+                        if (isDisabled) return;
+                        const btn = e.currentTarget as HTMLButtonElement;
+                        btn.style.background = 'linear-gradient(135deg,#B22234,#8B1A28)';
+                        btn.style.boxShadow = '0 3px 10px rgba(178,34,52,0.35)';
+                      }}
+                    >
+                      {acknowledgeJob.isPending ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                          strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                      ) : (
+                        <Timer className="w-3.5 h-3.5" aria-hidden />
+                      )}
+                      {acknowledgeJob.isPending ? 'Sending…' : 'Confirm & Send'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
 
         {/* ── BODY ── */}
         <div className="flex-1 overflow-y-auto px-6 py-5" style={{ background: '#fff' }}>
@@ -957,9 +1306,11 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
               <DetailRow label="Client"      value={displayJob.client} />
               <DetailRow label="Client ID"   value={displayJob.clientId} />
               <DetailRow label="Order Type"  value={displayJob.order} />
+              {displayJob.specificType ? <DetailRow label="Specific Service" value={displayJob.specificType} /> : null}
               <DetailRow label="Complexity"  value={displayJob.complexity} />
               {displayJob.process ? <DetailRow label="Process" value={displayJob.process} /> : null}
               <DetailRow label="Colors"      value={String(displayJob.colors)} />
+              {displayJob.finalFiles?.length ? <DetailRow label="Output Formats" value={displayJob.finalFiles.join(', ')} /> : null}
               <DetailRow label="Assigned To" value={displayJob.assignedTo ?? 'Unassigned'} />
               {displayJob.subType ? <DetailRow label="Sub-Type" value={displayJob.subType} /> : null}
             </div>
@@ -970,6 +1321,18 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 SPECIFICATIONS
               </div>
               {displayJob.etaHours ? <DetailRow label="ETA" value={`${displayJob.etaHours}h`} /> : null}
+              {isAcknowledged && etaCountdown ? (
+                <DetailRow
+                  label="ETA Countdown"
+                  value={etaCountdown.display}
+                  valueStyle={{
+                    fontFamily: 'IBM Plex Mono, monospace',
+                    fontSize: 11,
+                    color: etaCountdown.expired ? '#059669' : '#1D4ED8',
+                    fontWeight: 700,
+                  }}
+                />
+              ) : null}
               <DetailRow label="Created"   value={displayJob.created} />
               <DetailRow
                 label="Reference"

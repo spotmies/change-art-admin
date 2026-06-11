@@ -123,7 +123,7 @@ export interface IJobCard {
   time_and_date: IsoDateTime;
   order_type: OrderType;
   project_type: ProjectType;
-  eta_hours: number;
+  eta_hours: number | null;
   design_name: string;
   design_complexity: DesignComplexity | null;
   process_type: ProcessType | null;
@@ -139,6 +139,7 @@ export interface IJobCard {
   mail_description: string | null;
   sewout_required: boolean | null;
   description: string | null;
+  specific_type: string | null;
   stitch_count: number | null;
   /** Flat price the agency quoted to the client (set via /cs/jobs/:id/quote/send-price). */
   admin_price: number | null;
@@ -152,6 +153,7 @@ export interface IJobCard {
   assigned_sewout_id: string | null;
   version: number;
   is_locked: boolean;
+  acknowledgement_sent_at: IsoDateTime | null;
   is_admin_copy: boolean;
   parent_job_id: string | null;
   has_admin_copy: boolean;
