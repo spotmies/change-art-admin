@@ -5,6 +5,7 @@ import { ConfirmModal } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
 import type { IUser } from '@contracts';
 import { useCreateUser, useDeactivateUser, useUpdateUser } from '../hooks/use-admin-users';
+import { useSessionUser } from '@modules/auth/stores/auth-store';
 
 export type UserModalMode = 'view' | 'edit' | 'create';
 
@@ -76,10 +77,12 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
 
+  const sessionUser = useSessionUser();
   const create = useCreateUser();
   const update = useUpdateUser();
   const deactivate = useDeactivateUser();
   const saving = create.isPending || update.isPending;
+  const isSelf = !!user && !!sessionUser && user.id === sessionUser.id;
 
   // Reset the form whenever the modal target changes.
   useEffect(() => {
@@ -299,9 +302,12 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
                     className="fi"
                     value={form.isActive ? 'active' : 'inactive'}
                     onChange={(e) => set('isActive', e.target.value === 'active')}
+                    disabled={isSelf}
+                    title={isSelf ? 'You cannot deactivate your own account' : undefined}
+                    style={isSelf ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   >
                     <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    {!isSelf ? <option value="inactive">Inactive</option> : null}
                   </select>
                 </div>
               ) : null}
@@ -331,7 +337,7 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
             </>
           ) : (
             <>
-              {user && user.is_active ? (
+              {user && user.is_active && !isSelf ? (
                 <button
                   type="button"
                   className="btn btn-red"

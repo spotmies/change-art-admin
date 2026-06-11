@@ -286,6 +286,15 @@ function priorityClass(priority: string): string {
   return map[priority] || 'normal';
 }
 
+function priorityCardClass(priority: string): string {
+  const map: Record<string, string> = {
+    Normal: 'job-card-normal',
+    Rush: 'job-card-rush',
+    'Super Rush': 'job-card-super-rush',
+  };
+  return map[priority] || 'job-card-normal';
+}
+
 function Badge({ children, accent }: { children: ReactNode; accent: string }) {
   return <span className={cn('badge', accent)}>{children}</span>;
 }
@@ -322,7 +331,7 @@ function TableView({
         </thead>
         <tbody>
           {jobs.map((j) => (
-            <tr key={j.id} onClick={() => onOpen?.(j)}>
+            <tr key={j.id} className={priorityCardClass(j.priority)} onClick={() => onOpen?.(j)}>
               <td>
                 <div className="job-cell">
                   <div>
@@ -402,7 +411,7 @@ function GridView({
         return (
           <article
             key={j.id}
-            className={cn('job-card', actionRequired && 'job-card-attention')}
+            className={cn('job-card', priorityCardClass(j.priority), actionRequired && 'job-card-attention')}
             onClick={() => onOpen?.(j)}
             role="button"
             tabIndex={0}
@@ -467,7 +476,7 @@ function ListView({
       {jobs.map((j) => (
         <div
           key={j.id}
-          className="job-list-item"
+          className={cn('job-list-item', priorityCardClass(j.priority))}
           onClick={() => onOpen?.(j)}
           role="button"
           tabIndex={0}

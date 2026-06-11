@@ -20,6 +20,9 @@ export const ERROR_CODES = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   EMAIL_ALREADY_EXISTS: 'EMAIL_ALREADY_EXISTS',
   ACCOUNT_DEACTIVATED: 'ACCOUNT_DEACTIVATED',
+  INVALID_OTP: 'INVALID_OTP',
+  OTP_EXPIRED: 'OTP_EXPIRED',
+  TOO_MANY_OTP_ATTEMPTS: 'TOO_MANY_OTP_ATTEMPTS',
 
   // Authorization
   INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
@@ -96,6 +99,9 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   INVALID_CREDENTIALS: 'Email or password is incorrect.',
   EMAIL_ALREADY_EXISTS: 'An account with this email already exists.',
   ACCOUNT_DEACTIVATED: 'This account has been deactivated.',
+  INVALID_OTP: 'Incorrect code. Please try again.',
+  OTP_EXPIRED: 'This code has expired. Please request a new one.',
+  TOO_MANY_OTP_ATTEMPTS: 'Too many incorrect attempts. Please request a new code.',
 
   INSUFFICIENT_PERMISSIONS: "You don't have permission to do this.",
   TENANT_MISMATCH: 'You cannot access records from another organisation.',

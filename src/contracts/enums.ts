@@ -160,6 +160,7 @@ export enum NotificationType {
   QUOTE_UPDATE = 'QUOTE_UPDATE',
   DELIVERY = 'DELIVERY',
   SYSTEM = 'SYSTEM',
+  CLIENT_DATA_ACCESSED = 'CLIENT_DATA_ACCESSED',
 }
 
 export enum FileCategory {

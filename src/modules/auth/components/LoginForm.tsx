@@ -22,7 +22,10 @@ export function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const setUser = useAuthStore((s) => s.setUser);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const isDeactivated = !!(location.state as { deactivated?: boolean } | null)?.deactivated;
+  const [serverError, setServerError] = useState<string | null>(
+    isDeactivated ? 'Your account has been deactivated. Contact an administrator.' : null,
+  );
 
   const {
     register,

@@ -56,9 +56,9 @@ export function AdminDashboardPage() {
       <StatGrid
         className="stats-grid-6"
         stats={[
-          { accent: 'blue',    label: 'Open Jobs',       value: loading(active.length) },
-          { accent: 'amber',   label: 'In Production',   value: loading(inProd.length) },
-          { accent: 'teal',    label: 'In QC',           value: loading(inQc.length) },
+          { accent: 'blue',    label: 'Open Jobs',       value: loading(active.length),    href: '/admin/jobs' },
+          { accent: 'amber',   label: 'In Production',   value: loading(inProd.length),    href: '/admin/jobs' },
+          { accent: 'teal',    label: 'In QC',           value: loading(inQc.length),      href: '/admin/jobs' },
           {
             accent: 'green',
             label: 'Sewout',
@@ -66,6 +66,7 @@ export function AdminDashboardPage() {
             delta: 'Jobs in sewout stage',
             deltaDirection: 'up',
             icon: <Send aria-hidden />,
+            href: '/admin/jobs',
           },
           {
             accent: 'purple',
@@ -74,6 +75,7 @@ export function AdminDashboardPage() {
             delta: 'Completed jobs',
             deltaDirection: 'up',
             icon: <CheckCircle2 aria-hidden />,
+            href: '/admin/jobs',
           },
           {
             accent: 'crimson',
@@ -81,6 +83,7 @@ export function AdminDashboardPage() {
             value: loading(totalClients),
             delta: 'Registered accounts',
             deltaDirection: 'up',
+            href: '/admin/clients',
           },
         ]}
       />

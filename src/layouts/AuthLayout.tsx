@@ -20,16 +20,18 @@ export function AuthLayout() {
   const reset = useAuthStore((s) => s.reset);
   const location = useLocation();
 
-  // If a CLIENT session somehow exists, sign it out immediately to prevent
-  // an infinite redirect loop (CLIENT has no route in this admin app).
+  // If a CLIENT or deactivated session exists, sign out immediately to prevent
+  // an infinite redirect loop (CLIENT has no route; deactivated → RoleGuard
+  // sends them back here → AuthLayout sends them to dashboard → loop).
   const isStuckClient = status === 'authenticated' && user?.role === UserRole.CLIENT;
+  const isDeactivated = status === 'authenticated' && !!user && !user.is_active;
   useEffect(() => {
-    if (isStuckClient) {
+    if (isStuckClient || isDeactivated) {
       authService.signOut().then(() => reset());
     }
-  }, [isStuckClient, reset]);
+  }, [isStuckClient, isDeactivated, reset]);
 
-  if (status === 'authenticating' || isStuckClient) {
+  if (status === 'authenticating' || isStuckClient || isDeactivated) {
     return null;
   }
 

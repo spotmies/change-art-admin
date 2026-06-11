@@ -493,7 +493,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                             className="block uppercase"
                             style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
                           >
-                            Agency Price ($) <span style={{ color: '#B22234' }}>*</span>
+                            Quote Price <span style={{ color: '#B22234' }}>*</span>
                           </label>
                           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
                             <span
@@ -704,7 +704,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                           onMouseOut={(e)  => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                         >
                           <X className="w-2.5 h-2.5" style={{ marginRight: 4 }} aria-hidden />
-                          {rejectQuote.isPending ? 'Rejecting…' : 'Reject Quote'}
+                          {rejectQuote.isPending ? 'Cancelling…' : 'Cancel'}
                         </button>
                         {!quoteSent ? (
                           <button

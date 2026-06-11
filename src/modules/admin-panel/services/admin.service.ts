@@ -163,6 +163,24 @@ export const adminService = {
     return apiClient.patch<IUser, UpdateUserBody>(`/api/v1/users/${id}`, body);
   },
 
+  /**
+   * Fire-and-forget: logs a client record access event so the backend can
+   * notify the administrator (John Peter) that client data was viewed or edited.
+   */
+  logClientAccess(clientId: string): Promise<void> {
+    return apiClient.post<void>(`/api/v1/clients/${clientId}/access-log`);
+  },
+
+  /** Send a 6-digit OTP to the current admin's email for client-section access. */
+  requestAccessOtp(): Promise<void> {
+    return apiClient.post<void>('/api/v1/clients/request-access-otp');
+  },
+
+  /** Verify the OTP the admin entered. Throws on wrong code, expiry, or lockout. */
+  verifyAccessOtp(code: string): Promise<void> {
+    return apiClient.post<void, { code: string }>('/api/v1/clients/verify-access-otp', { code });
+  },
+
   // Soft delete — marks the user inactive and invalidates their sessions.
   deactivateUser(id: string): Promise<IUser> {
     return apiClient.patch<IUser>(`/api/v1/users/${id}/deactivate`);

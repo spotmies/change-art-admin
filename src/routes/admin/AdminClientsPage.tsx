@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Pencil, Search } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { PaymentMode } from '@contracts';
@@ -9,6 +10,7 @@ import {
   ClientDetailModal,
   type ClientModalMode,
 } from '../../modules/admin-panel/components/ClientDetailModal';
+import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
 import { ProfileChangeRequestsTab } from '../../modules/admin-panel/components/ProfileChangeRequestsTab';
 
 const PER_PAGE = 20;
@@ -43,11 +45,35 @@ function useDebounced<T>(value: T, ms = 300): T {
   return debounced;
 }
 
+const SESSION_FLAG = 'clients_otp_verified';
+
+function isSessionVerified(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSessionVerified(): void {
+  try {
+    sessionStorage.setItem(SESSION_FLAG, '1');
+  } catch {
+    // sessionStorage unavailable — gate will re-appear on next click but won't break anything
+  }
+}
+
 export function AdminClientsPage() {
+  const navigate = useNavigate();
+  const [pageGateOpen, setPageGateOpen] = useState(() => !isSessionVerified());
   const [tab, setTab] = useState<Tab>('clients');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
+
+  function openClient(client: IClient, mode: ClientModalMode) {
+    setSelected({ client, mode });
+  }
 
   const debouncedSearch = useDebounced(search, 300);
 
@@ -197,24 +223,20 @@ export function AdminClientsPage() {
                 </thead>
                 <tbody>
                   {clients.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="cursor-pointer"
-                      onClick={() => setSelected({ client: c, mode: 'view' })}
-                    >
+                    <tr key={c.id}>
                       <td><span className="ref-code">{c.client_id}</span></td>
                       <td className="font-semibold">{c.contact_name}</td>
                       <td className="text-text-muted">{c.company_name ?? '—'}</td>
                       <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
-                      <td className="text-text-muted">{c.email}</td>
+                      <td className="text-text-muted">••••••••••</td>
                       <td className="text-text-muted">{c.location ?? '—'}</td>
                       <td><span className="badge gray">{formatPaymentMode(c.payment_mode)}</span></td>
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td>
                         <button
                           type="button"
                           className="btn btn-outline"
                           aria-label={`Edit ${c.contact_name}`}
-                          onClick={() => setSelected({ client: c, mode: 'edit' })}
+                          onClick={() => openClient(c, 'edit')}
                         >
                           <Pencil aria-hidden className="w-3.5 h-3.5" />
                           Edit
@@ -236,6 +258,17 @@ export function AdminClientsPage() {
           </>
         )}
       </Panel>
+
+      {/* Page-level OTP gate — shown once per session on first visit */}
+      {pageGateOpen && (
+        <ClientSectionGateModal
+          onVerified={() => {
+            markSessionVerified();
+            setPageGateOpen(false);
+          }}
+          onDismiss={() => navigate(-1)}
+        />
+      )}
 
       <ClientDetailModal
         client={selected?.client ?? null}
