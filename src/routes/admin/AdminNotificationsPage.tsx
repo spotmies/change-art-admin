@@ -27,6 +27,7 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   [NotificationType.QUOTE_UPDATE]: 'Quote',
   [NotificationType.DELIVERY]: 'Delivery',
   [NotificationType.SYSTEM]: 'System',
+  [NotificationType.CLIENT_DATA_ACCESSED]: 'Data Access',
 };
 
 const TYPE_BADGE: Record<NotificationType, string> = {
@@ -38,6 +39,7 @@ const TYPE_BADGE: Record<NotificationType, string> = {
   [NotificationType.QUOTE_UPDATE]: 'navy',
   [NotificationType.DELIVERY]: 'green',
   [NotificationType.SYSTEM]: 'gray',
+  [NotificationType.CLIENT_DATA_ACCESSED]: 'gray',
 };
 
 function formatDateTime(iso: string): string {
