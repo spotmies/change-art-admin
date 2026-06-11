@@ -799,6 +799,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                           on the client; Send Price is hidden once a price has
                           been sent so the rep can't dispatch a second one. */}
                       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
+                        {/* Cancel button — rejects the quote and closes the price panel 
                         <button
                           type="button"
                           onClick={handleRejectQuote}
@@ -822,7 +823,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                         >
                           <X className="w-2.5 h-2.5" style={{ marginRight: 4 }} aria-hidden />
                           {rejectQuote.isPending ? 'Cancelling…' : 'Cancel'}
-                        </button>
+                        </button>*/}
                         {!quoteSent ? (
                           <button
                             type="button"

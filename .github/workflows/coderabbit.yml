@@ -1,4 +1,4 @@
-name: Azure AI Code Review
+name: CodeTurtle AI Code Review
 
 on:
   pull_request_target:
@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout base repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
@@ -38,8 +38,6 @@ jobs:
 
       - name: Send chunks to Azure AI
         run: |
-          set -euo pipefail
-          shopt -s nullglob
           cat <<'PROMPT' > prompt.txt
           You are a senior software engineer acting as an automated code reviewer
           similar to CodeRabbit.
@@ -54,13 +52,15 @@ jobs:
           - Ignore formatting-only or whitespace-only changes
           - Reference filenames and approximate line numbers when possible
           - Suggest fixes or alternatives, not just problems
-          - IMPORTANT: Only report issues that are directly supported by the provided diff chunk.
-            If you cannot confirm an issue from the diff, do not list it as a high-risk issue.
-            For high-risk issues, be conservative: if not certain, move it to suggestions or omit it.
 
           Output MUST be valid GitHub-flavored Markdown.
 
           Output format:
+
+          ### 📌 Summary
+          - Short bullet summary of overall findings
+
+          ---
 
           ### 💬 Inline Comments (File-wise)
           For each file:
@@ -72,61 +72,23 @@ jobs:
 
           ### ⚠️ High-Risk Issues
           - List only serious issues (security, data loss, crashes)
-          - If none in this chunk, say: "No high-risk issues found."
+          - If none, say: "No high-risk issues found."
 
           Keep it concise and developer-friendly.
           PROMPT
 
-          echo "## 🤖 AI Code Review" > combined_review.md
+          echo "## Code Turtle Review 🐢" > combined_review.md
           echo "" >> combined_review.md
 
-          CHUNKS=(chunks/*)
-          if [ "${#CHUNKS[@]}" -eq 0 ]; then
-            echo "No code diff chunks found for this PR." >> combined_review.md
-            echo -e "\n---\n" >> combined_review.md
-          fi
-
-          for CHUNK in "${CHUNKS[@]}"; do
-            if [ ! -s "$CHUNK" ]; then
-              continue
-            fi
-
-            PAYLOAD="$(jq -n \
-              --arg diff "$(cat "$CHUNK")" \
-              --arg prompt "$(cat prompt.txt)" \
-              '{diff: $diff, prompt: $prompt}')"
-
-            if ! RESPONSE="$(curl --silent --show-error --location \
-              --retry 3 --retry-delay 2 --retry-all-errors \
-              --connect-timeout 20 --max-time 120 \
-              -X POST https://coderabbit-production.up.railway.app/review \
+          for CHUNK in chunks/*; do
+            RESPONSE=$(curl -s -X POST https://coderabbit-production.up.railway.app/review \
               -H "Content-Type: application/json" \
-              -d "$PAYLOAD")"; then
-              echo "⚠️ Failed to review chunk \`$CHUNK\`: request error." >> combined_review.md
-              echo -e "\n---\n" >> combined_review.md
-              continue
-            fi
+              -d "$(jq -n \
+                --arg diff "$(cat "$CHUNK")" \
+                --arg prompt "$(cat prompt.txt)" \
+                '{diff: $diff, prompt: $prompt}')")
 
-            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '
-              if type == "string" then .
-              elif type == "object" then (.review // .choices[0].message.content // empty)
-              else empty
-              end
-            ' 2>/dev/null || true)"
-            if [ -z "$REVIEW_TEXT" ]; then
-              REVIEW_TEXT="$(printf '%s' "$RESPONSE" | tr -d '\000' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-            fi
-            # Providers sometimes return literal "null" or repeat headers.
-            # Keep the combined output clean and developer-friendly.
-            REVIEW_TEXT="$(printf '%s\n' "$REVIEW_TEXT" \
-              | sed -e '/^[[:space:]]*null[[:space:]]*$/Id' \
-                    -e '/^[[:space:]]*#*[[:space:]]*🤖[[:space:]]*AI[[:space:]]*Code[[:space:]]*Review[[:space:]]*$/Id' \
-                    -e '/^[[:space:]]*🤖[[:space:]]*AI[[:space:]]*Code[[:space:]]*Review[[:space:]]*$/Id')"
-            if [ -z "$REVIEW_TEXT" ]; then
-              echo "⚠️ No parseable review content returned for chunk \`$CHUNK\`." >> combined_review.md
-            else
-              echo "$REVIEW_TEXT" >> combined_review.md
-            fi
+            echo "$RESPONSE" | jq -r '.review // .choices[0].message.content' >> combined_review.md
             echo -e "\n---\n" >> combined_review.md
           done
 
@@ -134,14 +96,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
           BODY="$(cat combined_review.md)"
 
           if [ -z "$BODY" ]; then
             BODY="⚠️ AI review failed or returned empty response."
           fi
 
-          curl --silent --show-error --fail-with-body -X POST \
+          curl -s -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
@@ -151,8 +112,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
-          curl --silent --show-error --fail-with-body -X POST \
+          curl -s -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels \

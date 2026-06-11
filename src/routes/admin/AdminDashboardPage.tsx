@@ -9,8 +9,12 @@ import {
   SectionHeader,
   StatGrid,
 } from '@modules/shared-ui';
-import { CheckCircle2, Send } from 'lucide-react';
-import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { AlertTriangle, CheckCircle2, Send, Target, TrendingUp } from 'lucide-react';
+import {
+  useAdminJobViews,
+  useAdminJobCards,
+  useAdminUsers,
+} from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 export function AdminDashboardPage() {
@@ -19,11 +23,9 @@ export function AdminDashboardPage() {
 
   const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
   const { data: clientsData } = useAdminClients();
+  const { data: rawJobsData } = useAdminJobCards({ per_page: 100 });
+  const { data: usersData } = useAdminUsers();
 
-  // "Open Jobs" / "New Jobs" deliberately exclude quote-stage rows — those
-  // belong to the Quotes page until the client confirms the price. Once a
-  // quote is confirmed and the workflow moves it to JOB_PLACED, it shows
-  // up here. This keeps the two queues disjoint on every surface.
   const active   = useMemo(
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
     [jobs],
@@ -38,13 +40,109 @@ export function AdminDashboardPage() {
 
   const totalClients = clientsData?.meta.total ?? 0;
 
-  // All non-delivered active jobs for the donut center
   const totalActive = active.length;
-  const prodPct = totalActive
-    ? Math.round((inProd.length / totalActive) * 100)
-    : 0;
+  const prodPct = totalActive ? Math.round((inProd.length / totalActive) * 100) : 0;
 
-  const loading = (v: number | string) => isLoading ? '…' : v;
+  // ── Analytics computations ──────────────────────────────────────────────
+
+  // Missed Deadlines: active jobs whose ETA window has already elapsed
+  const missedDeadlines = useMemo(() => {
+    const now = Date.now();
+    return active.filter((j) => {
+      const deadline = new Date(j.created).getTime() + j.etaHours * 3_600_000;
+      return deadline < now;
+    }).length;
+  }, [active]);
+
+  // Achieved Targets: delivered jobs (completed successfully)
+  const achievedTargets = delivered.length;
+
+  // Weekly Trend: jobs created on each weekday of the current week (Mon–Fri)
+  const weeklyData = useMemo(() => {
+    const now = new Date();
+    // Start of this week's Monday
+    const dayOfWeek = now.getDay(); // 0 = Sun
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    monday.setHours(0, 0, 0, 0);
+
+    const counts = [0, 0, 0, 0, 0];
+    for (const job of jobs) {
+      const created = new Date(job.created);
+      const dayIdx = Math.floor((created.getTime() - monday.getTime()) / 86_400_000);
+      if (dayIdx >= 0 && dayIdx < 5) counts[dayIdx]++;
+    }
+
+    const maxVal = Math.max(...counts, 1);
+    const colors = [
+      'var(--color-teal)',
+      'var(--color-amber)',
+      'var(--color-purple, #a855f7)',
+      'var(--color-blue)',
+      undefined,
+    ];
+    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => ({
+      label,
+      value: counts[i],
+      height: Math.max(Math.round((counts[i] / maxVal) * 100), 4),
+      color: colors[i],
+      highlight: i === 4,
+    }));
+  }, [jobs]);
+
+  // Production Trends: jobs created each day for the last 7 days
+  const productionTrends = useMemo(() => {
+    const result: { label: string; value: number; height: number; color: string }[] = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now);
+      day.setDate(day.getDate() - i);
+      day.setHours(0, 0, 0, 0);
+      const nextDay = new Date(day);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const count = jobs.filter((j) => {
+        const d = new Date(j.created);
+        return d >= day && d < nextDay;
+      }).length;
+      result.push({
+        label: day.toLocaleDateString('en', { weekday: 'short' }),
+        value: count,
+        height: 0,
+        color: 'var(--color-blue)',
+      });
+    }
+    const maxVal = Math.max(...result.map((r) => r.value), 1);
+    return result.map((r) => ({ ...r, height: Math.max(Math.round((r.value / maxVal) * 100), 4) }));
+  }, [jobs]);
+
+  // Top Performing Staff: staff ranked by number of active + delivered jobs handled
+  const topStaff = useMemo(() => {
+    const usersMap = new Map<string, string>();
+    for (const u of usersData?.items ?? []) usersMap.set(u.id, u.name);
+
+    const counts = new Map<string, { name: string; total: number; delivered: number }>();
+    for (const card of rawJobsData?.items ?? []) {
+      const handlerId =
+        card.current_handler_id ??
+        card.assigned_junior_id ??
+        card.assigned_senior_id ??
+        card.assigned_sewout_id ??
+        null;
+      if (!handlerId) continue;
+      const name = usersMap.get(handlerId) ?? 'Unknown';
+      const entry = counts.get(handlerId) ?? { name, total: 0, delivered: 0 };
+      entry.total++;
+      const isDelivered = [
+        'QC_APPROVED', 'READY_TO_DELIVER', 'DELIVERED', 'CLOSED',
+      ].includes(card.status);
+      if (isDelivered) entry.delivered++;
+      counts.set(handlerId, entry);
+    }
+    return [...counts.values()].sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [rawJobsData, usersData]);
+
+  const loading = (v: number | string) => (isLoading ? '…' : v);
 
   return (
     <div className="page">
@@ -53,6 +151,7 @@ export function AdminDashboardPage() {
         subtitle="Platform-wide overview. Full access to all modules."
       />
 
+      {/* Row 1 — Core job volume stats */}
       <StatGrid
         className="stats-grid-6"
         stats={[
@@ -88,6 +187,50 @@ export function AdminDashboardPage() {
         ]}
       />
 
+      {/* Row 2 — Analytics metrics */}
+      <StatGrid
+        className="stats-grid-4"
+        stats={[
+          {
+            accent: 'crimson',
+            label: 'Missed Deadlines',
+            value: loading(missedDeadlines),
+            delta: 'Active jobs past ETA',
+            deltaDirection: missedDeadlines > 0 ? 'down' : 'none',
+            icon: <AlertTriangle aria-hidden />,
+            href: '/admin/jobs',
+          },
+          {
+            accent: 'green',
+            label: 'Achieved Targets',
+            value: loading(achievedTargets),
+            delta: 'Jobs delivered',
+            deltaDirection: 'up',
+            icon: <Target aria-hidden />,
+            href: '/admin/jobs',
+          },
+          {
+            accent: 'teal',
+            label: 'This Week',
+            value: loading(weeklyData.reduce((s, d) => s + d.value, 0)),
+            delta: 'Jobs created this week',
+            deltaDirection: 'up',
+            icon: <TrendingUp aria-hidden />,
+          },
+          {
+            accent: 'blue',
+            label: 'On-Time Rate',
+            value: loading(
+              active.length + delivered.length > 0
+                ? `${Math.round((achievedTargets / Math.max(active.length + delivered.length, 1)) * 100)}%`
+                : '—',
+            ),
+            delta: 'Delivered vs total jobs',
+            deltaDirection: 'up',
+          },
+        ]}
+      />
+
       <div className="two-col">
         {/* Left — job tables */}
         <div>
@@ -114,10 +257,10 @@ export function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Right — stats panels */}
+        {/* Right — analytics panels */}
         <div className="flex flex-col gap-3">
 
-          {/* Jobs Status */}
+          {/* Jobs Status donut */}
           <Panel>
             <div className="flex items-center gap-5">
               <div
@@ -172,17 +315,57 @@ export function AdminDashboardPage() {
             </div>
           </Panel>
 
-          {/* Weekly Trend */}
+          {/* Weekly Trend (dynamic) */}
           <Panel title="Weekly Trend">
-            <BarChart
-              items={[
-                { label: 'Mon', value: 8,  height: 40,  color: 'var(--color-teal)' },
-                { label: 'Tue', value: 11, height: 55,  color: 'var(--color-amber)' },
-                { label: 'Wed', value: 7,  height: 35,  color: 'var(--color-purple, #a855f7)' },
-                { label: 'Thu', value: 14, height: 70,  color: 'var(--color-blue)' },
-                { label: 'Fri', value: 20, height: 100, highlight: true },
-              ]}
-            />
+            <BarChart items={weeklyData} />
+          </Panel>
+
+          {/* Production Trends — last 7 days */}
+          <Panel title="Production Trends" className="panel-blue">
+            <BarChart items={productionTrends} />
+          </Panel>
+
+          {/* Top Performing Staff */}
+          <Panel title="Top Performing Staff" className="panel-teal">
+            {topStaff.length === 0 ? (
+              <div className="text-[12px] text-text-faint py-2">No assignment data yet.</div>
+            ) : (
+              <div className="flex flex-col gap-2 mt-1">
+                {topStaff.map((s, idx) => {
+                  const pct = topStaff[0].total > 0 ? Math.round((s.total / topStaff[0].total) * 100) : 0;
+                  return (
+                    <div key={s.name} className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="text-[10px] font-bold w-4 text-center"
+                            style={{ color: idx === 0 ? 'var(--color-amber)' : 'var(--text-faint)' }}
+                          >
+                            {idx + 1}
+                          </span>
+                          <span className="text-[12px] font-medium text-text-main truncate max-w-[110px]">
+                            {s.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-text-faint">{s.delivered} done</span>
+                          <span className="text-[12px] font-bold text-text-main">{s.total}</span>
+                        </div>
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--glass-border)' }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${pct}%`,
+                            background: idx === 0 ? 'var(--color-teal)' : 'var(--color-blue)',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </Panel>
 
         </div>

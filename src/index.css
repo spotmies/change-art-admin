@@ -838,6 +838,23 @@ html[data-theme='light'] .mb-track {
     }
   }
 
+  /* 4-column analytics row — admin dashboard second metrics row */
+  .stats-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 900px) {
+    .stats-grid-4 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .stats-grid-4 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
   /* ─ Section header ─ (margin-bottom: 12px matches demo) */
   .sec-header {
     display: flex;
