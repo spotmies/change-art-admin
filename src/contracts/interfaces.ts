@@ -152,6 +152,9 @@ export interface IJobCard {
   assigned_sewout_id: string | null;
   version: number;
   is_locked: boolean;
+  is_admin_copy: boolean;
+  parent_job_id: string | null;
+  has_admin_copy: boolean;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

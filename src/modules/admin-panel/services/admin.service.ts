@@ -135,6 +135,19 @@ export const adminService = {
     return apiClient.patch<IJobCard, UpdateJobCardBody>(`/api/v1/job-cards/${id}`, body);
   },
 
+  /** Returns the admin copy for an original job, or null if none exists yet. */
+  getAdminCopy(originalJobId: string): Promise<IJobCard | null> {
+    return apiClient.get<IJobCard | null>(`/api/v1/job-cards/${originalJobId}/admin-copy`);
+  },
+
+  /** Creates (or updates if already exists) the admin copy for an original job. */
+  createAdminCopy(originalJobId: string, body: Omit<UpdateJobCardBody, 'version'>): Promise<IJobCard> {
+    return apiClient.post<IJobCard, Omit<UpdateJobCardBody, 'version'>>(
+      `/api/v1/job-cards/${originalJobId}/admin-copy`,
+      body,
+    );
+  },
+
   getClients(filters: ClientFilters = {}): Promise<PaginatedList<IClient>> {
     return apiClient.getPaginated<IClient>('/api/v1/clients', {
       params: { per_page: 100, ...filters } as Record<string, unknown>,

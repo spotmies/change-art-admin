@@ -73,6 +73,39 @@ export function useAdminJobById(id: string) {
   return { data: job, isLoading: jobQuery.isLoading, isError: jobQuery.isError };
 }
 
+/**
+ * Fetches the admin copy for an original job. Returns null when none exists yet.
+ */
+export function useAdminCopy(originalJobId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.jobs.adminCopy(originalJobId ?? ''),
+    queryFn: () => adminService.getAdminCopy(originalJobId!),
+    enabled: !!originalJobId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Creates (or updates) the admin copy for an original job.
+ * Invalidates the full jobs cache on success so the list refreshes.
+ */
+export function useCreateAdminCopy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      originalJobId,
+      body,
+    }: {
+      originalJobId: string;
+      body: Omit<UpdateJobCardBody, 'version'>;
+    }) => adminService.createAdminCopy(originalJobId, body),
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.adminCopy(vars.originalJobId) });
+    },
+  });
+}
+
 export function useAdminJobViews(filters: JobCardFilters = {}): {
   jobs: Job[];
   total: number;

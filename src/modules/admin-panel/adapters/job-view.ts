@@ -167,5 +167,8 @@ export function adaptJobCard(
     height: card.height_inches ?? undefined,
     fabric: card.fabric ?? undefined,
     stitchCount: card.stitch_count ?? undefined,
+    isAdminCopy: card.is_admin_copy ?? false,
+    parentJobId: card.parent_job_id ?? null,
+    hasAdminCopy: card.has_admin_copy ?? false,
   };
 }

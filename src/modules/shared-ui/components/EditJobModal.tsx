@@ -3,7 +3,7 @@ import { X, Save, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
 import { DesignComplexity, OrderType, Priority, ProcessType } from '@contracts';
-import { useUpdateJobCard } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useUpdateJobCard, useCreateAdminCopy } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { toastApiError } from '@lib/toast-error';
 import type { UpdateJobCardBody } from '@modules/admin-panel/services/admin.service';
 import type {
@@ -235,6 +235,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
   const [isIn, setIsIn] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const updateMutation = useUpdateJobCard();
+  const createAdminCopyMutation = useCreateAdminCopy();
 
   useEffect(() => {
     if (job) {
@@ -308,11 +309,8 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
 
   const handleSave = () => {
     const patch = buildPatch();
-    const changedFields = Object.keys(patch);
 
-    if (changedFields.length === 0) {
-      // Status is the only other thing the user can touch here, and it isn't
-      // editable via this endpoint — let them know rather than silently no-op.
+    if (Object.keys(patch).length === 0) {
       if (form.status !== job.status) {
         toast.error("Status changes happen automatically as the job moves through the workflow — it can't be set here.");
       }
@@ -320,35 +318,48 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
       return;
     }
 
-    if (!job.uuid || job.version == null) {
+    if (!job.uuid) {
       toast.error('This job is missing its backend reference — refresh the page and try again.');
       return;
     }
 
-    updateMutation.mutate(
-      { id: job.uuid, body: { version: job.version, ...patch } },
-      {
-        onSuccess: () => {
-          toast.success('Job updated.');
-          onSave?.(job, {
-            design: form.design.trim() || job.design,
-            client: form.client.trim() || job.client,
-            order: form.order,
-            process: form.process,
-            complexity: form.complexity,
-            priority: form.priority,
-            status: form.status,
-            etaHours: num(form.etaHours),
-            colors: num(form.colors),
-            clientPrice: num(form.clientPrice),
-            adminPrice: num(form.adminPrice),
-            agreedPrice: num(form.agreedPrice),
-            notes: form.notes,
-          });
-          handleClose();
-        },
-        onError: (err) => toastApiError(err),
-      },
+    const afterSuccess = () => {
+      toast.success(job.isAdminCopy ? 'Admin copy updated.' : 'Admin copy created — original client data preserved.');
+      onSave?.(job, {
+        design: form.design.trim() || job.design,
+        client: form.client.trim() || job.client,
+        order: form.order,
+        process: form.process,
+        complexity: form.complexity,
+        priority: form.priority,
+        status: form.status,
+        etaHours: num(form.etaHours),
+        colors: num(form.colors),
+        clientPrice: num(form.clientPrice),
+        adminPrice: num(form.adminPrice),
+        agreedPrice: num(form.agreedPrice),
+        notes: form.notes,
+      });
+      handleClose();
+    };
+
+    // If this is already an admin copy — patch it normally.
+    if (job.isAdminCopy) {
+      if (job.version == null) {
+        toast.error('Version info missing — refresh and try again.');
+        return;
+      }
+      updateMutation.mutate(
+        { id: job.uuid, body: { version: job.version, ...patch } },
+        { onSuccess: afterSuccess, onError: (err) => toastApiError(err) },
+      );
+      return;
+    }
+
+    // First-time edit on an original job — create admin copy via dedicated endpoint.
+    createAdminCopyMutation.mutate(
+      { originalJobId: job.uuid, body: patch },
+      { onSuccess: afterSuccess, onError: (err) => toastApiError(err) },
     );
   };
 
@@ -518,14 +529,14 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
               padding: '7px 13px',
               gap: 6,
               marginLeft: 'auto',
-              opacity: updateMutation.isPending ? 0.6 : 1,
-              cursor: updateMutation.isPending ? 'not-allowed' : 'pointer',
+              opacity: (updateMutation.isPending || createAdminCopyMutation.isPending) ? 0.6 : 1,
+              cursor: (updateMutation.isPending || createAdminCopyMutation.isPending) ? 'not-allowed' : 'pointer',
             }}
             onClick={handleSave}
-            disabled={updateMutation.isPending}
+            disabled={updateMutation.isPending || createAdminCopyMutation.isPending}
           >
             <Save className="w-3.5 h-3.5" aria-hidden />
-            {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
+            {(updateMutation.isPending || createAdminCopyMutation.isPending) ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
       </div>

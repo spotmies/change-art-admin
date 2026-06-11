@@ -5,6 +5,7 @@ import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
 import { useSendQuotePrice, useRejectQuote, useDispatchJob } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { useJobRoom } from '@lib/use-job-room';
+import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 interface JobDetailModalProps {
   job: Job | null;
@@ -123,6 +124,23 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
+  // Toggle between admin-edited and original client data (admin copies only).
+  const [viewMode, setViewMode] = useState<'admin' | 'client'>('admin');
+  // Side-by-side compare mode (admin copies only).
+  const [showCompare, setShowCompare] = useState(false);
+
+  // When viewing an admin copy, lazily fetch the original client job so the
+  // "Client Provided" tab and Compare view can display it.
+  const originalJobQuery = useAdminJobById(
+    job?.isAdminCopy && job.parentJobId ? job.parentJobId : '',
+  );
+  const originalJob = originalJobQuery.data ?? null;
+
+  // Reset to admin tab and close compare whenever a different job is opened.
+  useEffect(() => {
+    setViewMode('admin');
+    setShowCompare(false);
+  }, [job?.uuid]);
 
   const sendPrice = useSendQuotePrice();
   const rejectQuote = useRejectQuote();
@@ -189,6 +207,11 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
 
   if (!job) return null;
 
+  // The data source for all detail fields. Toggle switches this between
+  // the admin-edited copy and the original client submission.
+  const showToggle = job.isAdminCopy === true;
+  const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
+
   const hasSewout  = job.order.includes('Sewout');
   const flowSteps  = buildFlowSteps(hasSewout);
   const stepIdx    = currentStepIndex(job, hasSewout);
@@ -196,12 +219,12 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   // Show only the real images the client uploaded. When the job has none, fall
   // back to a single placeholder tile (jobImage at index 0). Never pad with
   // duplicate placeholders — that's what caused the "same image 3x" bug.
-  const realImages = job.images ?? [];
-  const images = realImages.length > 0 ? realImages : [jobImage(job, 0, 560, 420)];
+  const realImages = displayJob.images ?? [];
+  const images = realImages.length > 0 ? realImages : [jobImage(displayJob, 0, 560, 420)];
 
-  const clientBudget = job.negotiation?.clientOffer ?? job.clientPrice ?? null;
-  const adminCounter = job.negotiation?.agencyOffer ?? job.adminPrice ?? null;
-  const agreedPrice  = job.negotiation?.finalPrice ?? job.agreedPrice ?? null;
+  const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
+  const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
+  const agreedPrice  = displayJob.negotiation?.finalPrice ?? displayJob.agreedPrice ?? null;
 
   // Whether the quote has already been priced & sent (status QUOTE_APPROVED).
   // Drives readonly fields and swaps the action buttons for a clear
@@ -209,8 +232,8 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   // price for the same quote.
   const quoteSent = isQuoteAlreadySent(job);
 
-  const aiOverall = job.aiScore
-    ? Math.round((job.aiScore.colour + job.aiScore.align + job.aiScore.res + job.aiScore.brief) / 4)
+  const aiOverall = displayJob.aiScore
+    ? Math.round((displayJob.aiScore.colour + displayJob.aiScore.align + displayJob.aiScore.res + displayJob.aiScore.brief) / 4)
     : null;
   const aiPass = aiOverall !== null ? aiOverall >= 80 : null;
 
@@ -381,6 +404,100 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
 
         {/* ── BODY ── */}
         <div className="flex-1 overflow-y-auto px-6 py-5" style={{ background: '#fff' }}>
+
+          {/* DATA SOURCE TOGGLE + COMPARE — only visible for admin copies */}
+          {showToggle && (
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div
+                className="flex rounded-lg overflow-hidden"
+                style={{ border: '1px solid #E2E8F0', background: '#F8FAFC' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setViewMode('admin'); setShowCompare(false); }}
+                  style={{
+                    padding: '5px 14px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    border: 'none',
+                    transition: 'all 0.15s',
+                    background: viewMode === 'admin' && !showCompare ? '#B22234' : 'transparent',
+                    color: viewMode === 'admin' && !showCompare ? '#fff' : '#64748B',
+                  }}
+                >
+                  Admin Edited
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewMode('client'); setShowCompare(false); }}
+                  style={{
+                    padding: '5px 14px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    border: 'none',
+                    transition: 'all 0.15s',
+                    background: viewMode === 'client' && !showCompare ? '#B22234' : 'transparent',
+                    color: viewMode === 'client' && !showCompare ? '#fff' : '#64748B',
+                  }}
+                >
+                  Client Provided
+                </button>
+              </div>
+
+              {/* Compare button */}
+              <button
+                type="button"
+                onClick={() => setShowCompare((v) => !v)}
+                style={{
+                  padding: '5px 14px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer',
+                  border: `1.5px solid ${showCompare ? '#B22234' : '#E2E8F0'}`,
+                  borderRadius: 8,
+                  transition: 'all 0.15s',
+                  background: showCompare ? 'rgba(178,34,52,0.07)' : '#F8FAFC',
+                  color: showCompare ? '#B22234' : '#64748B',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="18" rx="1" />
+                  <rect x="14" y="3" width="7" height="18" rx="1" />
+                </svg>
+                {showCompare ? 'Close Compare' : 'Compare'}
+              </button>
+
+              {viewMode === 'client' && !showCompare && (
+                <span className="text-[10.5px] font-medium" style={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                  Showing original client submission — read only
+                </span>
+              )}
+              {originalJobQuery.isLoading && (
+                <span className="text-[10.5px]" style={{ color: '#B22234' }}>Loading…</span>
+              )}
+            </div>
+          )}
+
+          {/* SIDE-BY-SIDE COMPARE VIEW */}
+          {showCompare && originalJob && (
+            <CompareView adminJob={job} clientJob={originalJob} />
+          )}
+          {showCompare && !originalJob && !originalJobQuery.isLoading && (
+            <div className="text-[12px] text-center py-8" style={{ color: '#94A3B8' }}>
+              Original client data not available.
+            </div>
+          )}
+
+          {/* Normal detail view — hidden when compare mode is active */}
+          {!showCompare && (<>
 
           {/* TOP LAYOUT — Image carousel (+ pricing card when in quote view) */}
           {(() => {
@@ -784,7 +901,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                   : 'pending';
                 const subLabel = i === 2
                   ? (job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress')
-                  : step.sub;
+                  : step.sub; // workflow stepper always uses admin copy's data
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center">
                     <div
@@ -836,14 +953,14 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
               <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
                 JOB DETAILS
               </div>
-              <DetailRow label="Client"      value={job.client} />
-              <DetailRow label="Client ID"   value={job.clientId} />
-              <DetailRow label="Order Type"  value={job.order} />
-              <DetailRow label="Complexity"  value={job.complexity} />
-              {job.process ? <DetailRow label="Process" value={job.process} /> : null}
-              <DetailRow label="Colors"      value={String(job.colors)} />
-              <DetailRow label="Assigned To" value={job.assignedTo ?? 'Unassigned'} />
-              {job.subType ? <DetailRow label="Sub-Type" value={job.subType} /> : null}
+              <DetailRow label="Client"      value={displayJob.client} />
+              <DetailRow label="Client ID"   value={displayJob.clientId} />
+              <DetailRow label="Order Type"  value={displayJob.order} />
+              <DetailRow label="Complexity"  value={displayJob.complexity} />
+              {displayJob.process ? <DetailRow label="Process" value={displayJob.process} /> : null}
+              <DetailRow label="Colors"      value={String(displayJob.colors)} />
+              <DetailRow label="Assigned To" value={displayJob.assignedTo ?? 'Unassigned'} />
+              {displayJob.subType ? <DetailRow label="Sub-Type" value={displayJob.subType} /> : null}
             </div>
 
             {/* SPECIFICATIONS */}
@@ -851,11 +968,11 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
               <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
                 SPECIFICATIONS
               </div>
-              {job.etaHours ? <DetailRow label="ETA" value={`${job.etaHours}h`} /> : null}
-              <DetailRow label="Created"   value={job.created} />
+              {displayJob.etaHours ? <DetailRow label="ETA" value={`${displayJob.etaHours}h`} /> : null}
+              <DetailRow label="Created"   value={displayJob.created} />
               <DetailRow
                 label="Reference"
-                value={job.ref}
+                value={displayJob.ref}
                 valueStyle={{ color: '#B22234', fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5 }}
               />
               <DetailRow
@@ -870,7 +987,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 label="Agreed Price"
                 value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString()}` : 'Pending'}
               />
-              {job.aiScore && aiOverall !== null ? (
+              {displayJob.aiScore && aiOverall !== null ? (
                 <DetailRow
                   label="AI QC Score"
                   value={`${aiOverall}/100 — ${aiPass ? 'Pass' : 'Fail'}`}
@@ -881,20 +998,20 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
           </div>
 
           {/* NOTES / BRIEF */}
-          {job.notes ? (
+          {displayJob.notes ? (
             <div className="mb-5">
               <SectionLabel>NOTES / BRIEF</SectionLabel>
               <div
                 className="text-[12.5px] leading-relaxed p-3.5 rounded-xl"
                 style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', color: '#475569' }}
               >
-                {job.notes}
+                {displayJob.notes}
               </div>
             </div>
           ) : null}
 
           {/* AI QC REPORT */}
-          {job.aiScore ? (
+          {displayJob.aiScore ? (
             <div className="mb-2">
               <SectionLabel>AI QC REPORT</SectionLabel>
               <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EDF5' }}>
@@ -916,10 +1033,10 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
 
                 {/* Score bars */}
                 <div className="grid grid-cols-5 gap-2 px-4 py-3">
-                  <ScoreBar label="COLOUR"     value={job.aiScore.colour} color="#ef4444" />
-                  <ScoreBar label="ALIGNMENT"  value={job.aiScore.align}  color="#3b82f6" />
-                  <ScoreBar label="RESOLUTION" value={job.aiScore.res}    color="#a855f7" />
-                  <ScoreBar label="BRIEF"      value={job.aiScore.brief}  color="#f59e0b" />
+                  <ScoreBar label="COLOUR"     value={displayJob.aiScore!.colour} color="#ef4444" />
+                  <ScoreBar label="ALIGNMENT"  value={displayJob.aiScore!.align}  color="#3b82f6" />
+                  <ScoreBar label="RESOLUTION" value={displayJob.aiScore!.res}    color="#a855f7" />
+                  <ScoreBar label="BRIEF"      value={displayJob.aiScore!.brief}  color="#f59e0b" />
                   <ScoreBar label="OVERALL"    value={aiOverall ?? 0}     color="#B22234" />
                 </div>
 
@@ -955,6 +1072,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
             </div>
           ) : null}
 
+          </>)}
         </div>
 
         {/* ── FOOTER ── */}
@@ -1462,6 +1580,158 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
       </div>
       <div style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11, fontWeight: 500, color: '#0D1B2A' }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job }) {
+  const fields: { label: string; get: (j: Job) => string }[] = [
+    { label: 'Design Name',   get: (j) => j.design || '—' },
+    { label: 'Order Type',    get: (j) => j.order || '—' },
+    { label: 'Project Type',  get: (j) => j.project || '—' },
+    { label: 'Process Type',  get: (j) => j.process || '—' },
+    { label: 'Complexity',    get: (j) => j.complexity || '—' },
+    { label: 'Priority',      get: (j) => j.priority || '—' },
+    { label: 'ETA Hours',     get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
+    { label: 'Colors',        get: (j) => j.colors != null ? String(j.colors) : '—' },
+    { label: 'Placement',     get: (j) => j.placement || '—' },
+    { label: 'Width (in)',    get: (j) => j.width != null ? `${j.width}"` : '—' },
+    { label: 'Height (in)',   get: (j) => j.height != null ? `${j.height}"` : '—' },
+    { label: 'Fabric',        get: (j) => j.fabric || '—' },
+    { label: 'Stitch Count',  get: (j) => j.stitchCount != null ? j.stitchCount.toLocaleString() : '—' },
+    { label: 'Notes',         get: (j) => j.notes || '—' },
+  ];
+
+  return (
+    <div style={{ padding: '0 20px 20px' }}>
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-3" style={{ fontSize: 11, color: '#64748B' }}>
+        <span className="flex items-center gap-1.5">
+          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#FEF3C7', border: '1px solid #FCD34D' }} />
+          Changed field
+        </span>
+      </div>
+
+      {/* Table */}
+      <div style={{ border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' }}>
+        {/* Header */}
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: '140px 1fr 1fr',
+            background: '#F8FAFC',
+            borderBottom: '1.5px solid #E2E8F0',
+          }}
+        >
+          <div style={{ padding: '9px 14px', fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }} />
+          <div
+            style={{
+              padding: '9px 14px',
+              fontSize: 11, fontWeight: 700, color: '#0EA5E9',
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              borderLeft: '1px solid #E2E8F0',
+            }}
+          >
+            Client Provided
+          </div>
+          <div
+            style={{
+              padding: '9px 14px',
+              fontSize: 11, fontWeight: 700, color: '#B22234',
+              textTransform: 'uppercase', letterSpacing: '0.08em',
+              borderLeft: '1px solid #E2E8F0',
+            }}
+          >
+            Admin Edited
+          </div>
+        </div>
+
+        {/* Rows */}
+        {fields.map(({ label, get }, idx) => {
+          const clientVal = get(clientJob);
+          const adminVal  = get(adminJob);
+          const changed   = clientVal !== adminVal;
+          const rowBg     = idx % 2 === 0 ? '#fff' : '#FAFBFC';
+
+          return (
+            <div
+              key={label}
+              className="grid"
+              style={{
+                gridTemplateColumns: '140px 1fr 1fr',
+                background: rowBg,
+                borderTop: idx === 0 ? 'none' : '1px solid #F1F5F9',
+              }}
+            >
+              {/* Field label */}
+              <div
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  color: '#64748B',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {label}
+              </div>
+
+              {/* Client value */}
+              <div
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: changed ? '#92400E' : '#0D1B2A',
+                  background: changed ? '#FEF3C7' : 'transparent',
+                  borderLeft: '1px solid #F1F5F9',
+                  wordBreak: 'break-word',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {clientVal}
+              </div>
+
+              {/* Admin value */}
+              <div
+                style={{
+                  padding: '8px 14px',
+                  fontSize: 12,
+                  fontWeight: changed ? 700 : 500,
+                  color: changed ? '#7F1D1D' : '#0D1B2A',
+                  background: changed ? '#FEF3C7' : 'transparent',
+                  borderLeft: '1px solid #F1F5F9',
+                  wordBreak: 'break-word',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {adminVal}
+                {changed && (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 9,
+                      fontWeight: 800,
+                      background: '#F59E0B',
+                      color: '#fff',
+                      borderRadius: 4,
+                      padding: '1px 5px',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Changed
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
