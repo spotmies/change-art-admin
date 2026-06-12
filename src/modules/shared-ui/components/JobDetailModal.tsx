@@ -77,11 +77,22 @@ function buildFlowSteps(hasSewout: boolean): { role: string; sub: string }[] {
 }
 
 function currentStepIndex(job: Job, hasSewout: boolean): number {
+  const raw = (job.rawStatus ?? '').toUpperCase();
+
+  // Steps (no sewout): 0=CS Created, 1=TL Assigned, 2=Execution, 3=QC Review, 4=CS Dispatch
+  // Steps (sewout):    0=CS Created, 1=TL Assigned, 2=Execution, 3=Sewout, 4=QC Review, 5=CS Dispatch
+  // The returned index is the ACTIVE step; all steps before it render as completed ✓.
+
   switch (job.stage) {
-    case 'quote':     return 0;
+    case 'quote':  return 0;
     case 'junior':
-    case 'senior':    return 2;
-    case 'sewout':    return 3;
+    case 'senior': {
+      // Job placed / CS-approved: job is in the CS queue, not yet assigned to anyone → TL step is next
+      if (raw === 'JOB_PLACED' || raw === 'CS_APPROVED') return 1;
+      // Assigned / IN_PROGRESS / Senior stages: someone is actively working → Execution step is active
+      return 2;
+    }
+    case 'sewout':    return hasSewout ? 3 : 2;
     case 'qc':        return hasSewout ? 4 : 3;
     case 'delivered': return hasSewout ? 5 : 4;
     default:          return 0;
@@ -377,10 +388,16 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const handleAcknowledge = () => {
     const id = requireUuid('acknowledge job');
     if (!id) return;
-    const parsed = ackEtaHours ? parseFloat(ackEtaHours) : undefined;
-    const etaHours = parsed != null && !isNaN(parsed) && parsed > 0 ? parsed : undefined;
     setShowAckPopover(false);
-    acknowledgeJob.mutate({ jobId: id, etaHours });
+    // Quote flow: ETA already stored from send-price step — don't override it.
+    // Order flow: admin entered ETA in this popover — send it now.
+    if (job?.etaHours != null && job.etaHours > 0) {
+      acknowledgeJob.mutate({ jobId: id });
+    } else {
+      const parsed = ackEtaHours ? parseFloat(ackEtaHours) : undefined;
+      const etaHours = parsed != null && !isNaN(parsed) && parsed > 0 ? parsed : undefined;
+      acknowledgeJob.mutate({ jobId: id, etaHours });
+    }
   };
 
   return (
@@ -595,8 +612,11 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
 
         {/* ── ACK POPOVER ── */}
         {showAckPopover && canAcknowledge && (() => {
+          // Quote flow: ETA was already locked in when admin sent the price.
+          // Order flow: no prior ETA — admin must enter it now.
+          const etaIsLocked = job != null && job.etaHours != null && job.etaHours > 0;
           const etaParsed = ackEtaHours ? parseFloat(ackEtaHours) : NaN;
-          const etaValid = !isNaN(etaParsed) && etaParsed > 0;
+          const etaValid = etaIsLocked || (!isNaN(etaParsed) && etaParsed > 0);
           const isDisabled = acknowledgeJob.isPending || !etaValid;
           return (
             <>
@@ -634,43 +654,71 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 {/* Body */}
                 <div style={{ padding: '16px 16px 14px' }}>
                   <p style={{ fontSize: 11.5, color: '#64748B', lineHeight: 1.5, margin: '0 0 14px' }}>
-                    Set the ETA and notify the client that production has started. The countdown begins the moment you confirm.
+                    {etaIsLocked
+                      ? 'The ETA was locked when the quote price was sent. Confirm to start the countdown.'
+                      : 'Enter the ETA and notify the client that production has started. The countdown begins the moment you confirm.'}
                   </p>
 
-                  {/* ETA input */}
+                  {/* ETA — locked chip (quote flow) or editable input (order flow) */}
                   <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                    ETA (hours) <span style={{ color: '#B22234' }}>*</span>
+                    ETA (hours)
+                    {!etaIsLocked && <span style={{ color: '#B22234' }}> *</span>}
+                    {etaIsLocked && (
+                      <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#059669', background: '#D1FAE5', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em' }}>
+                        LOCKED
+                      </span>
+                    )}
                   </label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={ackEtaHours}
-                      onChange={(e) => {
-                        // allow digits, one decimal point, nothing else
-                        const v = e.target.value.replace(/[^\d.]/g, '').replace(/^(\d*\.?\d*).*$/, '$1');
-                        setAckEtaHours(v);
-                      }}
-                      placeholder="e.g. 4"
-                      disabled={acknowledgeJob.isPending}
-                      autoFocus
-                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      style={{
+                    {etaIsLocked ? (
+                      /* Read-only locked display */
+                      <div style={{
                         flex: 1,
-                        border: `1.5px solid ${etaValid ? '#B22234' : '#E2E8F0'}`,
+                        border: '1.5px solid #059669',
                         borderRadius: 8,
                         padding: '8px 10px',
                         fontSize: 14,
                         fontFamily: 'IBM Plex Mono, monospace',
                         fontWeight: 700,
-                        color: '#0F172A',
-                        background: acknowledgeJob.isPending ? '#F8FAFC' : '#fff',
-                        outline: 'none',
-                        transition: 'border-color 0.15s',
-                      }}
-                      onFocus={(e) => { e.currentTarget.style.borderColor = '#B22234'; }}
-                      onBlur={(e) => { e.currentTarget.style.borderColor = etaValid ? '#B22234' : '#E2E8F0'; }}
-                    />
+                        color: '#059669',
+                        background: '#F0FDF4',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}>
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                        {job!.etaHours}
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={ackEtaHours}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^\d.]/g, '').replace(/^(\d*\.?\d*).*$/, '$1');
+                          setAckEtaHours(v);
+                        }}
+                        placeholder="e.g. 4"
+                        disabled={acknowledgeJob.isPending}
+                        autoFocus
+                        className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        style={{
+                          flex: 1,
+                          border: `1.5px solid ${etaValid ? '#B22234' : '#E2E8F0'}`,
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          fontSize: 14,
+                          fontFamily: 'IBM Plex Mono, monospace',
+                          fontWeight: 700,
+                          color: '#0F172A',
+                          background: acknowledgeJob.isPending ? '#F8FAFC' : '#fff',
+                          outline: 'none',
+                          transition: 'border-color 0.15s',
+                        }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = '#B22234'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = etaValid ? '#B22234' : '#E2E8F0'; }}
+                      />
+                    )}
                     <span style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap' }}>hrs</span>
                   </div>
 
@@ -1249,9 +1297,19 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 const state = i < stepIdx ? 'done'
                   : i === stepIdx ? 'current'
                   : 'pending';
-                const subLabel = i === 2
-                  ? (job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress')
-                  : step.sub; // workflow stepper always uses admin copy's data
+                const raw = (job.rawStatus ?? '').toUpperCase();
+                let subLabel = step.sub;
+                if (i === 1) {
+                  // TL Assigned step: show "Pending" when job is awaiting assignment
+                  if (state === 'current') subLabel = 'Pending';
+                } else if (i === 2) {
+                  // Execution step: show who it's assigned to, or ETA, or fallback
+                  if (state === 'current') {
+                    if (raw === 'ASSIGNED' && job.assignedTo) subLabel = job.assignedTo;
+                    else if (raw === 'ASSIGNED') subLabel = 'Assigned';
+                    else subLabel = job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress';
+                  }
+                }
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center">
                     <div
