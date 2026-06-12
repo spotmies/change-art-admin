@@ -11,7 +11,7 @@ function formatDate(dateStr: string): string {
     day: '2-digit',
   });
 }
-import { cn } from '@lib/utils';
+import { cn, briefText } from '@lib/utils';
 import { jobImage, type Job } from '../mocks/jobs';
 
 function statusDisplay(status: string): string {
@@ -234,7 +234,7 @@ function DeliveredView({
 
           <div className="border-t border-[var(--glass-border)] pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="text-[13px] text-text-muted">
-              {job.summary}
+              {briefText(job.summary)}
             </div>
             <div className="flex-shrink-0">
               {renderRowActions ? renderRowActions(job) : null}
@@ -442,7 +442,7 @@ function GridView({
             </div>
             <div className="jc-body">
               <div className="jc-title">{j.design}</div>
-              <div className="jc-desc">{j.summary}</div>
+              <div className="jc-desc">{briefText(j.summary)}</div>
               <div className="jc-meta">
                 <span className="truncate max-w-[90px]">{j.client}</span>
                 <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
@@ -497,7 +497,7 @@ function ListView({
           </div>
           <div className="list-body">
             <div className="list-title">{j.design}</div>
-            <div className="list-desc">{j.summary}</div>
+            <div className="list-desc">{briefText(j.summary)}</div>
             <div className="list-meta">
               {j.ref || j.id} · {j.order}{j.specificType ? ` · ${j.specificType}` : ''} · {j.status}
             </div>

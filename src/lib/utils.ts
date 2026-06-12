@@ -64,6 +64,18 @@ export function normalizeRefNumber(ref: string | null | undefined): string {
   return ref;
 }
 
+/**
+ * Strip embedded `[Label: Value]` metadata tags from a job brief/description,
+ * returning only the client's free-text message for compact card summaries.
+ */
+export function briefText(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/\[\s*[^:\]]+?\s*:\s*[^\]]*?\s*\]/g, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
 /** Tailwind classname for a numeric trend delta. */
 export function deltaToneClass(delta: number): string {
   if (delta > 0) return 'text-status-green';

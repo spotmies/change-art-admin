@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import {
   BarChart,
@@ -82,14 +83,14 @@ export function CSDashboardPage() {
         <div>
           <SectionHeader
             title={<span style={{ color: '#5eead4' }}>New Jobs</span>}
-            action={<a href="/cs/new-jobs">View All →</a>}
+            action={<Link to="/cs/new-jobs">View All →</Link>}
           />
           <JobTable jobs={newJobs} defaultView="table" withControls={false} />
 
           <div className="mt-6">
             <SectionHeader
               title={<span style={{ color: '#ff8a95' }}>Quotes Pending Your Review</span>}
-              action={<a href="/cs/new-quotes">View All →</a>}
+              action={<Link to="/cs/new-quotes">View All →</Link>}
             />
             <JobTable jobs={pendingQuotes} defaultView="table" withControls={false} />
           </div>

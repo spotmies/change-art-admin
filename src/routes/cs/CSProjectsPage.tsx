@@ -1,15 +1,23 @@
-import { useMemo } from 'react';
-import { GreetingHero, JobTable, StatGrid } from '@modules/shared-ui';
+import { useMemo, useState } from 'react';
+import { GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 
 const FETCH_SIZE = 200;
+const PER_PAGE   = 20;
 
 export function CSProjectsPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
+  const [page, setPage] = useState(1);
 
-  const open  = useMemo(() => allData.filter((j) => j.stage !== 'delivered'), [allData]);
-  const ready = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver'), [allData]);
-  const amend = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
+  const open       = useMemo(() => allData.filter((j) => j.stage !== 'delivered'), [allData]);
+  const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver'), [allData]);
+  const amend      = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
+
+  const totalPages = Math.max(1, Math.ceil(allData.length / PER_PAGE));
+  const pageItems  = useMemo(
+    () => allData.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [allData, page],
+  );
 
   if (isError) {
     return (
@@ -39,9 +47,24 @@ export function CSProjectsPage() {
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-text-faint text-sm">Loading projects…</div>
+        <div className="flex items-center justify-center py-16 text-text-faint text-sm">
+          Loading projects…
+        </div>
+      ) : allData.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-text-faint text-sm">
+          No projects yet.
+        </div>
       ) : (
-        <JobTable jobs={allData} showActions defaultView="grid" />
+        <>
+          <JobTable jobs={pageItems} showActions defaultView="grid" />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={allData.length}
+            perPage={PER_PAGE}
+            onPageChange={setPage}
+          />
+        </>
       )}
     </div>
   );

@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   GreetingHero,
   JobTable,
+  Pagination,
   StatGrid,
   Pills,
   type PillItem,
@@ -9,12 +10,19 @@ import {
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 
 const FETCH_SIZE = 200;
+const PER_PAGE   = 20;
+
+type FilterId = 'all' | 'In Production' | 'Senior Review' | 'In QC' | 'Sewout';
 
 export function CSNewJobsPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
-  const [filter, setFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<FilterId>('all');
+  const [page, setPage] = useState(1);
 
-  const allJobs  = useMemo(() => allData.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'), [allData]);
+  const allJobs  = useMemo(
+    () => allData.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
+    [allData],
+  );
   const inProd   = useMemo(() => allJobs.filter((j) => j.stage === 'junior'),  [allJobs]);
   const srReview = useMemo(() => allJobs.filter((j) => j.stage === 'senior'),  [allJobs]);
   const inQc     = useMemo(() => allJobs.filter((j) => j.stage === 'qc'),      [allJobs]);
@@ -28,10 +36,18 @@ export function CSNewJobsPage() {
     { id: 'Sewout',        label: 'Sewout',          count: sewout.length   },
   ];
 
-  const filtered = useMemo(
-    () => filter === 'all' ? allJobs : allJobs.filter((j) => j.status === filter),
-    [filter, allJobs],
+  const filtered = useMemo(() => {
+    if (filter === 'all') return allJobs;
+    return allJobs.filter((j) => j.status === filter);
+  }, [filter, allJobs]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageItems  = useMemo(
+    () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filtered, page],
   );
+
+  useEffect(() => { setPage(1); }, [filter]);
 
   if (isError) {
     return (
@@ -53,21 +69,34 @@ export function CSNewJobsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'teal',  label: 'Total Active',  value: isLoading ? '…' : allJobs.length  },
-          { accent: 'amber', label: 'In Production', value: isLoading ? '…' : inProd.length   },
-          { accent: 'blue',  label: 'Senior Review', value: isLoading ? '…' : srReview.length },
-          { accent: 'green', label: 'In QC',         value: isLoading ? '…' : inQc.length     },
+          { accent: 'teal',   label: 'Total Active',  value: isLoading ? '…' : allJobs.length  },
+          { accent: 'amber',  label: 'In Production', value: isLoading ? '…' : inProd.length   },
+          { accent: 'blue',   label: 'Senior Review', value: isLoading ? '…' : srReview.length },
+          { accent: 'green',  label: 'In QC',         value: isLoading ? '…' : inQc.length     },
         ]}
       />
 
-      <Pills items={pills} activeId={filter} onSelect={setFilter} />
+      <Pills items={pills} activeId={filter} onSelect={(id) => setFilter(id as FilterId)} />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-text-faint text-sm">Loading jobs…</div>
+        <div className="flex items-center justify-center py-16 text-text-faint text-sm">
+          Loading jobs…
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-text-faint text-sm">No active jobs right now.</div>
+        <div className="flex items-center justify-center py-16 text-text-faint text-sm">
+          No active jobs matching this filter.
+        </div>
       ) : (
-        <JobTable jobs={filtered} showActions defaultView="grid" />
+        <>
+          <JobTable jobs={pageItems} showActions defaultView="grid" />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            perPage={PER_PAGE}
+            onPageChange={setPage}
+          />
+        </>
       )}
     </div>
   );
