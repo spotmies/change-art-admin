@@ -71,9 +71,7 @@ export function RegisterForm() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate aria-label="Create an account">
       <h2 className="text-[18px] font-bold mb-1">Create your client account</h2>
-      <p className="text-[12.5px] text-text-muted mb-6">
-        Request quotes, place orders, and track delivery.
-      </p>
+
 
       <label className="block">
         <span className="lbl">Full Name</span>

@@ -66,10 +66,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate aria-label="Sign in">
-      <h2 className="text-[18px] font-bold mb-1">Sign in</h2>
-      <p className="text-[12.5px] text-text-muted mb-6">
-        Continue to your role-specific dashboard.
-      </p>
+      <h2 className="text-[18px] font-bold mb-1 flex justify-center">Sign in</h2>
 
       <label className="block">
         <span className="lbl">Email</span>

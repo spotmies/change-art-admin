@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Toast: vertically + horizontally centered ── */
+[data-rht-toaster] > div {
+  top: 50% !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+}
+
 /* ═══════════════════════════════════════════
    ROOT VARIABLES
    Tokens ported from change_artwork/change_artwork_demo_v2.html.

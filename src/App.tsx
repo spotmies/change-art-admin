@@ -19,7 +19,7 @@ export function App() {
           <SocketProvider>
             <RouterProvider router={router} />
             <Toaster
-              position="top-right"
+              position="top-center"
               gutter={10}
               toastOptions={{
                 duration: 4000,
