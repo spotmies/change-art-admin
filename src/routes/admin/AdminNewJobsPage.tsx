@@ -1,20 +1,38 @@
 import { useMemo, useState } from 'react';
-import { GreetingHero, JobTable, Pagination, Pills, StatGrid, type PillItem } from '@modules/shared-ui';
+import {
+  GreetingHero,
+  JobFilterBar,
+  JobTable,
+  Pagination,
+  Pills,
+  StatGrid,
+  applyJobFilters,
+  EMPTY_FILTERS,
+  JOB_STATUS_OPTIONS,
+  type JobFilters,
+  type PillItem,
+} from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 
-// Fetched batch size — enough to cover all active jobs without pagination round-trips.
 const FETCH_SIZE = 100;
-// Items shown per UI page.
-const PER_PAGE = 20;
+const PER_PAGE   = 20;
+
+// Status options relevant to active production jobs (no quote / delivered states)
+const PIPELINE_STATUS_OPTIONS = JOB_STATUS_OPTIONS.filter(
+  (o) => !['Quote Submitted', 'Quote Approved', 'Delivered', 'Cancelled'].includes(o.value),
+);
 
 export function AdminNewJobsPage() {
   const { jobs, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
-  const [filter, setFilter] = useState('all');
-  const [page, setPage] = useState(1);
+  const clientsQuery = useAdminClients();
+  const clients = clientsQuery.data?.items ?? [];
 
-  // Active production pipeline — every non-delivered, non-cancelled row
-  // EXCEPT quote-stage. Quote requests live on the Quotes page until the
-  // client confirms and the workflow moves the job to JOB_PLACED.
+  const [stageFilter, setStageFilter] = useState('all');
+  const [filters, setFilters]         = useState<JobFilters>(EMPTY_FILTERS);
+  const [page, setPage]               = useState(1);
+
+  // Active pipeline — exclude quote stage, delivered, and cancelled.
   const active = useMemo(
     () => jobs.filter(
       (j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled',
@@ -22,10 +40,10 @@ export function AdminNewJobsPage() {
     [jobs],
   );
 
-  const inProd    = useMemo(() => active.filter((j) => j.stage === 'junior'), [active]);
-  const srReview  = useMemo(() => active.filter((j) => j.stage === 'senior'), [active]);
-  const inQc      = useMemo(() => active.filter((j) => j.stage === 'qc'), [active]);
-  const sewout    = useMemo(() => active.filter((j) => j.stage === 'sewout'), [active]);
+  const inProd   = useMemo(() => active.filter((j) => j.stage === 'junior'),  [active]);
+  const srReview = useMemo(() => active.filter((j) => j.stage === 'senior'),  [active]);
+  const inQc     = useMemo(() => active.filter((j) => j.stage === 'qc'),      [active]);
+  const sewout   = useMemo(() => active.filter((j) => j.stage === 'sewout'),  [active]);
 
   const pills: PillItem[] = [
     { id: 'all',           label: 'All',           count: active.length },
@@ -35,27 +53,35 @@ export function AdminNewJobsPage() {
     { id: 'Sewout',        label: 'Sewout',        count: sewout.length },
   ];
 
-  const filtered = useMemo(() => {
-    if (filter === 'all') return active;
-    return active.filter((j) => j.status === filter);
-  }, [active, filter]);
+  // Stage pill filter
+  const stageFiltered = useMemo(() => {
+    if (stageFilter === 'all') return active;
+    return active.filter((j) => j.status === stageFilter);
+  }, [active, stageFilter]);
 
-  // Client-side pagination on the filtered list.
+  // Filter bar criteria on top of stage filter
+  const filtered = useMemo(() => applyJobFilters(stageFiltered, filters), [stageFiltered, filters]);
+
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const pageItems  = useMemo(
     () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
     [filtered, page],
   );
 
-  function handleFilterChange(id: string) {
-    setFilter(id);
+  function handleStageChange(id: string) {
+    setStageFilter(id);
+    setPage(1);
+  }
+
+  function handleFiltersChange(next: JobFilters) {
+    setFilters(next);
     setPage(1);
   }
 
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="New Jobs" subtitle="All active jobs across the platform." />
+        <GreetingHero title="New Jobs" subtitle="Active pipeline." />
         <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
@@ -72,33 +98,44 @@ export function AdminNewJobsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'teal',    label: 'Total Active',  value: isLoading ? '…' : active.length },
-          { accent: 'amber',   label: 'In Production', value: isLoading ? '…' : inProd.length },
-          { accent: 'purple',  label: 'Senior Review', value: isLoading ? '…' : srReview.length },
-          { accent: 'green',   label: 'In QC',         value: isLoading ? '…' : inQc.length },
+          { accent: 'teal',   label: 'Total Active',  value: isLoading ? '…' : active.length },
+          { accent: 'amber',  label: 'In Production', value: isLoading ? '…' : inProd.length },
+          { accent: 'purple', label: 'Senior Review', value: isLoading ? '…' : srReview.length },
+          { accent: 'green',  label: 'In QC',         value: isLoading ? '…' : inQc.length },
         ]}
       />
 
-      <Pills items={pills} activeId={filter} onSelect={handleFilterChange} />
+      <Pills items={pills} activeId={stageFilter} onSelect={handleStageChange} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
           Loading jobs…
         </div>
-      ) : pageItems.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-text-faint text-sm">
-          No jobs in this category.
-        </div>
       ) : (
         <>
-          <JobTable jobs={pageItems} showActions defaultView="grid" />
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            total={filtered.length}
-            perPage={PER_PAGE}
-            onPageChange={setPage}
+          <JobTable
+            jobs={pageItems}
+            showActions
+            defaultView="grid"
+            emptyLabel="No jobs match the current filters."
+            toolbarSlot={
+              <JobFilterBar
+                filters={filters}
+                onChange={handleFiltersChange}
+                statusOptions={PIPELINE_STATUS_OPTIONS}
+                clients={clients}
+              />
+            }
           />
+          {pageItems.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={filtered.length}
+              perPage={PER_PAGE}
+              onPageChange={setPage}
+            />
+          )}
         </>
       )}
     </div>

@@ -80,6 +80,8 @@ export interface IClient {
   date: IsoDateTime;
   location: string | null;
   address: string | null;
+  country: string | null;
+  currency: string | null;
   payment_mode: PaymentMode | null;
   card_on_file: ICardOnFile | null;
   user_id: string | null;

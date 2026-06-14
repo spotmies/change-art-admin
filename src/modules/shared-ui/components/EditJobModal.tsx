@@ -105,7 +105,8 @@ const PRIORITY_TO_ENUM: Record<string, Priority> = {
   'Super Rush': Priority.SUPER_RUSH,
 };
 
-const ORDER_OPTIONS: JobOrderType[] = ['Artwork', 'Digitizing', 'Digitizing + Sewout', 'Sewout'];
+// ORDER_OPTIONS kept for future use if order-type editing is re-enabled.
+// const ORDER_OPTIONS: JobOrderType[] = ['Artwork', 'Digitizing', 'Digitizing + Sewout', 'Sewout'];
 const PROCESS_OPTIONS = ['Screen Printing', 'Digital Printing', 'Offset Printing', 'Sublimation', 'Flex Printing', 'Others'];
 const COMPLEXITY_OPTIONS: JobComplexity[] = ['Simple', 'Medium', 'Super Medium', 'Complex', 'Super Complex'];
 const PRIORITY_OPTIONS: JobPriority[] = ['Normal', 'Rush', 'Super Rush'];
@@ -297,6 +298,9 @@ function statusAccent(status: string): string {
 const FIELD_CLS =
   'w-full rounded-lg px-3 py-2.5 text-[12.5px] outline-none transition border bg-white text-[#0D1B2A] border-[#E2E8F0] focus:border-[#B22234] focus:ring-2 focus:ring-[#B22234]/10';
 
+const FIELD_READONLY_CLS =
+  'w-full rounded-lg px-3 py-2.5 text-[12.5px] border bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0] cursor-not-allowed select-none';
+
 type PriceCell = string | { text: string; muted?: boolean; warn?: boolean };
 
 function formatMoney(raw: string | number | null | undefined): string {
@@ -420,23 +424,9 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
     return Number.isFinite(n) ? n : null;
   };
 
-  // When order type changes, reset specific service if no longer valid; reset format
-  const handleOrderChange = (newOrder: JobOrderType) => {
-    const newId = getOrderTypeId(newOrder);
-    const newServices = SPECIFIC_SERVICES[newId] ?? [];
-    const specificStillValid = form.specificType ? newServices.includes(form.specificType) : false;
-    setForm((f) => f ? {
-      ...f,
-      order: newOrder,
-      specificType: specificStillValid ? f.specificType : '',
-      formatOption: '',
-    } : f);
-  };
-
-  // When specific service changes, reset format option
-  const handleSpecificTypeChange = (newValue: string) => {
-    setForm((f) => f ? { ...f, specificType: newValue, formatOption: '' } : f);
-  };
+  // These handlers are preserved in case order/service editing is re-enabled.
+  // const handleOrderChange = ...
+  // const handleSpecificTypeChange = ...
 
   const buildPatch = (): Omit<UpdateJobCardBody, 'version'> => {
     const patch: Omit<UpdateJobCardBody, 'version'> = {};
@@ -631,32 +621,26 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
               <div className="grid gap-3">
 
                 <Field label="Design Name">
-                  <input className={FIELD_CLS} value={form.design} onChange={(e) => set('design', e.target.value)} />
+                  <input className={FIELD_READONLY_CLS} value={form.design} readOnly tabIndex={-1} />
                 </Field>
 
                 <Field label="Client">
-                  <input className={FIELD_CLS} value={form.client} onChange={(e) => set('client', e.target.value)} />
+                  <input className={FIELD_READONLY_CLS} value={form.client} readOnly tabIndex={-1} />
                 </Field>
 
                 <Field label="Order Type">
-                  <select className={FIELD_CLS} value={form.order} onChange={(e) => handleOrderChange(e.target.value as JobOrderType)}>
-                    {ORDER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <input className={FIELD_READONLY_CLS} value={form.order} readOnly tabIndex={-1} />
                 </Field>
 
-                {/* Specific Service — dropdown with options matching the order type */}
+                {/* Specific Service — read-only display */}
                 {specificServices.length > 0 && (
                   <Field label="Specific Service">
-                    <select
-                      className={FIELD_CLS}
-                      value={form.specificType}
-                      onChange={(e) => handleSpecificTypeChange(e.target.value)}
-                    >
-                      <option value="">— Select specific service —</option>
-                      {specificServices.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    <input
+                      className={FIELD_READONLY_CLS}
+                      value={form.specificType || '—'}
+                      readOnly
+                      tabIndex={-1}
+                    />
                   </Field>
                 )}
 

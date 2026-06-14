@@ -438,8 +438,6 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 className="flex items-center gap-2 mb-1.5"
                 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11.5, fontWeight: 700, color: '#B22234', letterSpacing: '0.04em' }}
               >
-                <span>{job.id}</span>
-                <span style={{ color: '#CBD5E1' }}>•</span>
                 <span>{job.ref}</span>
               </div>
               <h2 className="text-[20px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
@@ -811,23 +809,6 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
               >
                 <button
                   type="button"
-                  onClick={() => { setViewMode('admin'); setShowCompare(false); }}
-                  style={{
-                    padding: '5px 14px',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    cursor: 'pointer',
-                    border: 'none',
-                    transition: 'all 0.15s',
-                    background: viewMode === 'admin' && !showCompare ? '#B22234' : 'transparent',
-                    color: viewMode === 'admin' && !showCompare ? '#fff' : '#64748B',
-                  }}
-                >
-                  Admin Edited
-                </button>
-                <button
-                  type="button"
                   onClick={() => { setViewMode('client'); setShowCompare(false); }}
                   style={{
                     padding: '5px 14px',
@@ -842,6 +823,23 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                   }}
                 >
                   Client Provided
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setViewMode('admin'); setShowCompare(false); }}
+                  style={{
+                    padding: '5px 14px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: 'pointer',
+                    border: 'none',
+                    transition: 'all 0.15s',
+                    background: viewMode === 'admin' && !showCompare ? '#B22234' : 'transparent',
+                    color: viewMode === 'admin' && !showCompare ? '#fff' : '#64748B',
+                  }}
+                >
+                  Admin Edited
                 </button>
               </div>
 
@@ -1522,8 +1520,15 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
           <button
             type="button"
             className="btn btn-outline"
-            style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
-            onClick={() => onEdit?.(job)}
+            style={{
+              fontSize: 12,
+              padding: '7px 13px',
+              gap: 6,
+              ...(isAcknowledged ? { opacity: 0.4, cursor: 'not-allowed', pointerEvents: 'none' } : {}),
+            }}
+            onClick={() => !isAcknowledged && onEdit?.(job)}
+            disabled={isAcknowledged}
+            title={isAcknowledged ? 'Cannot edit after acknowledgement is sent' : undefined}
           >
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
@@ -2009,20 +2014,21 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
 
 function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job }) {
   const fields: { label: string; get: (j: Job) => string }[] = [
-    { label: 'Design Name',   get: (j) => j.design || '—' },
-    { label: 'Order Type',    get: (j) => j.order || '—' },
-    { label: 'Project Type',  get: (j) => j.project || '—' },
-    { label: 'Process Type',  get: (j) => j.process || '—' },
-    { label: 'Complexity',    get: (j) => j.complexity || '—' },
-    { label: 'Priority',      get: (j) => j.priority || '—' },
-    { label: 'ETA Hours',     get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
-    { label: 'Colors',        get: (j) => j.colors != null ? String(j.colors) : '—' },
-    { label: 'Placement',     get: (j) => j.placement || '—' },
-    { label: 'Width (in)',    get: (j) => j.width != null ? `${j.width}"` : '—' },
-    { label: 'Height (in)',   get: (j) => j.height != null ? `${j.height}"` : '—' },
-    { label: 'Fabric',        get: (j) => j.fabric || '—' },
-    { label: 'Stitch Count',  get: (j) => j.stitchCount != null ? j.stitchCount.toLocaleString() : '—' },
-    { label: 'Notes',         get: (j) => j.notes || '—' },
+    { label: 'Design Name',     get: (j) => j.design || '—' },
+    { label: 'Order Type',      get: (j) => j.order || '—' },
+    { label: 'Project Type',    get: (j) => j.project || '—' },
+    { label: 'Process Type',    get: (j) => j.process || '—' },
+    { label: 'Complexity',      get: (j) => j.complexity || '—' },
+    { label: 'Priority',        get: (j) => j.priority || '—' },
+    { label: 'ETA Hours',       get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
+    { label: 'Colors',          get: (j) => j.colors != null ? String(j.colors) : '—' },
+    { label: 'Output Formats',  get: (j) => j.finalFiles?.length ? j.finalFiles.join(', ') : '—' },
+    { label: 'Placement',       get: (j) => j.placement || '—' },
+    { label: 'Width (in)',      get: (j) => j.width != null ? `${j.width}"` : '—' },
+    { label: 'Height (in)',     get: (j) => j.height != null ? `${j.height}"` : '—' },
+    { label: 'Fabric',          get: (j) => j.fabric || '—' },
+    { label: 'Stitch Count',    get: (j) => j.stitchCount != null ? j.stitchCount.toLocaleString() : '—' },
+    { label: 'Notes',           get: (j) => j.notes || '—' },
   ];
 
   return (

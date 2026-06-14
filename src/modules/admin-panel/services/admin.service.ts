@@ -63,6 +63,29 @@ export interface UserFilters {
   per_page?: number;
 }
 
+export interface CreateClientBody {
+  client_name: string;
+  contact_name: string;
+  contact_number: string;
+  email: string;
+  company_name?: string;
+  location?: string;
+  country?: string;
+  currency?: string;
+}
+
+export interface ProvisionClientBody {
+  client_name: string;
+  contact_name: string;
+  contact_number: string;
+  email: string;
+  password: string;
+  company_name?: string;
+  location?: string;
+  country?: string;
+  currency?: string;
+}
+
 export interface UpdateClientBody {
   client_name?: string;
   company_name?: string;
@@ -158,6 +181,14 @@ export const adminService = {
     return apiClient.getPaginated<IClient>('/api/v1/clients', {
       params: { per_page: 100, ...filters } as Record<string, unknown>,
     });
+  },
+
+  createClient(body: CreateClientBody): Promise<IClient> {
+    return apiClient.post<IClient, CreateClientBody>('/api/v1/clients', body);
+  },
+
+  provisionClient(body: ProvisionClientBody): Promise<IClient> {
+    return apiClient.post<IClient, ProvisionClientBody>('/api/v1/clients/provision', body);
   },
 
   updateClient(id: string, body: UpdateClientBody): Promise<IClient> {

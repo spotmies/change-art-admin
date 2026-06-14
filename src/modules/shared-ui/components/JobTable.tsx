@@ -29,6 +29,8 @@ interface JobTableProps {
   defaultView?: JobView;
   /** Show built-in search input + view toggle (defaults true). */
   withControls?: boolean;
+  /** Hide only the search input inside the controls bar (keeps the view toggle). */
+  hideSearch?: boolean;
   /** Show the View/Edit action buttons on each row/card. */
   showActions?: boolean;
   /** Called when a row/card/list item is clicked. */
@@ -39,6 +41,8 @@ interface JobTableProps {
   emptyLabel?: string;
   /** Extra elements rendered to the right of the view toggle (e.g. a Filter button). */
   controlsExtra?: ReactNode;
+  /** Slot rendered on the LEFT of tbl-top (e.g. <JobFilterBar>) — view toggle stays right. */
+  toolbarSlot?: ReactNode;
   /** Open the quote popup (Review & Set Price) from this table's View button. */
   quoteView?: boolean;
 }
@@ -52,11 +56,13 @@ export function JobTable({
   defaultView = 'grid',
   variant = 'default',
   withControls = true,
+  hideSearch = false,
   showActions = false,
   onOpen,
   renderActions,
   emptyLabel = 'No jobs found',
   controlsExtra,
+  toolbarSlot,
   quoteView = false,
 }: JobTableProps) {
   const [view, setView] = useState<JobView>(defaultView);
@@ -107,32 +113,30 @@ export function JobTable({
     );
   }, [jobs, query]);
 
-  if (!jobs.length) {
-    return (
-      <div className={variant === 'delivered' ? 'w-full' : 'jobs-root'} data-view={view}>
-        <EmptyState label={emptyLabel} />
-      </div>
-    );
-  }
-
   const renderRowActions = renderActions ?? (showActions ? builtInActions : undefined);
 
   return (
     <div className={variant === 'delivered' ? 'w-full' : 'jobs-root'} data-view={view}>
       {withControls ? (
         <div className="tbl-top">
-          <div className="tbl-search-wrap">
-            <Search className="tbl-search-icon" aria-hidden />
-            <input
-              type="text"
-              className="tbl-search"
-              placeholder="Search jobs, clients, designs..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search jobs"
-            />
-          </div>
-          <div className="view-toggle" role="tablist" aria-label="Job views">
+          {/* Left slot: external filter bar OR built-in search */}
+          {toolbarSlot ? (
+            <div className="tbl-toolbar-slot">{toolbarSlot}</div>
+          ) : !hideSearch ? (
+            <div className="tbl-search-wrap">
+              <Search className="tbl-search-icon" aria-hidden />
+              <input
+                type="text"
+                className="tbl-search"
+                placeholder="Search jobs, clients, designs..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search jobs"
+              />
+            </div>
+          ) : null}
+          {/* Right: view toggle */}
+          <div className="view-toggle tbl-toggle-right" role="tablist" aria-label="Job views">
             {(['grid', 'list', 'table'] as const).map((v) => (
               <button
                 key={v}
@@ -436,6 +440,11 @@ function GridView({
                 loading="lazy"
                 referrerPolicy="no-referrer"
               />
+              {/* Order type badge — top-left */}
+              <span className={cn('badge absolute top-[10px] left-[10px] z-[1] whitespace-nowrap', orderBadgeAccent(j.order))}>
+                {j.order}
+              </span>
+              {/* Status badge — top-right */}
               <span className={cn('jc-status-overlay badge', statusBadgeAccent(j.status))}>
                 {statusDisplay(j.status)}
               </span>
@@ -445,7 +454,6 @@ function GridView({
               <div className="jc-desc">{briefText(j.summary)}</div>
               <div className="jc-meta">
                 <span className="truncate max-w-[90px]">{j.client}</span>
-                <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
                 <PriorityChip priority={j.priority} />
               </div>
               {actionRequired ? (
@@ -478,7 +486,7 @@ function ListView({
   className?: string;
 }) {
   return (
-    <div className={cn("list-view", className)}>
+    <div className={cn("list-view pt-1", className)}>
       {jobs.map((j) => (
         <div
           key={j.id}
@@ -487,27 +495,63 @@ function ListView({
           role="button"
           tabIndex={0}
         >
+          {/* Thumbnail */}
           <div className="list-thumb">
             <img
-              src={jobImage(j, 0, 120, 120)}
+              src={jobImage(j, 0, 128, 128)}
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"
             />
           </div>
+
+          {/* Main body */}
           <div className="list-body">
-            <div className="list-title">{j.design}</div>
-            <div className="list-desc">{briefText(j.summary)}</div>
-            <div className="list-meta">
-              {j.ref || j.id} · {j.order}{j.specificType ? ` · ${j.specificType}` : ''} · {j.status}
+            {/* Title row with badges */}
+            <div className="list-title-row">
+              <span className="list-title">{j.design}</span>
+              <div className="list-badges">
+                <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
+                <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
+                {j.priority !== 'Normal' && <PriorityChip priority={j.priority} />}
+              </div>
             </div>
-            {renderRowActions ? renderRowActions(j) : null}
+
+            {/* Client + ref */}
+            <div className="flex items-center gap-2">
+              {j.client && <span className="list-client">{j.client}</span>}
+              {j.client && (j.ref || j.id) && <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>·</span>}
+              <span className="list-ref">{j.ref || j.id}</span>
+              {j.specificType && (
+                <>
+                  <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>·</span>
+                  <span className="list-meta">{j.specificType}</span>
+                </>
+              )}
+            </div>
+
+            {/* Description */}
+            {briefText(j.summary) && (
+              <div className="list-desc">{briefText(j.summary)}</div>
+            )}
+
+            {/* Actions */}
+            {renderRowActions && (
+              <div
+                className="flex items-center gap-2 mt-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {renderRowActions(j)}
+              </div>
+            )}
           </div>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
+
+          {/* Right — date + ETA */}
+          <div className="list-right">
             <div className="list-date">{formatDate(j.created)}</div>
             {j.etaHours ? (
               <div className="list-eta">
-                <Clock className="w-3.5 h-3.5 stroke-[2]" />
+                <Clock className="w-3 h-3 stroke-[2.2]" />
                 <span>{j.etaHours}h</span>
               </div>
             ) : null}

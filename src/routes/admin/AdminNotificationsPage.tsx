@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, CheckCheck, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { NotificationType, type INotification } from '@contracts';
 import {
@@ -53,6 +54,7 @@ function formatDateTime(iso: string): string {
 }
 
 export function AdminNotificationsPage() {
+  const navigate = useNavigate();
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [typeFilter, setTypeFilter] = useState<NotificationType | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
@@ -222,6 +224,7 @@ export function AdminNotificationsPage() {
                   notification={n}
                   onMarkRead={() => markRead.mutate(n.id)}
                   busy={markRead.isPending}
+                  onNavigate={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
                 />
               ))}
             </ul>
@@ -240,24 +243,42 @@ export function AdminNotificationsPage() {
   );
 }
 
+/** Extract the job UUID from notification data, if present. */
+function getJobId(n: INotification): string | null {
+  return (n.data?.jobId as string | undefined) ?? null;
+}
+
 interface RowProps {
   notification: INotification;
   onMarkRead: () => void;
   busy: boolean;
+  onNavigate: (jobId: string) => void;
 }
 
-function NotificationRow({ notification: n, onMarkRead, busy }: RowProps) {
+function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowProps) {
+  const jobId = getJobId(n);
+
+  function handleClick() {
+    if (!n.is_read) onMarkRead();
+    if (jobId) onNavigate(jobId);
+  }
+
   return (
     <li
-      className="flex items-start gap-3 px-3 py-2.5 rounded-md border border-glass-border"
-      style={{ background: n.is_read ? 'transparent' : 'rgba(220,38,38,0.04)' }}
+      className="flex items-start gap-3 px-3 py-2.5 rounded-md border border-glass-border transition-colors"
+      style={{
+        background: n.is_read ? 'transparent' : 'rgba(220,38,38,0.04)',
+        cursor: jobId ? 'pointer' : 'default',
+      }}
+      onClick={jobId ? handleClick : undefined}
+      role={jobId ? 'button' : undefined}
+      tabIndex={jobId ? 0 : undefined}
+      onKeyDown={jobId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
     >
       <span
         aria-hidden
         className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
-        style={{
-          background: n.is_read ? 'transparent' : 'var(--crimson)',
-        }}
+        style={{ background: n.is_read ? 'transparent' : 'var(--crimson)' }}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -270,13 +291,18 @@ function NotificationRow({ notification: n, onMarkRead, busy }: RowProps) {
         {n.body ? (
           <div className="text-[12px] text-text-muted mt-1 whitespace-pre-wrap">{n.body}</div>
         ) : null}
+        {jobId ? (
+          <div className="text-[11px] mt-1" style={{ color: 'var(--crimson)', fontWeight: 600 }}>
+            Click to open job →
+          </div>
+        ) : null}
       </div>
       {!n.is_read ? (
         <button
           type="button"
           className="btn btn-outline shrink-0"
           aria-label="Mark as read"
-          onClick={onMarkRead}
+          onClick={(e) => { e.stopPropagation(); onMarkRead(); }}
           disabled={busy}
         >
           <Check className="w-3.5 h-3.5" aria-hidden />

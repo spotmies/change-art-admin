@@ -1,45 +1,55 @@
 import { useMemo, useState } from 'react';
-import { GreetingHero, JobTable, Pagination, Pills, type PillItem } from '@modules/shared-ui';
-import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useSearchParams } from 'react-router-dom';
+import {
+  GreetingHero,
+  JobDetailModal,
+  JobFilterBar,
+  JobTable,
+  Pagination,
+  applyJobFilters,
+  EMPTY_FILTERS,
+  JOB_STATUS_OPTIONS,
+  type JobFilters,
+} from '@modules/shared-ui';
+import { useAdminJobViews, useAdminJobById } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 const PER_PAGE = 20;
 
+/** Reads `?open=<uuid>` from the URL and opens that job's detail modal directly. */
+function DeepLinkModal() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open') ?? '';
+  const { data: job } = useAdminJobById(openId);
+
+  return (
+    <JobDetailModal
+      job={openId && job ? job : null}
+      onClose={() => setSearchParams((p) => { p.delete('open'); return p; })}
+      onEdit={() => setSearchParams((p) => { p.delete('open'); return p; })}
+      onAssign={() => setSearchParams((p) => { p.delete('open'); return p; })}
+    />
+  );
+}
+
 export function AdminJobsPage() {
   const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState('all');
+  const [filters, setFilters] = useState<JobFilters>(EMPTY_FILTERS);
 
   const { jobs: rawJobs, total, isLoading, isError } = useAdminJobViews({ page, per_page: PER_PAGE });
+  const clientsQuery = useAdminClients();
+  const clients = clientsQuery.data?.items ?? [];
+
   const totalPages = Math.ceil((total || 0) / PER_PAGE);
 
-  // Quote-stage rows belong to the Quotes page, not "All Jobs". Filter
-  // them out client-side so the two queues stay disjoint. (The backend's
-  // job-cards endpoint doesn't currently accept a stage filter; the
-  // production list keeps every confirmed job and drops only quotes.)
+  // Quote-stage rows belong to the Quotes page — keep All Jobs disjoint.
   const jobs = useMemo(() => rawJobs.filter((j) => j.stage !== 'quote'), [rawJobs]);
 
-  // Order-type filter is applied client-side on the current page's data.
-  const filtered = useMemo(() => {
-    if (filter === 'all') return jobs;
-    if (filter === 'Artwork') return jobs.filter((j) => j.order === 'Artwork');
-    if (filter === 'Digitizing') return jobs.filter((j) => j.order === 'Digitizing');
-    if (filter === 'Sewout')
-      return jobs.filter((j) => j.order === 'Digitizing + Sewout' || j.order === 'Sewout');
-    return jobs;
-  }, [jobs, filter]);
+  // Apply all filter bar criteria client-side on the current page.
+  const filtered = useMemo(() => applyJobFilters(jobs, filters), [jobs, filters]);
 
-  const pills: PillItem[] = [
-    { id: 'all',       label: 'All',       count: jobs.length },
-    { id: 'Artwork',   label: 'Artwork',   count: jobs.filter((j) => j.order === 'Artwork').length },
-    { id: 'Digitizing',label: 'Digitizing',count: jobs.filter((j) => j.order === 'Digitizing').length },
-    {
-      id: 'Sewout',
-      label: 'Sewout',
-      count: jobs.filter((j) => j.order === 'Digitizing + Sewout' || j.order === 'Sewout').length,
-    },
-  ];
-
-  function handleFilterChange(id: string) {
-    setFilter(id);
+  function handleFiltersChange(next: JobFilters) {
+    setFilters(next);
     setPage(1);
   }
 
@@ -58,10 +68,8 @@ export function AdminJobsPage() {
     <div className="page">
       <GreetingHero
         title="All Jobs"
-        subtitle={`Every job across the platform — search by client, stage, owner, or revenue band.${total > 0 ? ` ${total} total.` : ''}`}
+        subtitle={`Every job across the platform — search, filter by type, priority, client, or date.${total > 0 ? ` ${total} total.` : ''}`}
       />
-
-      <Pills items={pills} activeId={filter} onSelect={handleFilterChange} />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
@@ -69,7 +77,19 @@ export function AdminJobsPage() {
         </div>
       ) : (
         <>
-          <JobTable jobs={filtered} showActions defaultView="grid" />
+          <JobTable
+            jobs={filtered}
+            showActions
+            defaultView="grid"
+            toolbarSlot={
+              <JobFilterBar
+                filters={filters}
+                onChange={handleFiltersChange}
+                statusOptions={JOB_STATUS_OPTIONS}
+                clients={clients}
+              />
+            }
+          />
           <Pagination
             page={page}
             totalPages={totalPages}
@@ -79,6 +99,7 @@ export function AdminJobsPage() {
           />
         </>
       )}
+      <DeepLinkModal />
     </div>
   );
 }

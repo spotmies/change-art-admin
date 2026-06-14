@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Pencil, Search } from 'lucide-react';
+import { Pencil, Plus, Search } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { PaymentMode } from '@contracts';
 import type { IClient } from '@contracts';
@@ -12,6 +12,7 @@ import {
 } from '../../modules/admin-panel/components/ClientDetailModal';
 import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
 import { ProfileChangeRequestsTab } from '../../modules/admin-panel/components/ProfileChangeRequestsTab';
+import { AddClientModal } from '../../modules/admin-panel/components/AddClientModal';
 
 const PER_PAGE = 20;
 
@@ -70,6 +71,7 @@ export function AdminClientsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
+  const [addClientOpen, setAddClientOpen] = useState(false);
 
   function openClient(client: IClient, mode: ClientModalMode) {
     setSelected({ client, mode });
@@ -189,6 +191,17 @@ export function AdminClientsPage() {
               aria-label="Search"
             />
           </div>
+
+          {tab === 'clients' && (
+            <button
+              type="button"
+              className="btn btn-crimson"
+              onClick={() => setAddClientOpen(true)}
+            >
+              <Plus className="w-3.5 h-3.5" aria-hidden />
+              Add Client
+            </button>
+          )}
         </div>
 
         {tab === 'requests' ? (
@@ -269,6 +282,11 @@ export function AdminClientsPage() {
           onDismiss={() => navigate(-1)}
         />
       )}
+
+      <AddClientModal
+        open={addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+      />
 
       <ClientDetailModal
         client={selected?.client ?? null}
