@@ -57,6 +57,7 @@ import { AdminNewJobsPage } from '@routes/admin/AdminNewJobsPage';
 import { AdminNewQuotesPage } from '@routes/admin/AdminNewQuotesPage';
 import { AdminClientsPage } from '@routes/admin/AdminClientsPage';
 import { AdminUsersPage } from '@routes/admin/AdminUsersPage';
+import { AdminEmailInboxPage } from '@routes/admin/AdminEmailInboxPage';
 import { AdminNotificationsPage } from '@routes/admin/AdminNotificationsPage';
 import { AdminCreateQuotePage } from '@routes/admin/AdminCreateQuotePage';
 import { AdminPlaceOrderPage } from '@routes/admin/AdminPlaceOrderPage';
@@ -217,6 +218,7 @@ export const router = createBrowserRouter([
       { path: 'new-quotes', element: <AdminNewQuotesPage /> },
       { path: 'clients', element: <AdminClientsPage /> },
       { path: 'users', element: <AdminUsersPage /> },
+      { path: 'email-inbox', element: <AdminEmailInboxPage /> },
       { path: 'notifications', element: <AdminNotificationsPage /> },
       { path: 'create-quote', element: <AdminCreateQuotePage /> },
       { path: 'place-order', element: <AdminPlaceOrderPage /> },

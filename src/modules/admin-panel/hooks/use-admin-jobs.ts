@@ -74,6 +74,35 @@ export function useAdminJobById(id: string) {
 }
 
 /**
+ * Admin/CS only: promote a DRAFT job card (from email inbox) to JOB_PLACED.
+ * Invalidates the full jobs cache so New Jobs list reflects the change immediately.
+ */
+export function useActivateJobCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminService.activateJobCard(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    },
+  });
+}
+
+/**
+ * Fetch a fresh presigned thumbnail URL for a single job when the detail modal
+ * opens. staleTime:0 bypasses the 60-second batch-thumbnail cache, so email
+ * attachments appear immediately even if the cache pre-dates the file upload.
+ */
+export function useJobThumbnail(jobId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.files.thumbnails(jobId ? [jobId] : []),
+    queryFn: () => adminService.getJobThumbnails([jobId!]),
+    enabled: !!jobId,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
  * Fetches the admin copy for an original job. Returns null when none exists yet.
  */
 export function useAdminCopy(originalJobId: string | null | undefined) {

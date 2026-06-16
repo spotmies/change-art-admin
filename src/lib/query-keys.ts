@@ -79,4 +79,10 @@ export const queryKeys = {
   emailIngestion: {
     drafts: () => ['email-ingestion', 'drafts'] as const,
   },
+
+  contactSubmissions: {
+    all: () => ['contact-submissions'] as const,
+    list: () => ['contact-submissions', 'list'] as const,
+    byId: (id: string) => ['contact-submissions', 'byId', id] as const,
+  },
 } as const;

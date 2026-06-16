@@ -1,5 +1,5 @@
 import { apiClient } from '@lib/api-client';
-import type { IClient, IJobCard, IUser, PaginatedList } from '@contracts';
+import type { IClient, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
 
 // ─── Client profile change requests (admin review queue) ──────────────────
 // Local to this module — not in @contracts because the backend enum mirror
@@ -257,5 +257,21 @@ export const adminService = {
       `/api/v1/clients/profile-change-requests/${id}/reject`,
       note ? { note } : {},
     );
+  },
+
+  /**
+   * Admin/CS only: promote an email-created DRAFT job card to JOB_PLACED so
+   * it enters the production pipeline and appears in the New Jobs view.
+   */
+  activateJobCard(id: string): Promise<IJobCard> {
+    return apiClient.post<IJobCard>(`/api/v1/job-cards/${id}/activate`);
+  },
+
+  listContactSubmissions(): Promise<IIngestedEmail[]> {
+    return apiClient.get<IIngestedEmail[]>('/api/v1/contact-submissions');
+  },
+
+  getContactSubmission(id: string): Promise<IIngestedEmail> {
+    return apiClient.get<IIngestedEmail>(`/api/v1/contact-submissions/${id}`);
   },
 };

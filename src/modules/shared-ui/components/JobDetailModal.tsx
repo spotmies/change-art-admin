@@ -5,7 +5,7 @@ import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
 import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { useJobRoom } from '@lib/use-job-room';
-import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminJobById, useJobThumbnail } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
@@ -183,6 +183,10 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const originalJobQuery = useAdminJobById(
     job?.isAdminCopy && job.parentJobId ? job.parentJobId : '',
   );
+
+  // Always fetch a fresh thumbnail when the modal opens — bypasses the 60-second
+  // batch cache so email-attached images show up even if the cache pre-dates upload.
+  const freshThumbQuery = useJobThumbnail(job?.uuid);
   const originalJob = originalJobQuery.data ?? null;
 
   // Reset to admin tab and close compare whenever a different job is opened.
@@ -271,7 +275,12 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   // Show only the real images the client uploaded. When the job has none, fall
   // back to a single placeholder tile (jobImage at index 0). Never pad with
   // duplicate placeholders — that's what caused the "same image 3x" bug.
-  const realImages = displayJob.images ?? [];
+  // freshThumbUrl comes from a staleTime:0 query that fires on modal open,
+  // bypassing the 60-second batch-thumbnail cache so email-attached images show.
+  const freshThumbUrl = job?.uuid ? (freshThumbQuery.data?.[job.uuid] ?? null) : null;
+  const realImages = freshThumbUrl
+    ? [freshThumbUrl]
+    : (displayJob.images ?? []);
   const images = realImages.length > 0 ? realImages : [jobImage(displayJob, 0, 560, 420)];
 
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;

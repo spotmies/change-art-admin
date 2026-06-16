@@ -296,17 +296,44 @@ export interface ILeaveRequest {
   updated_at: IsoDateTime;
 }
 
+export interface IContactSubmissionAttachment {
+  filename: string;
+  mimeType: string;
+  size: string;
+  storageKey: string;
+  type: 'image' | 'pdf' | 'other';
+  url?: string;
+}
+
+export interface IContactSubmissionAiData {
+  intent?: string;
+  confidence?: number;
+  rejection_reason?: string;
+  design_name?: string;
+  order_type?: string;
+  priority?: string;
+  notes?: string;
+  width_inches?: number;
+  height_inches?: number;
+  num_colors?: number;
+  contact_name?: string;
+  contact_number?: string;
+}
+
 export interface IIngestedEmail {
   id: string;
   tenant_id: string;
   from_email: string;
+  to_email: string;
   subject: string;
   body: string;
-  attachments: Record<string, unknown>[];
-  draft_job_card_id: string | null;
-  processing_status: EmailIngestionStatus;
-  received_at: IsoDateTime;
+  attachments: IContactSubmissionAttachment[];
   created_at: IsoDateTime;
+  ai_status: EmailIngestionStatus;
+  ai_intent: string | null;
+  ai_confidence: string | null;
+  ai_extracted_data: IContactSubmissionAiData | null;
+  linked_job_card_id: string | null;
 }
 
 // ─── API Envelope Types ──────────────────────────────────────
