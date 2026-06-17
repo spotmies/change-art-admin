@@ -7,9 +7,10 @@ import {
   type SendQuotePriceBody,
   type RejectQuoteBody,
   type DispatchJobBody,
+  type MarkCompleteBody,
 } from '../services/cs-quote.service';
 
-export type { SendQuotePriceBody, RejectQuoteBody, DispatchJobBody };
+export type { SendQuotePriceBody, RejectQuoteBody, DispatchJobBody, MarkCompleteBody };
 
 export function useSendQuotePrice() {
   const qc = useQueryClient();
@@ -47,6 +48,30 @@ export function useDispatchJob() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       toast.success('Job dispatched to client.');
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useMarkComplete() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, body }: { jobId: string; body?: MarkCompleteBody }) =>
+      csQuoteService.markComplete(jobId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      toast.success('Job marked complete — ready to deliver.');
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useNotifyOrderReady() {
+  return useMutation({
+    mutationFn: ({ jobId }: { jobId: string }) =>
+      csQuoteService.notifyOrderReady(jobId),
+    onSuccess: (data) => {
+      toast.success(`Order ready email sent to ${data.to}`);
     },
     onError: (err) => toastApiError(err),
   });

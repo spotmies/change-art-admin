@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Download, Edit2, UserPlus, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2 } from 'lucide-react';
+import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck } from 'lucide-react';
+import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
-import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob } from '@/modules/cs-panel/hooks/use-cs-quote';
+import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById, useJobThumbnail } from '@modules/admin-panel/hooks/use-admin-jobs';
 
@@ -60,20 +61,20 @@ interface JobDetailModalProps {
 function buildFlowSteps(hasSewout: boolean): { role: string; sub: string }[] {
   return hasSewout
     ? [
-        { role: 'CS',        sub: 'Created'  },
-        { role: 'TL',        sub: 'Assigned' },
-        { role: 'Execution', sub: ''         },
-        { role: 'Sewout',    sub: 'Pending'  },
-        { role: 'QC',        sub: 'Review'   },
-        { role: 'CS',        sub: 'Dispatch' },
-      ]
+      { role: 'CS', sub: 'Created' },
+      { role: 'TL', sub: 'Assigned' },
+      { role: 'Execution', sub: '' },
+      { role: 'Sewout', sub: 'Pending' },
+      { role: 'QC', sub: 'Review' },
+      { role: 'CS', sub: 'Dispatch' },
+    ]
     : [
-        { role: 'CS',        sub: 'Created'  },
-        { role: 'TL',        sub: 'Assigned' },
-        { role: 'Execution', sub: ''         },
-        { role: 'QC',        sub: 'Review'   },
-        { role: 'CS',        sub: 'Dispatch' },
-      ];
+      { role: 'CS', sub: 'Created' },
+      { role: 'TL', sub: 'Assigned' },
+      { role: 'Execution', sub: '' },
+      { role: 'QC', sub: 'Review' },
+      { role: 'CS', sub: 'Dispatch' },
+    ];
 }
 
 function currentStepIndex(job: Job, hasSewout: boolean): number {
@@ -84,7 +85,7 @@ function currentStepIndex(job: Job, hasSewout: boolean): number {
   // The returned index is the ACTIVE step; all steps before it render as completed ✓.
 
   switch (job.stage) {
-    case 'quote':  return 0;
+    case 'quote': return 0;
     case 'junior':
     case 'senior': {
       // Job placed / CS-approved: job is in the CS queue, not yet assigned to anyone → TL step is next
@@ -92,10 +93,10 @@ function currentStepIndex(job: Job, hasSewout: boolean): number {
       // Assigned / IN_PROGRESS / Senior stages: someone is actively working → Execution step is active
       return 2;
     }
-    case 'sewout':    return hasSewout ? 3 : 2;
-    case 'qc':        return hasSewout ? 4 : 3;
+    case 'sewout': return hasSewout ? 3 : 2;
+    case 'qc': return hasSewout ? 4 : 3;
     case 'delivered': return hasSewout ? 5 : 4;
-    default:          return 0;
+    default: return 0;
   }
 }
 
@@ -154,7 +155,7 @@ function isReadyToDeliverStatus(job: Job): boolean {
   return normalizedStatus(job) === 'READY_TO_DELIVER';
 }
 
-export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = false }: JobDetailModalProps) {
+export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobDetailModalProps) {
   const [isIn, setIsIn] = useState(false);
   const [agencyPrice, setAgencyPrice] = useState('');
   const [confirmedEta, setConfirmedEta] = useState('');
@@ -169,6 +170,8 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
+  const [showSendMailConfirm, setShowSendMailConfirm] = useState(false);
+  const [showMarkComplete, setShowMarkComplete] = useState(false);
   const [showAckPopover, setShowAckPopover] = useState(false);
   const [ackEtaHours, setAckEtaHours] = useState(() =>
     job?.etaHours != null ? String(job.etaHours) : '',
@@ -199,6 +202,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const rejectQuote = useRejectQuote();
   const dispatchJob = useDispatchJob();
   const acknowledgeJob = useAcknowledgeJob();
+  const notifyOrderReady = useNotifyOrderReady();
   const isSubmitting = sendPrice.isPending || rejectQuote.isPending;
 
   const etaCountdown = useEtaCountdown(job?.acknowledgedAt, job?.etaHours);
@@ -268,9 +272,9 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const showToggle = job.isAdminCopy === true;
   const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
 
-  const hasSewout  = job.order.includes('Sewout');
-  const flowSteps  = buildFlowSteps(hasSewout);
-  const stepIdx    = currentStepIndex(job, hasSewout);
+  const hasSewout = job.order.includes('Sewout');
+  const flowSteps = buildFlowSteps(hasSewout);
+  const stepIdx = currentStepIndex(job, hasSewout);
 
   // Show only the real images the client uploaded. When the job has none, fall
   // back to a single placeholder tile (jobImage at index 0). Never pad with
@@ -285,7 +289,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
 
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
   const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
-  const agreedPrice  = displayJob.negotiation?.finalPrice ?? displayJob.agreedPrice ?? null;
+  const agreedPrice = displayJob.negotiation?.finalPrice ?? displayJob.agreedPrice ?? null;
 
   // Whether the quote has already been priced & sent (status QUOTE_APPROVED).
   // Drives readonly fields and swaps the action buttons for a clear
@@ -303,14 +307,15 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   // wrongly open the quote popup.
   const isQuote = quoteView && isQuoteStageStatus(job);
   const isReadyToDeliver = isReadyToDeliverStatus(job);
+  const isCsApproved = normalizedStatus(job) === 'CS_APPROVED';
   const canAcknowledge = normalizedStatus(job) === 'JOB_PLACED' && !job.acknowledgedAt;
   const isAcknowledged = !!job.acknowledgedAt;
 
   // Workflow "current" node is blue ONLY on the quote popup; every other
   // popup keeps the original crimson so non-quote popups are unchanged.
   const curBorder = isQuote ? '#2563EB' : '#B22234';
-  const curBg     = isQuote ? '#EBF0FA' : '#fff';
-  const curGlow   = isQuote ? 'rgba(37,99,235,0.12)' : 'rgba(178,34,52,0.1)';
+  const curBg = isQuote ? '#EBF0FA' : '#fff';
+  const curGlow = isQuote ? 'rgba(37,99,235,0.12)' : 'rgba(178,34,52,0.1)';
 
   const jobUuid = job.uuid;
   const requireUuid = (action: string): string | null => {
@@ -347,8 +352,8 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
   const handleSendPrice = () => {
     const amount = parseFloat(agencyPrice);
     const etaHours = parseFloat(confirmedEta);
-    const priceBad = !agencyPrice || !Number.isFinite(amount)   || amount   <= 0 || amount   > MAX_PRICE;
-    const etaBad   = !confirmedEta || !Number.isFinite(etaHours) || etaHours <= 0 || etaHours > MAX_ETA_HOURS;
+    const priceBad = !agencyPrice || !Number.isFinite(amount) || amount <= 0 || amount > MAX_PRICE;
+    const etaBad = !confirmedEta || !Number.isFinite(etaHours) || etaHours <= 0 || etaHours > MAX_ETA_HOURS;
     setPriceInvalid(priceBad);
     setEtaInvalid(etaBad);
     if (priceBad || etaBad) return;
@@ -831,7 +836,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                     color: viewMode === 'client' && !showCompare ? '#fff' : '#64748B',
                   }}
                 >
-                  Client Provided
+                  Original
                 </button>
                 <button
                   type="button"
@@ -848,7 +853,7 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                     color: viewMode === 'admin' && !showCompare ? '#fff' : '#64748B',
                   }}
                 >
-                  Admin Edited
+                  Modified
                 </button>
               </div>
 
@@ -903,160 +908,199 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
           {/* Normal detail view — hidden when compare mode is active */}
           {!showCompare && (<>
 
-          {/* TOP LAYOUT — Image carousel (+ pricing card when in quote view) */}
-          {(() => {
-            const totalImages = images.length;
-            const canPaginate = totalImages > 2;
-            const atStart = !canPaginate || carPage === 0;
-            const atEnd   = !canPaginate || carPage >= totalImages - 2;
-            const navPrev = () => setCarPage((p) => Math.max(0, p - 1));
-            const navNext = () => setCarPage((p) => Math.min(totalImages - 2, p + 1));
-            const arrowBase: React.CSSProperties = {
-              position: 'absolute',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 30,
-              height: 30,
-              borderRadius: 999,
-              background: 'rgba(0,0,0,0.55)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 2,
-              transition: 'background 0.15s',
-            };
-            return (
-              <div
-                className={cn('grid gap-4 mb-5', isQuote ? 'grid-cols-1 md:grid-cols-2' : '')}
-                style={isQuote ? { alignItems: 'stretch' } : undefined}
-              >
-                {/* LEFT — image carousel */}
-                <div className="flex flex-col min-w-0">
-                  <SectionLabel>JOB IMAGES</SectionLabel>
-                  <div className="relative flex-1" style={{ minHeight: 0 }}>
-                    <button
-                      type="button"
-                      onClick={navPrev}
-                      disabled={atStart}
-                      aria-label="Previous image"
-                      style={{
-                        ...arrowBase,
-                        left: -14,
-                        opacity: atStart ? 0.25 : 1,
-                        cursor: atStart ? 'default' : 'pointer',
-                      }}
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <div
-                      className="grid grid-cols-2 gap-2.5"
-                      style={{ height: '100%', minHeight: isQuote ? 220 : 180 }}
-                    >
-                      {images.map((src, i) => {
-                        const visible = i >= carPage && i < carPage + 2;
-                        return (
-                          <img
-                            key={i}
-                            src={src}
-                            alt={i === 0 ? job.design : ''}
-                            className="w-full rounded-xl object-cover"
-                            style={{
-                              display: visible ? 'block' : 'none',
-                              height: '100%',
-                              minHeight: 150,
-                              border: '1px solid rgba(15,23,42,0.06)',
-                              background: 'rgba(0,0,0,0.04)',
-                            }}
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                          />
-                        );
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={navNext}
-                      disabled={atEnd}
-                      aria-label="Next image"
-                      style={{
-                        ...arrowBase,
-                        right: -14,
-                        opacity: atEnd ? 0.25 : 1,
-                        cursor: atEnd ? 'default' : 'pointer',
-                      }}
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* RIGHT — Review & Set Price card (quote view only) */}
-                {isQuote ? (
+            {/* TOP LAYOUT — Image carousel (+ pricing card when in quote view) */}
+            {(() => {
+              const totalImages = images.length;
+              const canPaginate = totalImages > 2;
+              const atStart = !canPaginate || carPage === 0;
+              const atEnd = !canPaginate || carPage >= totalImages - 2;
+              const navPrev = () => setCarPage((p) => Math.max(0, p - 1));
+              const navNext = () => setCarPage((p) => Math.min(totalImages - 2, p + 1));
+              const arrowBase: React.CSSProperties = {
+                position: 'absolute',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 30,
+                height: 30,
+                borderRadius: 999,
+                background: 'rgba(0,0,0,0.55)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 2,
+                transition: 'background 0.15s',
+              };
+              return (
+                <div
+                  className={cn('grid gap-4 mb-5', isQuote ? 'grid-cols-1 md:grid-cols-2' : '')}
+                  style={isQuote ? { alignItems: 'stretch' } : undefined}
+                >
+                  {/* LEFT — image carousel */}
                   <div className="flex flex-col min-w-0">
-                    <SectionLabel>REVIEW &amp; SET PRICE</SectionLabel>
-                    <div
-                      className="rounded-xl flex-1 flex flex-col"
-                      style={{
-                        background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)',
-                        border: '1.5px solid #FCD34D',
-                        padding: 14,
-                        gap: 10,
-                        color: '#92400E',
-                        boxShadow: '0 8px 30px rgba(217,119,6,0.12), inset 0 1px 0 rgba(255,255,255,0.6)',
-                      }}
-                    >
-                      {/* Price + ETA row — equal columns, matching reference */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
-                        <div style={{ minWidth: 0 }}>
-                          <label
-                            className="block uppercase"
-                            style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
-                          >
-                            Quote Price <span style={{ color: '#B22234' }}>*</span>
-                          </label>
-                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
-                            <span
+                    <SectionLabel>JOB IMAGES</SectionLabel>
+                    <div className="relative flex-1" style={{ minHeight: 0 }}>
+                      <button
+                        type="button"
+                        onClick={navPrev}
+                        disabled={atStart}
+                        aria-label="Previous image"
+                        style={{
+                          ...arrowBase,
+                          left: -14,
+                          opacity: atStart ? 0.25 : 1,
+                          cursor: atStart ? 'default' : 'pointer',
+                        }}
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <div
+                        className="grid grid-cols-2 gap-2.5"
+                        style={{ height: '100%', minHeight: isQuote ? 220 : 180 }}
+                      >
+                        {images.map((src, i) => {
+                          const visible = i >= carPage && i < carPage + 2;
+                          return (
+                            <img
+                              key={i}
+                              src={src}
+                              alt={i === 0 ? job.design : ''}
+                              className="w-full rounded-xl object-cover"
                               style={{
-                                position: 'absolute',
-                                left: 11,
-                                fontSize: 15,
-                                fontWeight: 700,
-                                color: '#D97706',
-                                pointerEvents: 'none',
-                                lineHeight: 1,
+                                display: visible ? 'block' : 'none',
+                                height: '100%',
+                                minHeight: 150,
+                                border: '1px solid rgba(15,23,42,0.06)',
+                                background: 'rgba(0,0,0,0.04)',
                               }}
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          );
+                        })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={navNext}
+                        disabled={atEnd}
+                        aria-label="Next image"
+                        style={{
+                          ...arrowBase,
+                          right: -14,
+                          opacity: atEnd ? 0.25 : 1,
+                          cursor: atEnd ? 'default' : 'pointer',
+                        }}
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RIGHT — Review & Set Price card (quote view only) */}
+                  {isQuote ? (
+                    <div className="flex flex-col min-w-0">
+                      <SectionLabel>REVIEW &amp; SET PRICE</SectionLabel>
+                      <div
+                        className="rounded-xl flex-1 flex flex-col"
+                        style={{
+                          background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)',
+                          border: '1.5px solid #FCD34D',
+                          padding: 14,
+                          gap: 10,
+                          color: '#92400E',
+                          boxShadow: '0 8px 30px rgba(217,119,6,0.12), inset 0 1px 0 rgba(255,255,255,0.6)',
+                        }}
+                      >
+                        {/* Price + ETA row — equal columns, matching reference */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
+                          <div style={{ minWidth: 0 }}>
+                            <label
+                              className="block uppercase"
+                              style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
                             >
-                              $
-                            </span>
+                              Quote Price <span style={{ color: '#B22234' }}>*</span>
+                            </label>
+                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%' }}>
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  left: 11,
+                                  fontSize: 15,
+                                  fontWeight: 700,
+                                  color: '#D97706',
+                                  pointerEvents: 'none',
+                                  lineHeight: 1,
+                                }}
+                              >
+                                $
+                              </span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={MAX_PRICE}
+                                step="any"
+                                value={agencyPrice}
+                                readOnly={quoteSent}
+                                disabled={quoteSent}
+                                onChange={(e) => {
+                                  // Strip non-numeric chars + cap length, then
+                                  // flag over-cap values as invalid live so the
+                                  // red border + error appear as the rep types,
+                                  // not only when they click Send Price.
+                                  const next = trimNumeric(e.target.value, MAX_PRICE_LEN);
+                                  setAgencyPrice(next);
+                                  const n = parseFloat(next);
+                                  setPriceInvalid(Number.isFinite(n) && n > MAX_PRICE);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  background: quoteSent ? '#FEF3C7' : '#FFFFFF',
+                                  border: `1.5px solid ${priceInvalid ? '#DC2626' : '#FCD34D'}`,
+                                  color: '#92400E',
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  borderRadius: 8,
+                                  padding: '7px 12px 7px 26px',
+                                  height: 34,
+                                  lineHeight: 1,
+                                  outline: 'none',
+                                  boxShadow: 'inset 0 1px 2px rgba(217,119,6,0.05)',
+                                  cursor: quoteSent ? 'not-allowed' : 'text',
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <label
+                              className="block uppercase"
+                              style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
+                            >
+                              Confirmed ETA (hrs) <span style={{ color: '#B22234' }}>*</span>
+                            </label>
                             <input
                               type="number"
                               min={1}
-                              max={MAX_PRICE}
+                              max={MAX_ETA_HOURS}
                               step="any"
-                              value={agencyPrice}
+                              value={confirmedEta}
                               readOnly={quoteSent}
                               disabled={quoteSent}
                               onChange={(e) => {
-                                // Strip non-numeric chars + cap length, then
-                                // flag over-cap values as invalid live so the
-                                // red border + error appear as the rep types,
-                                // not only when they click Send Price.
-                                const next = trimNumeric(e.target.value, MAX_PRICE_LEN);
-                                setAgencyPrice(next);
+                                const next = trimNumeric(e.target.value, MAX_ETA_LEN);
+                                setConfirmedEta(next);
                                 const n = parseFloat(next);
-                                setPriceInvalid(Number.isFinite(n) && n > MAX_PRICE);
+                                setEtaInvalid(Number.isFinite(n) && n > MAX_ETA_HOURS);
                               }}
                               style={{
                                 width: '100%',
                                 background: quoteSent ? '#FEF3C7' : '#FFFFFF',
-                                border: `1.5px solid ${priceInvalid ? '#DC2626' : '#FCD34D'}`,
+                                border: `1.5px solid ${etaInvalid ? '#DC2626' : '#FCD34D'}`,
                                 color: '#92400E',
                                 fontSize: 13,
                                 fontWeight: 600,
                                 borderRadius: 8,
-                                padding: '7px 12px 7px 26px',
+                                padding: '7px 12px',
                                 height: 34,
                                 lineHeight: 1,
                                 outline: 'none',
@@ -1066,144 +1110,105 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                             />
                           </div>
                         </div>
-                        <div style={{ minWidth: 0 }}>
+
+                        {/* Note to Client */}
+                        <div>
                           <label
                             className="block uppercase"
                             style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
                           >
-                            Confirmed ETA (hrs) <span style={{ color: '#B22234' }}>*</span>
+                            Note to Client{' '}
+                            <span style={{ fontWeight: 500, textTransform: 'lowercase', fontSize: 9.5, opacity: 0.7 }}>
+                              (optional)
+                            </span>
                           </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={MAX_ETA_HOURS}
-                            step="any"
-                            value={confirmedEta}
+                          <textarea
+                            value={noteToClient}
                             readOnly={quoteSent}
                             disabled={quoteSent}
-                            onChange={(e) => {
-                              const next = trimNumeric(e.target.value, MAX_ETA_LEN);
-                              setConfirmedEta(next);
-                              const n = parseFloat(next);
-                              setEtaInvalid(Number.isFinite(n) && n > MAX_ETA_HOURS);
-                            }}
+                            onChange={(e) => setNoteToClient(e.target.value)}
+                            placeholder={quoteSent && !noteToClient ? '— No note sent —' : undefined}
                             style={{
                               width: '100%',
                               background: quoteSent ? '#FEF3C7' : '#FFFFFF',
-                              border: `1.5px solid ${etaInvalid ? '#DC2626' : '#FCD34D'}`,
+                              border: '1.5px solid #FCD34D',
                               color: '#92400E',
-                              fontSize: 13,
-                              fontWeight: 600,
+                              fontSize: 12,
+                              fontWeight: 500,
                               borderRadius: 8,
                               padding: '7px 12px',
-                              height: 34,
-                              lineHeight: 1,
+                              lineHeight: 1.4,
+                              minHeight: 44,
+                              resize: quoteSent ? 'none' : 'vertical',
                               outline: 'none',
                               boxShadow: 'inset 0 1px 2px rgba(217,119,6,0.05)',
                               cursor: quoteSent ? 'not-allowed' : 'text',
                             }}
                           />
                         </div>
-                      </div>
 
-                      {/* Note to Client */}
-                      <div>
-                        <label
-                          className="block uppercase"
-                          style={{ color: '#92400E', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 5 }}
-                        >
-                          Note to Client{' '}
-                          <span style={{ fontWeight: 500, textTransform: 'lowercase', fontSize: 9.5, opacity: 0.7 }}>
-                            (optional)
-                          </span>
-                        </label>
-                        <textarea
-                          value={noteToClient}
-                          readOnly={quoteSent}
-                          disabled={quoteSent}
-                          onChange={(e) => setNoteToClient(e.target.value)}
-                          placeholder={quoteSent && !noteToClient ? '— No note sent —' : undefined}
-                          style={{
-                            width: '100%',
-                            background: quoteSent ? '#FEF3C7' : '#FFFFFF',
-                            border: '1.5px solid #FCD34D',
-                            color: '#92400E',
-                            fontSize: 12,
-                            fontWeight: 500,
-                            borderRadius: 8,
-                            padding: '7px 12px',
-                            lineHeight: 1.4,
-                            minHeight: 44,
-                            resize: quoteSent ? 'none' : 'vertical',
-                            outline: 'none',
-                            boxShadow: 'inset 0 1px 2px rgba(217,119,6,0.05)',
-                            cursor: quoteSent ? 'not-allowed' : 'text',
-                          }}
-                        />
-                      </div>
-
-                      {/* Info banner — message swaps when the price has
+                        {/* Info banner — message swaps when the price has
                           already been dispatched to the client. */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          background: quoteSent ? 'rgba(5,150,105,0.06)' : 'rgba(217,119,6,0.04)',
-                          border: `1px dashed ${quoteSent ? '#10B981' : '#FCD34D'}`,
-                          borderRadius: 8,
-                          padding: '8px 10px',
-                          fontSize: 10.5,
-                          color: quoteSent ? '#065F46' : '#B45309',
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        <AlertCircle className="w-3 h-3 shrink-0" style={{ marginTop: 1 }} aria-hidden />
-                        <span>
-                          {quoteSent
-                            ? <>Price already sent. Status is <b>Quote Approved</b> — awaiting client confirmation.</>
-                            : <>Sending price updates status to <b>Quote Approved</b> and requests client confirmation.</>}
-                        </span>
-                      </div>
-
-                      {/* Validation error — message picks the missing field(s)
-                          so the user knows what's actually wrong. */}
-                      {priceInvalid || etaInvalid ? (
                         <div
                           style={{
-                            color: '#DC2626',
-                            fontSize: 11,
-                            padding: '6px 10px',
-                            background: 'rgba(220,38,38,0.08)',
-                            border: '1px solid rgba(220,38,38,0.2)',
-                            borderRadius: 6,
-                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: quoteSent ? 'rgba(5,150,105,0.06)' : 'rgba(217,119,6,0.04)',
+                            border: `1px dashed ${quoteSent ? '#10B981' : '#FCD34D'}`,
+                            borderRadius: 8,
+                            padding: '8px 10px',
+                            fontSize: 10.5,
+                            color: quoteSent ? '#065F46' : '#B45309',
+                            lineHeight: 1.45,
                           }}
                         >
-                          {(() => {
-                            // Per-field reason: distinguish "missing/zero"
-                            // from "over the cap" so the rep knows what
-                            // specifically failed.
-                            const priceMsg = priceInvalid
-                              ? (parseFloat(agencyPrice) > MAX_PRICE
+                          <AlertCircle className="w-3 h-3 shrink-0" style={{ marginTop: 1 }} aria-hidden />
+                          <span>
+                            {quoteSent
+                              ? <>Price already sent. Status is <b>Quote Approved</b> — awaiting client confirmation.</>
+                              : <>Sending price updates status to <b>Quote Approved</b> and requests client confirmation.</>}
+                          </span>
+                        </div>
+
+                        {/* Validation error — message picks the missing field(s)
+                          so the user knows what's actually wrong. */}
+                        {priceInvalid || etaInvalid ? (
+                          <div
+                            style={{
+                              color: '#DC2626',
+                              fontSize: 11,
+                              padding: '6px 10px',
+                              background: 'rgba(220,38,38,0.08)',
+                              border: '1px solid rgba(220,38,38,0.2)',
+                              borderRadius: 6,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {(() => {
+                              // Per-field reason: distinguish "missing/zero"
+                              // from "over the cap" so the rep knows what
+                              // specifically failed.
+                              const priceMsg = priceInvalid
+                                ? (parseFloat(agencyPrice) > MAX_PRICE
                                   ? `Agency price must be at most $${MAX_PRICE.toLocaleString()}.`
                                   : 'Please enter a valid agency price.')
-                              : null;
-                            const etaMsg = etaInvalid
-                              ? (parseFloat(confirmedEta) > MAX_ETA_HOURS
+                                : null;
+                              const etaMsg = etaInvalid
+                                ? (parseFloat(confirmedEta) > MAX_ETA_HOURS
                                   ? `Confirmed ETA must be at most ${MAX_ETA_HOURS}h (30 days).`
                                   : 'Please enter a valid confirmed ETA.')
-                              : null;
-                            return [priceMsg, etaMsg].filter(Boolean).join(' ');
-                          })()}
-                        </div>
-                      ) : null}
+                                : null;
+                              return [priceMsg, etaMsg].filter(Boolean).join(' ');
+                            })()}
+                          </div>
+                        ) : null}
 
-                      {/* Action buttons — Reject is still valid while waiting
+                        {/* Action buttons — Reject is still valid while waiting
                           on the client; Send Price is hidden once a price has
                           been sent so the rep can't dispatch a second one. */}
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
-                        {/* Cancel button — rejects the quote and closes the price panel 
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center', marginTop: 'auto' }}>
+                          {/* Cancel button — rejects the quote and closes the price panel 
                         <button
                           type="button"
                           onClick={handleRejectQuote}
@@ -1228,278 +1233,278 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                           <X className="w-2.5 h-2.5" style={{ marginRight: 4 }} aria-hidden />
                           {rejectQuote.isPending ? 'Cancelling…' : 'Cancel'}
                         </button>*/}
-                        {!quoteSent ? (
-                          <button
-                            type="button"
-                            onClick={handleSendPrice}
-                            disabled={isSubmitting}
-                            style={{
-                              background: '#D97706',
-                              border: '1.5px solid #D97706',
-                              color: '#FFFFFF',
-                              padding: '7px 15px',
-                              fontSize: 11,
-                              fontWeight: 600,
-                              borderRadius: 99,
-                              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                              opacity: isSubmitting ? 0.55 : 1,
-                              transition: 'all 0.15s ease',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                            }}
-                            onMouseOver={(e) => {
-                              if (isSubmitting) return;
-                              (e.currentTarget as HTMLButtonElement).style.background = '#B45309';
-                              (e.currentTarget as HTMLButtonElement).style.borderColor = '#B45309';
-                            }}
-                            onMouseOut={(e) => {
-                              (e.currentTarget as HTMLButtonElement).style.background = '#D97706';
-                              (e.currentTarget as HTMLButtonElement).style.borderColor = '#D97706';
-                            }}
-                          >
-                            <svg
-                              width="11" height="11" viewBox="0 0 24 24" fill="none"
-                              stroke="currentColor" strokeWidth="2.5"
-                              strokeLinecap="round" strokeLinejoin="round"
-                              style={{ marginRight: 4 }}
+                          {!quoteSent ? (
+                            <button
+                              type="button"
+                              onClick={handleSendPrice}
+                              disabled={isSubmitting}
+                              style={{
+                                background: '#D97706',
+                                border: '1.5px solid #D97706',
+                                color: '#FFFFFF',
+                                padding: '7px 15px',
+                                fontSize: 11,
+                                fontWeight: 600,
+                                borderRadius: 99,
+                                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                                opacity: isSubmitting ? 0.55 : 1,
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                              }}
+                              onMouseOver={(e) => {
+                                if (isSubmitting) return;
+                                (e.currentTarget as HTMLButtonElement).style.background = '#B45309';
+                                (e.currentTarget as HTMLButtonElement).style.borderColor = '#B45309';
+                              }}
+                              onMouseOut={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background = '#D97706';
+                                (e.currentTarget as HTMLButtonElement).style.borderColor = '#D97706';
+                              }}
                             >
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                            {sendPrice.isPending ? 'Sending…' : 'Send Price'}
-                          </button>
-                        ) : null}
+                              <svg
+                                width="11" height="11" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" strokeWidth="2.5"
+                                strokeLinecap="round" strokeLinejoin="round"
+                                style={{ marginRight: 4 }}
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              {sendPrice.isPending ? 'Sending…' : 'Send Price'}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : null}
+                </div>
+              );
+            })()}
+
+            {/* WORKFLOW STEPPER */}
+            <div className="mb-5 relative">
+              {/* Background track */}
+              <div
+                className="absolute"
+                style={{ top: 19, left: 19, right: 19, height: 2, background: '#E8EDF5', zIndex: 0 }}
+              />
+              {/* Progress fill */}
+              <div
+                className="absolute"
+                style={{
+                  top: 19,
+                  left: 19,
+                  width: stepIdx === 0
+                    ? 0
+                    : `calc(${Math.min(stepIdx, flowSteps.length - 1)} / ${flowSteps.length - 1} * (100% - 38px))`,
+                  height: 2,
+                  background: '#B22234',
+                  zIndex: 0,
+                  transition: 'width 0.4s ease',
+                }}
+              />
+
+              <div className="flex items-start relative" style={{ zIndex: 1 }}>
+                {flowSteps.map((step, i) => {
+                  const state = i < stepIdx ? 'done'
+                    : i === stepIdx ? 'current'
+                      : 'pending';
+                  const raw = (job.rawStatus ?? '').toUpperCase();
+                  let subLabel = step.sub;
+                  if (i === 1) {
+                    // TL Assigned step: show "Pending" when job is awaiting assignment
+                    if (state === 'current') subLabel = 'Pending';
+                  } else if (i === 2) {
+                    // Execution step: show who it's assigned to, or ETA, or fallback
+                    if (state === 'current') {
+                      if (raw === 'ASSIGNED' && job.assignedTo) subLabel = job.assignedTo;
+                      else if (raw === 'ASSIGNED') subLabel = 'Assigned';
+                      else subLabel = job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress';
+                    }
+                  }
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center">
+                      <div
+                        className="w-[38px] h-[38px] rounded-full flex items-center justify-center"
+                        style={
+                          state === 'done'
+                            ? { background: '#B22234', border: '2px solid #B22234' }
+                            : state === 'current'
+                              ? { background: curBg, border: `2.5px solid ${curBorder}`, boxShadow: `0 0 0 4px ${curGlow}` }
+                              : { background: '#fff', border: '2px solid #E2E8F0' }
+                        }
+                      >
+                        {state === 'done' ? (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        ) : state === 'current' ? (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={curBorder} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                          </svg>
+                        ) : (
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#CBD5E1' }} />
+                        )}
+                      </div>
+                      <div className="text-center mt-1.5">
+                        <div
+                          className="text-[11px] font-bold"
+                          style={{ color: state === 'pending' ? '#94A3B8' : '#0D1B2A' }}
+                        >
+                          {step.role}
+                        </div>
+                        <div className="text-[10px] font-medium mt-0.5" style={{ color: '#94A3B8' }}>
+                          {subLabel}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* TWO-COLUMN DETAILS */}
+            <div
+              className="grid grid-cols-2 gap-x-6 mb-5 pt-4"
+              style={{ borderTop: '1px solid #E8EDF5' }}
+            >
+              {/* JOB DETAILS */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
+                  JOB DETAILS
+                </div>
+                <DetailRow label="Client" value={displayJob.client} />
+                <DetailRow label="Client ID" value={displayJob.clientId} />
+                <DetailRow label="Order Type" value={displayJob.order} />
+                {displayJob.specificType ? <DetailRow label="Specific Service" value={displayJob.specificType} /> : null}
+                <DetailRow label="Complexity" value={displayJob.complexity} />
+                {displayJob.process ? <DetailRow label="Process" value={displayJob.process} /> : null}
+                <DetailRow label="Colors" value={String(displayJob.colors)} />
+                {displayJob.finalFiles?.length ? <DetailRow label="Output Formats" value={displayJob.finalFiles.join(', ')} /> : null}
+                <DetailRow label="Assigned To" value={displayJob.assignedTo ?? 'Unassigned'} />
+                {displayJob.subType ? <DetailRow label="Sub-Type" value={displayJob.subType} /> : null}
+              </div>
+
+              {/* SPECIFICATIONS */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
+                  SPECIFICATIONS
+                </div>
+                {displayJob.etaHours ? <DetailRow label="ETA" value={`${displayJob.etaHours}h`} /> : null}
+                {isAcknowledged && etaCountdown ? (
+                  <DetailRow
+                    label="ETA Countdown"
+                    value={etaCountdown.display}
+                    valueStyle={{
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      fontSize: 11,
+                      color: etaCountdown.expired ? '#059669' : '#1D4ED8',
+                      fontWeight: 700,
+                    }}
+                  />
+                ) : null}
+                <DetailRow label="Created" value={displayJob.created} />
+                <DetailRow
+                  label="Reference"
+                  value={displayJob.ref}
+                  valueStyle={{ color: '#B22234', fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5 }}
+                />
+                <DetailRow
+                  label="Client Budget"
+                  value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString()}` : 'Not provided'}
+                />
+                <DetailRow
+                  label="Admin Counter"
+                  value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString()}` : 'None'}
+                />
+                <DetailRow
+                  label="Agreed Price"
+                  value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString()}` : 'Pending'}
+                />
+                {displayJob.aiScore && aiOverall !== null ? (
+                  <DetailRow
+                    label="AI QC Score"
+                    value={`${aiOverall}/100 — ${aiPass ? 'Pass' : 'Fail'}`}
+                    valueStyle={{ color: aiPass ? '#059669' : '#DC2626', fontWeight: 700 }}
+                  />
                 ) : null}
               </div>
-            );
-          })()}
-
-          {/* WORKFLOW STEPPER */}
-          <div className="mb-5 relative">
-            {/* Background track */}
-            <div
-              className="absolute"
-              style={{ top: 19, left: 19, right: 19, height: 2, background: '#E8EDF5', zIndex: 0 }}
-            />
-            {/* Progress fill */}
-            <div
-              className="absolute"
-              style={{
-                top: 19,
-                left: 19,
-                width: stepIdx === 0
-                  ? 0
-                  : `calc(${Math.min(stepIdx, flowSteps.length - 1)} / ${flowSteps.length - 1} * (100% - 38px))`,
-                height: 2,
-                background: '#B22234',
-                zIndex: 0,
-                transition: 'width 0.4s ease',
-              }}
-            />
-
-            <div className="flex items-start relative" style={{ zIndex: 1 }}>
-              {flowSteps.map((step, i) => {
-                const state = i < stepIdx ? 'done'
-                  : i === stepIdx ? 'current'
-                  : 'pending';
-                const raw = (job.rawStatus ?? '').toUpperCase();
-                let subLabel = step.sub;
-                if (i === 1) {
-                  // TL Assigned step: show "Pending" when job is awaiting assignment
-                  if (state === 'current') subLabel = 'Pending';
-                } else if (i === 2) {
-                  // Execution step: show who it's assigned to, or ETA, or fallback
-                  if (state === 'current') {
-                    if (raw === 'ASSIGNED' && job.assignedTo) subLabel = job.assignedTo;
-                    else if (raw === 'ASSIGNED') subLabel = 'Assigned';
-                    else subLabel = job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress';
-                  }
-                }
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center">
-                    <div
-                      className="w-[38px] h-[38px] rounded-full flex items-center justify-center"
-                      style={
-                        state === 'done'
-                          ? { background: '#B22234', border: '2px solid #B22234' }
-                          : state === 'current'
-                            ? { background: curBg, border: `2.5px solid ${curBorder}`, boxShadow: `0 0 0 4px ${curGlow}` }
-                            : { background: '#fff', border: '2px solid #E2E8F0' }
-                      }
-                    >
-                      {state === 'done' ? (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      ) : state === 'current' ? (
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={curBorder} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
-                        </svg>
-                      ) : (
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#CBD5E1' }} />
-                      )}
-                    </div>
-                    <div className="text-center mt-1.5">
-                      <div
-                        className="text-[11px] font-bold"
-                        style={{ color: state === 'pending' ? '#94A3B8' : '#0D1B2A' }}
-                      >
-                        {step.role}
-                      </div>
-                      <div className="text-[10px] font-medium mt-0.5" style={{ color: '#94A3B8' }}>
-                        {subLabel}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* TWO-COLUMN DETAILS */}
-          <div
-            className="grid grid-cols-2 gap-x-6 mb-5 pt-4"
-            style={{ borderTop: '1px solid #E8EDF5' }}
-          >
-            {/* JOB DETAILS */}
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
-                JOB DETAILS
-              </div>
-              <DetailRow label="Client"      value={displayJob.client} />
-              <DetailRow label="Client ID"   value={displayJob.clientId} />
-              <DetailRow label="Order Type"  value={displayJob.order} />
-              {displayJob.specificType ? <DetailRow label="Specific Service" value={displayJob.specificType} /> : null}
-              <DetailRow label="Complexity"  value={displayJob.complexity} />
-              {displayJob.process ? <DetailRow label="Process" value={displayJob.process} /> : null}
-              <DetailRow label="Colors"      value={String(displayJob.colors)} />
-              {displayJob.finalFiles?.length ? <DetailRow label="Output Formats" value={displayJob.finalFiles.join(', ')} /> : null}
-              <DetailRow label="Assigned To" value={displayJob.assignedTo ?? 'Unassigned'} />
-              {displayJob.subType ? <DetailRow label="Sub-Type" value={displayJob.subType} /> : null}
             </div>
 
-            {/* SPECIFICATIONS */}
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
-                SPECIFICATIONS
-              </div>
-              {displayJob.etaHours ? <DetailRow label="ETA" value={`${displayJob.etaHours}h`} /> : null}
-              {isAcknowledged && etaCountdown ? (
-                <DetailRow
-                  label="ETA Countdown"
-                  value={etaCountdown.display}
-                  valueStyle={{
-                    fontFamily: 'IBM Plex Mono, monospace',
-                    fontSize: 11,
-                    color: etaCountdown.expired ? '#059669' : '#1D4ED8',
-                    fontWeight: 700,
-                  }}
-                />
-              ) : null}
-              <DetailRow label="Created"   value={displayJob.created} />
-              <DetailRow
-                label="Reference"
-                value={displayJob.ref}
-                valueStyle={{ color: '#B22234', fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5 }}
-              />
-              <DetailRow
-                label="Client Budget"
-                value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString()}` : 'Not provided'}
-              />
-              <DetailRow
-                label="Admin Counter"
-                value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString()}` : 'None'}
-              />
-              <DetailRow
-                label="Agreed Price"
-                value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString()}` : 'Pending'}
-              />
-              {displayJob.aiScore && aiOverall !== null ? (
-                <DetailRow
-                  label="AI QC Score"
-                  value={`${aiOverall}/100 — ${aiPass ? 'Pass' : 'Fail'}`}
-                  valueStyle={{ color: aiPass ? '#059669' : '#DC2626', fontWeight: 700 }}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          {/* NOTES / BRIEF */}
-          {displayJob.notes ? (
-            <div className="mb-5">
-              <SectionLabel>NOTES / BRIEF</SectionLabel>
-              <div
-                className="text-[12.5px] leading-relaxed p-3.5 rounded-xl"
-                style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', color: '#475569' }}
-              >
-                {displayJob.notes}
-              </div>
-            </div>
-          ) : null}
-
-          {/* AI QC REPORT */}
-          {displayJob.aiScore ? (
-            <div className="mb-2">
-              <SectionLabel>AI QC REPORT</SectionLabel>
-              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EDF5' }}>
-                {/* Badge row */}
+            {/* NOTES / BRIEF */}
+            {displayJob.notes ? (
+              <div className="mb-5">
+                <SectionLabel>NOTES / BRIEF</SectionLabel>
                 <div
-                  className="px-4 pt-3 pb-2.5 flex items-center gap-3"
-                  style={{ borderBottom: '1px solid #E8EDF5' }}
+                  className="text-[12.5px] leading-relaxed p-3.5 rounded-xl"
+                  style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', color: '#475569' }}
                 >
-                  <span
-                    className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(178,34,52,0.10)', color: '#B22234', border: '1px solid rgba(178,34,52,0.18)' }}
-                  >
-                    AI ANALYSIS
-                  </span>
-                  <span className="text-[11px]" style={{ color: '#94A3B8' }}>
-                    Auto-generated · First-pass reference only
-                  </span>
+                  {displayJob.notes}
                 </div>
+              </div>
+            ) : null}
 
-                {/* Score bars */}
-                <div className="grid grid-cols-5 gap-2 px-4 py-3">
-                  <ScoreBar label="COLOUR"     value={displayJob.aiScore!.colour} color="#ef4444" />
-                  <ScoreBar label="ALIGNMENT"  value={displayJob.aiScore!.align}  color="#3b82f6" />
-                  <ScoreBar label="RESOLUTION" value={displayJob.aiScore!.res}    color="#a855f7" />
-                  <ScoreBar label="BRIEF"      value={displayJob.aiScore!.brief}  color="#f59e0b" />
-                  <ScoreBar label="OVERALL"    value={aiOverall ?? 0}     color="#B22234" />
-                </div>
-
-                {/* Recommendation callout */}
-                {aiPass !== null ? (
+            {/* AI QC REPORT */}
+            {displayJob.aiScore ? (
+              <div className="mb-2">
+                <SectionLabel>AI QC REPORT</SectionLabel>
+                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EDF5' }}>
+                  {/* Badge row */}
                   <div
-                    className="mx-4 mb-3 px-3.5 py-2.5 rounded-lg flex items-start gap-2"
-                    style={{
-                      background: aiPass ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)',
-                      border: `1px solid ${aiPass ? 'rgba(5,150,105,0.2)' : 'rgba(220,38,38,0.2)'}`,
-                    }}
+                    className="px-4 pt-3 pb-2.5 flex items-center gap-3"
+                    style={{ borderBottom: '1px solid #E8EDF5' }}
                   >
-                    <svg
-                      width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      stroke={aiPass ? '#059669' : '#DC2626'}
-                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                      style={{ flexShrink: 0, marginTop: 1 }}
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
+                      style={{ background: 'rgba(178,34,52,0.10)', color: '#B22234', border: '1px solid rgba(178,34,52,0.18)' }}
                     >
-                      {aiPass
-                        ? <><circle cx="12" cy="12" r="10" /><polyline points="20 6 9 17 4 12" /></>
-                        : <><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></>
-                      }
-                    </svg>
-                    <span className="text-[11.5px] leading-relaxed" style={{ color: aiPass ? '#059669' : '#DC2626' }}>
-                      <strong>AI Recommendation: {aiPass ? 'PASS' : 'FAIL'}</strong>
-                      {aiPass
-                        ? ' — Design meets quality standards. Minor colour variance within acceptable tolerance.'
-                        : ' — Review required. Quality threshold not met.'}
+                      AI ANALYSIS
+                    </span>
+                    <span className="text-[11px]" style={{ color: '#94A3B8' }}>
+                      Auto-generated · First-pass reference only
                     </span>
                   </div>
-                ) : null}
+
+                  {/* Score bars */}
+                  <div className="grid grid-cols-5 gap-2 px-4 py-3">
+                    <ScoreBar label="COLOUR" value={displayJob.aiScore!.colour} color="#ef4444" />
+                    <ScoreBar label="ALIGNMENT" value={displayJob.aiScore!.align} color="#3b82f6" />
+                    <ScoreBar label="RESOLUTION" value={displayJob.aiScore!.res} color="#a855f7" />
+                    <ScoreBar label="BRIEF" value={displayJob.aiScore!.brief} color="#f59e0b" />
+                    <ScoreBar label="OVERALL" value={aiOverall ?? 0} color="#B22234" />
+                  </div>
+
+                  {/* Recommendation callout */}
+                  {aiPass !== null ? (
+                    <div
+                      className="mx-4 mb-3 px-3.5 py-2.5 rounded-lg flex items-start gap-2"
+                      style={{
+                        background: aiPass ? 'rgba(5,150,105,0.06)' : 'rgba(220,38,38,0.06)',
+                        border: `1px solid ${aiPass ? 'rgba(5,150,105,0.2)' : 'rgba(220,38,38,0.2)'}`,
+                      }}
+                    >
+                      <svg
+                        width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke={aiPass ? '#059669' : '#DC2626'}
+                        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                        style={{ flexShrink: 0, marginTop: 1 }}
+                      >
+                        {aiPass
+                          ? <><circle cx="12" cy="12" r="10" /><polyline points="20 6 9 17 4 12" /></>
+                          : <><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></>
+                        }
+                      </svg>
+                      <span className="text-[11.5px] leading-relaxed" style={{ color: aiPass ? '#059669' : '#DC2626' }}>
+                        <strong>AI Recommendation: {aiPass ? 'PASS' : 'FAIL'}</strong>
+                        {aiPass
+                          ? ' — Design meets quality standards. Minor colour variance within acceptable tolerance.'
+                          : ' — Review required. Quality threshold not met.'}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
           </>)}
         </div>
@@ -1546,11 +1551,22 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
             type="button"
             className="btn btn-crimson"
             style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
-            onClick={() => onAssign?.(job)}
+            onClick={() => setShowSendMailConfirm(true)}
           >
-            <UserPlus className="w-3.5 h-3.5" aria-hidden />
-            Assign Job
+            <Send className="w-3.5 h-3.5" aria-hidden />
+            Send Mail to Client
           </button>
+          {!isQuote && isCsApproved ? (
+            <button
+              type="button"
+              className="btn btn-crimson"
+              style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+              onClick={() => setShowMarkComplete(true)}
+            >
+              <PackageCheck className="w-3.5 h-3.5" aria-hidden />
+              Mark Complete
+            </button>
+          ) : null}
           {!isQuote && isReadyToDeliver ? (
             <button
               type="button"
@@ -1565,6 +1581,17 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
         </div>
 
       </div>
+
+      {/* ── MARK COMPLETE MODAL ── */}
+      {showMarkComplete && jobUuid ? (
+        <MarkCompleteModal
+          jobId={jobUuid}
+          jobDesign={job.design}
+          orderType={job.order}
+          onClose={() => setShowMarkComplete(false)}
+          onSuccess={() => { setShowMarkComplete(false); handleClose(); }}
+        />
+      ) : null}
 
       {/* ── 2-STEP CONFIRMATION MODAL ── */}
       {showConfirm ? (
@@ -1649,9 +1676,9 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                 // Scale the headline price down as it grows so it still fits.
                 const priceFontSize =
                   priceStr.length > 22 ? 18 :
-                  priceStr.length > 16 ? 22 :
-                  priceStr.length > 12 ? 28 :
-                  36;
+                    priceStr.length > 16 ? 22 :
+                      priceStr.length > 12 ? 28 :
+                        36;
                 return (
                   <div
                     className="flex flex-col items-center gap-2.5 text-center"
@@ -1798,6 +1825,168 @@ export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = fal
                   </button>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── SEND MAIL TO CLIENT CONFIRMATION MODAL ── */}
+      {showSendMailConfirm ? (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15,23,42,0.55)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            zIndex: 60,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !notifyOrderReady.isPending) {
+              setShowSendMailConfirm(false);
+            }
+          }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Send Order Ready Email"
+            className="relative w-full max-w-[460px] rounded-2xl flex flex-col overflow-hidden"
+            style={{
+              background: '#fff',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex items-start gap-3 px-6 py-5"
+              style={{
+                background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
+                borderBottom: '1px solid #93C5FD',
+              }}
+            >
+              <div
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: 'rgba(37,99,235,0.12)',
+                  border: '1.5px solid rgba(37,99,235,0.25)',
+                }}
+              >
+                <Send className="w-4 h-4" style={{ color: '#2563EB' }} aria-hidden />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div style={{ fontSize: 17, fontWeight: 800, color: '#1E3A8A', letterSpacing: '0.01em', marginBottom: 2 }}>
+                  Send Order Ready Email
+                </div>
+                <div style={{ fontSize: 12, color: '#1D4ED8', opacity: 0.85 }}>
+                  Notify the client that their order is ready for delivery.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { if (!notifyOrderReady.isPending) setShowSendMailConfirm(false); }}
+                disabled={notifyOrderReady.isPending}
+                aria-label="Close"
+                style={{
+                  color: '#1E3A8A', opacity: 0.6, background: 'none', border: 'none',
+                  fontSize: 18, cursor: notifyOrderReady.isPending ? 'not-allowed' : 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5 flex flex-col gap-4">
+              <div
+                className="flex flex-col gap-2.5"
+                style={{
+                  background: '#EFF6FF', border: '1.5px solid #93C5FD',
+                  borderRadius: 12, padding: '16px 18px',
+                  boxShadow: '0 4px 24px rgba(37,99,235,0.06)',
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#1E3A8A', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
+                  What this will do
+                </div>
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: 0, padding: 0, listStyle: 'none' }}>
+                  <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#1E3A8A', fontWeight: 600, lineHeight: 1.5 }}>
+                    <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
+                    Send an email to the client notifying them their order is ready
+                  </li>
+                  <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#1E3A8A', fontWeight: 600, lineHeight: 1.5 }}>
+                    <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
+                    The job status will not change
+                  </li>
+                  <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#1E3A8A', fontWeight: 600, lineHeight: 1.5 }}>
+                    <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
+                    Client will be asked to log in and review their deliverables
+                  </li>
+                </ul>
+              </div>
+
+              <div
+                className="flex items-start gap-3"
+                style={{
+                  background: 'rgba(37,99,235,0.05)',
+                  border: '1px solid rgba(37,99,235,0.15)',
+                  borderRadius: 10, padding: '12px 14px',
+                }}
+              >
+                <AlertCircle className="w-4 h-4" style={{ color: '#2563EB', flexShrink: 0, marginTop: 1 }} aria-hidden />
+                <div style={{ fontSize: 12, color: '#1D4ED8', lineHeight: 1.55, fontWeight: 600 }}>
+                  The email will be sent to the client on record for <strong>{job.design}</strong> ({job.ref}).
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex items-center justify-end gap-2.5 px-6 py-4"
+              style={{ background: 'rgba(0,0,0,0.02)', borderTop: '1px solid #E8EDF5' }}
+            >
+              <button
+                type="button"
+                onClick={() => { if (!notifyOrderReady.isPending) setShowSendMailConfirm(false); }}
+                disabled={notifyOrderReady.isPending}
+                style={{
+                  border: '1.5px solid #E2E8F0', color: '#475569', fontWeight: 700,
+                  background: 'transparent', borderRadius: 99, padding: '9px 20px',
+                  fontSize: 12.5, cursor: notifyOrderReady.isPending ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  opacity: notifyOrderReady.isPending ? 0.5 : 1,
+                }}
+              >
+                ✕ Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = requireUuid('send mail');
+                  if (!id) return;
+                  notifyOrderReady.mutate(
+                    { jobId: id },
+                    { onSuccess: () => { setShowSendMailConfirm(false); } },
+                  );
+                }}
+                disabled={notifyOrderReady.isPending}
+                style={{
+                  background: '#2563EB',
+                  border: '1.5px solid #2563EB',
+                  color: '#fff', padding: '9px 22px', fontSize: 12.5, fontWeight: 700,
+                  borderRadius: 99,
+                  cursor: notifyOrderReady.isPending ? 'not-allowed' : 'pointer',
+                  opacity: notifyOrderReady.isPending ? 0.6 : 1,
+                  boxShadow: '0 4px 14px rgba(37,99,235,0.35)',
+                  transition: 'all 0.15s ease',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <Send className="w-3.5 h-3.5" aria-hidden />
+                {notifyOrderReady.isPending ? 'Sending…' : 'Send Email'}
+              </button>
             </div>
           </div>
         </div>
@@ -2023,21 +2212,21 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
 
 function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job }) {
   const fields: { label: string; get: (j: Job) => string }[] = [
-    { label: 'Design Name',     get: (j) => j.design || '—' },
-    { label: 'Order Type',      get: (j) => j.order || '—' },
-    { label: 'Project Type',    get: (j) => j.project || '—' },
-    { label: 'Process Type',    get: (j) => j.process || '—' },
-    { label: 'Complexity',      get: (j) => j.complexity || '—' },
-    { label: 'Priority',        get: (j) => j.priority || '—' },
-    { label: 'ETA Hours',       get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
-    { label: 'Colors',          get: (j) => j.colors != null ? String(j.colors) : '—' },
-    { label: 'Output Formats',  get: (j) => j.finalFiles?.length ? j.finalFiles.join(', ') : '—' },
-    { label: 'Placement',       get: (j) => j.placement || '—' },
-    { label: 'Width (in)',      get: (j) => j.width != null ? `${j.width}"` : '—' },
-    { label: 'Height (in)',     get: (j) => j.height != null ? `${j.height}"` : '—' },
-    { label: 'Fabric',          get: (j) => j.fabric || '—' },
-    { label: 'Stitch Count',    get: (j) => j.stitchCount != null ? j.stitchCount.toLocaleString() : '—' },
-    { label: 'Notes',           get: (j) => j.notes || '—' },
+    { label: 'Design Name', get: (j) => j.design || '—' },
+    { label: 'Order Type', get: (j) => j.order || '—' },
+    { label: 'Project Type', get: (j) => j.project || '—' },
+    { label: 'Process Type', get: (j) => j.process || '—' },
+    { label: 'Complexity', get: (j) => j.complexity || '—' },
+    { label: 'Priority', get: (j) => j.priority || '—' },
+    { label: 'ETA Hours', get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
+    { label: 'Colors', get: (j) => j.colors != null ? String(j.colors) : '—' },
+    { label: 'Output Formats', get: (j) => j.finalFiles?.length ? j.finalFiles.join(', ') : '—' },
+    { label: 'Placement', get: (j) => j.placement || '—' },
+    { label: 'Width (in)', get: (j) => j.width != null ? `${j.width}"` : '—' },
+    { label: 'Height (in)', get: (j) => j.height != null ? `${j.height}"` : '—' },
+    { label: 'Fabric', get: (j) => j.fabric || '—' },
+    { label: 'Stitch Count', get: (j) => j.stitchCount != null ? j.stitchCount.toLocaleString() : '—' },
+    { label: 'Notes', get: (j) => j.notes || '—' },
   ];
 
   return (
@@ -2070,7 +2259,7 @@ function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job })
               borderLeft: '1px solid #E2E8F0',
             }}
           >
-            Client Provided
+            Original
           </div>
           <div
             style={{
@@ -2080,16 +2269,16 @@ function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job })
               borderLeft: '1px solid #E2E8F0',
             }}
           >
-            Admin Edited
+            Modified
           </div>
         </div>
 
         {/* Rows */}
         {fields.map(({ label, get }, idx) => {
           const clientVal = get(clientJob);
-          const adminVal  = get(adminJob);
-          const changed   = clientVal !== adminVal;
-          const rowBg     = idx % 2 === 0 ? '#fff' : '#FAFBFC';
+          const adminVal = get(adminJob);
+          const changed = clientVal !== adminVal;
+          const rowBg = idx % 2 === 0 ? '#fff' : '#FAFBFC';
 
           return (
             <div

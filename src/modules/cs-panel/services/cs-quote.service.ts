@@ -1,5 +1,6 @@
 import { apiClient } from '@lib/api-client';
 import type { IJobCard } from '@contracts';
+import { FileCategory } from '@contracts';
 
 export interface SendQuotePriceBody {
   amount: number;          // required, positive
@@ -14,6 +15,42 @@ export interface RejectQuoteBody {
 
 export interface DispatchJobBody {
   note?: string;
+}
+
+export interface MarkCompleteBody {
+  stitch_count?: number;
+  note?: string;
+}
+
+export interface PresignResponse {
+  uploadUrl: string;
+  storageKey: string;
+  expiresAt: string;
+}
+
+export async function uploadCompletedFile(jobId: string, file: File): Promise<void> {
+  const presign = await apiClient.post<PresignResponse, object>('/api/v1/files/upload-url', {
+    job_card_id: jobId,
+    file_category: FileCategory.COMPLETED,
+    file_name: file.name,
+    file_type: file.type || 'application/octet-stream',
+    file_size_bytes: file.size,
+  });
+
+  await fetch(presign.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  });
+
+  await apiClient.post('/api/v1/files/complete-upload', {
+    job_card_id: jobId,
+    storage_key: presign.storageKey,
+    file_category: FileCategory.COMPLETED,
+    file_name: file.name,
+    file_type: file.type || 'application/octet-stream',
+    file_size_bytes: file.size,
+  });
 }
 
 /**
@@ -47,6 +84,20 @@ export const csQuoteService = {
     return apiClient.post<IJobCard, { etaHours?: number }>(
       `/api/v1/cs/jobs/${jobId}/acknowledge`,
       etaHours != null ? { etaHours } : {},
+    );
+  },
+
+  markComplete(jobId: string, body: MarkCompleteBody = {}): Promise<IJobCard> {
+    return apiClient.post<IJobCard, MarkCompleteBody>(
+      `/api/v1/cs/jobs/${jobId}/complete`,
+      body,
+    );
+  },
+
+  notifyOrderReady(jobId: string): Promise<{ sent: boolean; to: string }> {
+    return apiClient.post<{ sent: boolean; to: string }, object>(
+      `/api/v1/cs/jobs/${jobId}/notify-ready`,
+      {},
     );
   },
 };

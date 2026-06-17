@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { X, Search, ExternalLink, Mail, Paperclip, PlusCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
-import { EmailIngestionStatus, type IIngestedEmail, type IContactSubmissionAiData } from '@contracts';
+import { EmailIngestionStatus, JobStatus, type IIngestedEmail, type IContactSubmissionAiData } from '@contracts';
+import { queryKeys } from '@lib/query-keys';
 import {
   useContactSubmissions,
   useContactSubmission,
 } from '../../modules/admin-panel/hooks/use-contact-submissions';
 import { useActivateJobCard } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { adminService } from '../../modules/admin-panel/services/admin.service';
 
 const PER_PAGE = 20;
 
@@ -69,6 +72,12 @@ export function AdminEmailInboxPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Track job card IDs that have been activated this session so the button
+  // stays removed even when the user switches between emails in the list.
+  const [activatedJobIds, setActivatedJobIds] = useState<Set<string>>(new Set());
+  function markActivated(jobCardId: string) {
+    setActivatedJobIds((prev) => new Set(prev).add(jobCardId));
+  }
 
   const { data: items = [], isLoading, isError } = useContactSubmissions();
 
@@ -196,6 +205,8 @@ export function AdminEmailInboxPage() {
           id={selectedId}
           onClose={() => setSelectedId(null)}
           onViewJob={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+          activatedJobIds={activatedJobIds}
+          onActivated={markActivated}
         />
       )}
     </div>
@@ -278,9 +289,11 @@ interface DetailPanelProps {
   id: string;
   onClose: () => void;
   onViewJob: (jobId: string) => void;
+  activatedJobIds: Set<string>;
+  onActivated: (jobCardId: string) => void;
 }
 
-function DetailPanel({ id, onClose, onViewJob }: DetailPanelProps) {
+function DetailPanel({ id, onClose, onViewJob, activatedJobIds, onActivated }: DetailPanelProps) {
   const { data: email, isLoading } = useContactSubmission(id);
 
   return (
@@ -316,7 +329,12 @@ function DetailPanel({ id, onClose, onViewJob }: DetailPanelProps) {
       ) : !email ? (
         <div className="text-[var(--crimson)] text-sm py-8 text-center">Failed to load.</div>
       ) : (
-        <EmailDetail email={email} onViewJob={onViewJob} />
+        <EmailDetail
+          email={email}
+          onViewJob={onViewJob}
+          activatedJobIds={activatedJobIds}
+          onActivated={onActivated}
+        />
       )}
     </div>
   );
@@ -324,17 +342,40 @@ function DetailPanel({ id, onClose, onViewJob }: DetailPanelProps) {
 
 // ─── Email detail content ─────────────────────────────────────────────────────
 
-function EmailDetail({ email, onViewJob }: { email: IIngestedEmail; onViewJob: (id: string) => void }) {
+function EmailDetail({
+  email,
+  onViewJob,
+  activatedJobIds,
+  onActivated,
+}: {
+  email: IIngestedEmail;
+  onViewJob: (id: string) => void;
+  activatedJobIds: Set<string>;
+  onActivated: (jobCardId: string) => void;
+}) {
   const pct = confidencePct(email.ai_confidence);
   const ai = email.ai_extracted_data;
-  const navigate = useNavigate();
   const activateMutation = useActivateJobCard();
+
+  // Fetch the linked job card's live status so the button stays hidden across
+  // page refreshes — session state alone resets on reload.
+  const { data: linkedJobCard } = useQuery({
+    queryKey: queryKeys.jobs.byId(email.linked_job_card_id ?? ''),
+    queryFn: () => adminService.getJobCard(email.linked_job_card_id!),
+    enabled: !!email.linked_job_card_id,
+    staleTime: 0,
+  });
+
+  const jobAlreadyActivated =
+    !!email.linked_job_card_id && (
+      activatedJobIds.has(email.linked_job_card_id) ||
+      (linkedJobCard !== undefined && linkedJobCard?.status !== JobStatus.DRAFT)
+    );
 
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-col gap-1.5 pb-3" style={{ borderBottom: '1px solid var(--glass-border)' }}>
-        <p className="text-[13px] font-semibold leading-snug">{email.subject}</p>
         <MetaRow label="From" value={email.from_email} />
         <MetaRow label="To" value={email.to_email} />
         <MetaRow label="Received" value={formatDateTime(email.created_at)} />
@@ -367,7 +408,7 @@ function EmailDetail({ email, onViewJob }: { email: IIngestedEmail; onViewJob: (
               style={{
                 height: 4,
                 borderRadius: 2,
-                background: 'var(--glass-border)',
+                background: 'var(--glass-border-bright)',
                 overflow: 'hidden',
               }}
             >
@@ -375,7 +416,7 @@ function EmailDetail({ email, onViewJob }: { email: IIngestedEmail; onViewJob: (
                 style={{
                   height: '100%',
                   width: `${pct}%`,
-                  background: pct >= 70 ? 'var(--green)' : 'var(--gold)',
+                  background: pct >= 70 ? 'var(--color-green)' : 'var(--color-gold)',
                   borderRadius: 2,
                   transition: 'width 0.3s',
                 }}
@@ -388,54 +429,63 @@ function EmailDetail({ email, onViewJob }: { email: IIngestedEmail; onViewJob: (
 
         {email.linked_job_card_id && (
           <div className="flex flex-col gap-2 mt-1">
-            {/* Add to Jobs — promotes DRAFT → JOB_PLACED so it enters the
-                production pipeline and shows up in the New Jobs view */}
-            <button
-              type="button"
-              disabled={activateMutation.isPending}
-              onClick={() => {
-                activateMutation.mutate(email.linked_job_card_id!, {
-                  onSuccess: () => {
-                    toast.success('Job added to production pipeline!');
-                    navigate('/admin/new-jobs');
-                  },
-                  onError: (err: unknown) => {
-                    const msg = err instanceof Error ? err.message : 'Failed to add job.';
-                    toast.error(msg);
-                  },
-                });
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 7,
-                width: '100%',
-                padding: '9px 16px',
-                borderRadius: 8,
-                border: 'none',
-                background: activateMutation.isPending
-                  ? 'rgba(5,150,105,0.45)'
-                  : 'linear-gradient(135deg,#059669,#047857)',
-                color: '#fff',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: activateMutation.isPending ? 'not-allowed' : 'pointer',
-                boxShadow: activateMutation.isPending ? 'none' : '0 3px 10px rgba(5,150,105,0.35)',
-                transition: 'all 0.15s ease',
-                letterSpacing: '0.01em',
-              }}
-            >
-              {activateMutation.isPending ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                  strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-              ) : (
-                <PlusCircle className="w-3.5 h-3.5" aria-hidden />
-              )}
-              {activateMutation.isPending ? 'Adding…' : 'Add to Jobs'}
-            </button>
+            {/* Hidden once the job is in the pipeline (this session or previous) */}
+            {!jobAlreadyActivated && (
+              <button
+                type="button"
+                disabled={activateMutation.isPending}
+                onClick={() => {
+                  activateMutation.mutate(email.linked_job_card_id!, {
+                    onSuccess: () => {
+                      onActivated(email.linked_job_card_id!);
+                      toast.success('Job added to production pipeline!');
+                    },
+                    onError: (err: unknown) => {
+                      // If the job was already placed (e.g. from a previous
+                      // session), treat it the same as success so the button
+                      // disappears — no need to show an error.
+                      if (err instanceof Error && err.message.includes('production pipeline')) {
+                        onActivated(email.linked_job_card_id!);
+                        toast.success('Job is already in the production pipeline.');
+                      } else {
+                        const msg = err instanceof Error ? err.message : 'Failed to add job.';
+                        toast.error(msg);
+                      }
+                    },
+                  });
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 7,
+                  width: '100%',
+                  padding: '9px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: activateMutation.isPending
+                    ? 'rgba(5,150,105,0.45)'
+                    : 'linear-gradient(135deg,#059669,#047857)',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: activateMutation.isPending ? 'not-allowed' : 'pointer',
+                  boxShadow: activateMutation.isPending ? 'none' : '0 3px 10px rgba(5,150,105,0.35)',
+                  transition: 'all 0.2s ease',
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {activateMutation.isPending ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                    strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden>
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                ) : (
+                  <PlusCircle className="w-3.5 h-3.5" aria-hidden />
+                )}
+                {activateMutation.isPending ? 'Adding…' : 'Add to Jobs'}
+              </button>
+            )}
 
             <button
               type="button"
@@ -454,6 +504,9 @@ function EmailDetail({ email, onViewJob }: { email: IIngestedEmail; onViewJob: (
         <p className="text-[11px] font-semibold uppercase tracking-wide text-text-faint">
           Email Body
         </p>
+        {email.subject && (
+          <p className="text-[13px] font-semibold leading-snug">{email.subject}</p>
+        )}
         <div
           className="text-[12px] text-text-muted whitespace-pre-wrap leading-relaxed"
           style={{
