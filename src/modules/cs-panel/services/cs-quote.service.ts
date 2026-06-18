@@ -1,5 +1,5 @@
 import { apiClient } from '@lib/api-client';
-import type { IJobCard } from '@contracts';
+import type { IFileVersion, IJobCard } from '@contracts';
 import { FileCategory } from '@contracts';
 
 export interface SendQuotePriceBody {
@@ -28,7 +28,8 @@ export interface PresignResponse {
   expiresAt: string;
 }
 
-export async function uploadCompletedFile(jobId: string, file: File): Promise<void> {
+/** Upload a file to S3 as a COMPLETED file and return its DB record id. */
+export async function uploadCompletedFile(jobId: string, file: File): Promise<string> {
   const presign = await apiClient.post<PresignResponse, object>('/api/v1/files/upload-url', {
     job_card_id: jobId,
     file_category: FileCategory.COMPLETED,
@@ -43,7 +44,7 @@ export async function uploadCompletedFile(jobId: string, file: File): Promise<vo
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
   });
 
-  await apiClient.post('/api/v1/files/complete-upload', {
+  const registered = await apiClient.post<IFileVersion>('/api/v1/files/complete-upload', {
     job_card_id: jobId,
     storage_key: presign.storageKey,
     file_category: FileCategory.COMPLETED,
@@ -51,6 +52,8 @@ export async function uploadCompletedFile(jobId: string, file: File): Promise<vo
     file_type: file.type || 'application/octet-stream',
     file_size_bytes: file.size,
   });
+
+  return registered.id;
 }
 
 /**
@@ -94,10 +97,13 @@ export const csQuoteService = {
     );
   },
 
-  notifyOrderReady(jobId: string): Promise<{ sent: boolean; to: string }> {
-    return apiClient.post<{ sent: boolean; to: string }, object>(
+  notifyOrderReady(
+    jobId: string,
+    body: { file_ids: string[]; note?: string },
+  ): Promise<{ sent: boolean; to: string }> {
+    return apiClient.post<{ sent: boolean; to: string }, typeof body>(
       `/api/v1/cs/jobs/${jobId}/notify-ready`,
-      {},
+      body,
     );
   },
 };

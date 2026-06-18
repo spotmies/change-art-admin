@@ -68,8 +68,8 @@ export function useMarkComplete() {
 
 export function useNotifyOrderReady() {
   return useMutation({
-    mutationFn: ({ jobId }: { jobId: string }) =>
-      csQuoteService.notifyOrderReady(jobId),
+    mutationFn: ({ jobId, fileIds, note }: { jobId: string; fileIds: string[]; note?: string }) =>
+      csQuoteService.notifyOrderReady(jobId, { file_ids: fileIds, note }),
     onSuccess: (data) => {
       toast.success(`Order ready email sent to ${data.to}`);
     },
