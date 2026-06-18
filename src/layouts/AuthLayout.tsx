@@ -46,7 +46,7 @@ export function AuthLayout() {
         <header className="mb-7 flex justify-center">
           <img
             src="/ch-logo.png"
-            alt="Change! Digitizing & Design Services"
+            alt="CHANGE! Inc"
             className="h-11 w-auto"
             draggable={false}
           />

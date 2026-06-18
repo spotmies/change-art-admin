@@ -97,7 +97,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
       <div className="px-4 pt-3 pb-3 border-b border-glass-border">
         <img
           src="/ch-logo.png"
-          alt="Change! Digitizing & Design Services"
+          alt="CHANGE! Inc"
           className="h-9 w-auto"
           draggable={false}
         />
