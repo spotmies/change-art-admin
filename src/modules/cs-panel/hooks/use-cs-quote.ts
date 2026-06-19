@@ -67,10 +67,13 @@ export function useMarkComplete() {
 }
 
 export function useNotifyOrderReady() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ jobId, fileIds, note }: { jobId: string; fileIds: string[]; note?: string }) =>
       csQuoteService.notifyOrderReady(jobId, { file_ids: fileIds, note }),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(variables.jobId) });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       toast.success(`Order ready email sent to ${data.to}`);
     },
     onError: (err) => toastApiError(err),

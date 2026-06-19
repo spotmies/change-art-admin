@@ -48,6 +48,9 @@ export function SocketProvider({ children }: SocketProviderProps) {
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs.byId(event.jobId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs.timeline(event.jobId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      // Also refresh file views — a status change to DELIVERED surfaces completed
+      // files on the parent job endpoint that weren't visible before.
+      queryClient.invalidateQueries({ queryKey: ['admin', 'files', 'forJob'] });
     });
 
     // New job card was just written. Refresh every list view that filters
@@ -118,6 +121,9 @@ export function SocketProvider({ children }: SocketProviderProps) {
 
     socket.on(SOCKET_EVENTS.FILE_UPLOAD_COMPLETE, (event: FileUploadCompleteEvent) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.files.forJob(event.jobId) });
+      // useAdminJobFiles uses a separate ['admin','files','forJob',...] key —
+      // invalidate all admin file queries so the modal image carousel refreshes.
+      queryClient.invalidateQueries({ queryKey: ['admin', 'files', 'forJob'] });
     });
 
     socket.on(SOCKET_EVENTS.QUOTE_UPDATED, (event: QuoteUpdatedEvent) => {

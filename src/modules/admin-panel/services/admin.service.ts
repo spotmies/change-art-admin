@@ -1,5 +1,5 @@
 import { apiClient } from '@lib/api-client';
-import type { IClient, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
+import type { IClient, IFileVersion, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
 
 // ─── Client profile change requests (admin review queue) ──────────────────
 // Local to this module — not in @contracts because the backend enum mirror
@@ -158,6 +158,14 @@ export const adminService = {
       '/api/v1/files/thumbnails',
       { job_ids: jobIds },
     );
+  },
+
+  listFilesForJob(jobCardId: string, signal?: AbortSignal): Promise<IFileVersion[]> {
+    return apiClient.get<IFileVersion[]>(`/api/v1/files/job/${jobCardId}`, { signal });
+  },
+
+  getDownloadUrl(fileId: string): Promise<{ url: string; file: IFileVersion }> {
+    return apiClient.get<{ url: string; file: IFileVersion }>(`/api/v1/files/${fileId}/download-url`);
   },
 
   updateJobCard(id: string, body: UpdateJobCardBody): Promise<IJobCard> {

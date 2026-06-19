@@ -149,7 +149,7 @@ export function JobModal({ job, onClose }: JobModalProps) {
           <div className="modal-gallery">
             {images.map((src, i) => (
               <img
-                key={i}
+                key={`${job.id}-${src}-${i}`}
                 src={src}
                 alt={`${job.design} ${i + 1}`}
                 loading="lazy"

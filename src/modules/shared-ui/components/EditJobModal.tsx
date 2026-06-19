@@ -447,9 +447,6 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
       patch.priority = PRIORITY_TO_ENUM[form.priority];
     }
 
-    const eta = num(form.etaHours);
-    if (eta != null && eta > 0 && eta !== job.etaHours) patch.eta_hours = eta;
-
     const colors = num(form.colors);
     if (colors != null && colors >= 0 && colors !== job.colors) patch.num_colors = colors;
 
@@ -515,7 +512,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
         complexity: form.complexity,
         priority: form.priority,
         status: form.status,
-        etaHours: num(form.etaHours),
+        etaHours: job.etaHours ?? null,
         colors: num(form.colors),
         clientPrice: num(form.clientPrice),
         adminPrice: num(form.adminPrice),
@@ -550,6 +547,8 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
       { onSuccess: afterSuccess, onError: (err) => toastApiError(err) },
     );
   };
+
+  const hasChanges = form ? Object.keys(buildPatch()).length > 0 : false;
 
   return (
     <div
@@ -748,10 +747,6 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                   </select>
                 </Field>
 
-                <Field label="ETA (hours)">
-                  <input className={FIELD_CLS} type="number" min={1} value={form.etaHours} onChange={(e) => set('etaHours', e.target.value)} />
-                </Field>
-
                 <Field label="Number of Colors">
                   <input className={FIELD_CLS} type="number" min={1} max={20} value={form.colors} onChange={(e) => set('colors', e.target.value)} />
                 </Field>
@@ -815,11 +810,11 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
               padding: '7px 13px',
               gap: 6,
               marginLeft: 'auto',
-              opacity: (updateMutation.isPending || createAdminCopyMutation.isPending) ? 0.6 : 1,
-              cursor: (updateMutation.isPending || createAdminCopyMutation.isPending) ? 'not-allowed' : 'pointer',
+              opacity: (updateMutation.isPending || createAdminCopyMutation.isPending || !hasChanges) ? 0.55 : 1,
+              cursor: (updateMutation.isPending || createAdminCopyMutation.isPending || !hasChanges) ? 'not-allowed' : 'pointer',
             }}
             onClick={handleSave}
-            disabled={updateMutation.isPending || createAdminCopyMutation.isPending}
+            disabled={updateMutation.isPending || createAdminCopyMutation.isPending || !hasChanges}
           >
             <Save className="w-3.5 h-3.5" aria-hidden />
             {(updateMutation.isPending || createAdminCopyMutation.isPending) ? 'Saving…' : 'Save Changes'}

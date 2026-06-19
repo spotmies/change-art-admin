@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { JobDetailModal } from '@modules/shared-ui';
+import { JobDetailModal, EditJobModal, type Job } from '@modules/shared-ui';
 import { useAdminJobById } from '../../modules/admin-panel/hooks/use-admin-jobs';
 
 export function AdminJobDetailPage() {
   const { jobCardId } = useParams<{ jobCardId: string }>();
   const navigate = useNavigate();
+  const [editJob, setEditJob] = useState<Job | null>(null);
 
   const { data: job, isLoading, isError } = useAdminJobById(jobCardId ?? '');
 
@@ -37,5 +39,16 @@ export function AdminJobDetailPage() {
     );
   }
 
-  return <JobDetailModal job={job} onClose={handleClose} />;
+  return (
+    <>
+      <JobDetailModal job={job} onClose={handleClose} onEdit={(j) => setEditJob(j)} />
+      {editJob && (
+        <EditJobModal
+          job={editJob}
+          onClose={() => setEditJob(null)}
+          onBack={() => setEditJob(null)}
+        />
+      )}
+    </>
+  );
 }

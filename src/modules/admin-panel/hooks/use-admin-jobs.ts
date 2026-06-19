@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { UserRole } from '@contracts';
+import { UserRole, FileScanStatus, type IFileVersion } from '@contracts';
 import { queryKeys } from '@lib/query-keys';
 import type { Job } from '@modules/shared-ui';
 import {
@@ -99,6 +99,41 @@ export function useJobThumbnail(jobId: string | null | undefined) {
     enabled: !!jobId,
     staleTime: 0,
     gcTime: 0,
+  });
+}
+
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif|bmp|svg|tiff?|heic|heif|ico)$/i;
+
+export function isAdminViewableImage(file: IFileVersion): boolean {
+  const looksLikeImage =
+    file.file_type.startsWith('image/') || IMAGE_EXT_RE.test(file.file_name);
+  return (
+    looksLikeImage &&
+    file.scan_status !== FileScanStatus.INFECTED &&
+    file.scan_status !== FileScanStatus.SCAN_FAILED
+  );
+}
+
+export function useAdminJobFiles(jobUuid?: string | null) {
+  return useQuery({
+    queryKey: ['admin', 'files', 'forJob', jobUuid ?? 'none'],
+    queryFn: ({ signal }) => adminService.listFilesForJob(jobUuid as string, signal),
+    enabled: Boolean(jobUuid),
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+export function useAdminJobImageUrls(jobUuid: string | null | undefined, imageFiles: IFileVersion[]) {
+  const ids = imageFiles.map((f) => f.id);
+  return useQuery({
+    queryKey: ['admin', 'files', 'image-urls', jobUuid ?? 'none', ids],
+    queryFn: async () => {
+      const results = await Promise.all(imageFiles.map((f) => adminService.getDownloadUrl(f.id)));
+      return results.map((r) => r.url);
+    },
+    enabled: Boolean(jobUuid) && ids.length > 0,
+    staleTime: 10 * 60_000,
   });
 }
 

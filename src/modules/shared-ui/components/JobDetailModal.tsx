@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, UploadCloud, FileText, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2 } from 'lucide-react';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
 import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady } from '@/modules/cs-panel/hooks/use-cs-quote';
-import { uploadCompletedFile } from '@/modules/cs-panel/services/cs-quote.service';
+import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service';
+
 import { useJobRoom } from '@lib/use-job-room';
-import { useAdminJobById, useJobThumbnail } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminJobById, useAdminJobFiles, useAdminJobImageUrls, isAdminViewableImage } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { adminService } from '@modules/admin-panel/services/admin.service';
+import { FileCategory } from '@contracts';
 
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
@@ -172,11 +175,35 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
   const [showSendMailModal, setShowSendMailModal] = useState(false);
+  const [sendMailConfirmText, setSendMailConfirmText] = useState('');
   const [sendMailFiles, setSendMailFiles] = useState<File[]>([]);
-  const [sendMailNote, setSendMailNote] = useState('');
-  const [sendMailUploading, setSendMailUploading] = useState(false);
-  const [sendMailFileStatus, setSendMailFileStatus] = useState<Record<number, 'pending' | 'uploading' | 'done' | 'error'>>({});
-  const sendMailDropRef = useRef<HTMLDivElement>(null);
+  const [sendMailPhase, setSendMailPhase] = useState<'idle' | 'uploading' | 'sending'>('idle');
+  const [sendMailUploadProgress, setSendMailUploadProgress] = useState(0);
+  const [isSendMailDragging, setIsSendMailDragging] = useState(false);
+  const sendMailFileInputRef = useRef<HTMLInputElement>(null);
+
+  const addSendMailFiles = (incoming: FileList | null) => {
+    if (!incoming) return;
+    setSendMailFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name + f.size));
+      const next = Array.from(incoming).filter((f) => !existing.has(f.name + f.size));
+      return [...prev, ...next];
+    });
+  };
+
+  const removeSendMailFile = (idx: number) => {
+    setSendMailFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const closeSendMailModal = () => {
+    setShowSendMailModal(false);
+    setSendMailConfirmText('');
+    setSendMailFiles([]);
+    setSendMailPhase('idle');
+    setSendMailUploadProgress(0);
+    setIsSendMailDragging(false);
+  };
+
   const [showMarkComplete, setShowMarkComplete] = useState(false);
   const [showAckPopover, setShowAckPopover] = useState(false);
   const [ackEtaHours, setAckEtaHours] = useState(() =>
@@ -193,15 +220,45 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     job?.isAdminCopy && job.parentJobId ? job.parentJobId : '',
   );
 
-  // Always fetch a fresh thumbnail when the modal opens — bypasses the 60-second
-  // batch cache so email-attached images show up even if the cache pre-dates upload.
-  const freshThumbQuery = useJobThumbnail(job?.uuid);
+  const originalParentId = job?.isAdminCopy && job.parentJobId ? job.parentJobId : null;
   const originalJob = originalJobQuery.data ?? null;
 
-  // Reset to admin tab and close compare whenever a different job is opened.
+  // Fetch all files for the current job and the original client job so the
+  // carousel can display every uploaded image (not just the first thumbnail).
+  // For admin copies the "Modified" content is the COMPLETED delivery files
+  // (uploaded via "Send Mail to Client"). These are accessible at the original
+  // job's endpoint (the backend surfaces them there for the client to see).
+  // The "Original" content is the ORIGINAL-category files on the original job.
+  const { data: adminJobFiles } = useAdminJobFiles(job?.uuid);
+  const { data: clientJobFiles } = useAdminJobFiles(originalParentId);
+
+  // "Original" tab — what the client originally uploaded (ORIGINAL on the parent job).
+  const clientImageFiles = useMemo(
+    () => (clientJobFiles ?? []).filter((f) => isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
+    [clientJobFiles],
+  );
+  // Fallback for "Modified" tab when no COMPLETED files exist yet: admin copy's own ORIGINAL uploads.
+  const adminImageFiles = useMemo(
+    () => (adminJobFiles ?? []).filter((f) => isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
+    [adminJobFiles],
+  );
+  // All COMPLETED files on the admin copy — sent via "Send Mail to Client".
+  const allCompletedFiles = useMemo(
+    () => (adminJobFiles ?? []).filter((f) => f.file_category === FileCategory.COMPLETED),
+    [adminJobFiles],
+  );
+
+  const { data: clientImageUrls } = useAdminJobImageUrls(originalParentId, clientImageFiles);
+  const { data: adminImageUrls } = useAdminJobImageUrls(job?.uuid, adminImageFiles);
+
+  // The "Modified" images: fall back to client ORIGINAL uploads (since original images don't change), then admin copy uploads (exclude COMPLETED deliverables from carousel).
+  const modifiedImageUrls = clientImageUrls?.length ? clientImageUrls : adminImageUrls;
+
+  // Reset to admin tab, close compare, and reset carousel page whenever a different job is opened.
   useEffect(() => {
     setViewMode('admin');
     setShowCompare(false);
+    setCarPage(0);
   }, [job?.uuid]);
 
   const sendPrice = useSendQuotePrice();
@@ -282,16 +339,18 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const flowSteps = buildFlowSteps(hasSewout);
   const stepIdx = currentStepIndex(job, hasSewout);
 
-  // Show only the real images the client uploaded. When the job has none, fall
-  // back to a single placeholder tile (jobImage at index 0). Never pad with
-  // duplicate placeholders — that's what caused the "same image 3x" bug.
-  // freshThumbUrl comes from a staleTime:0 query that fires on modal open,
-  // bypassing the 60-second batch-thumbnail cache so email-attached images show.
-  const freshThumbUrl = job?.uuid ? (freshThumbQuery.data?.[job.uuid] ?? null) : null;
-  const realImages = freshThumbUrl
-    ? [freshThumbUrl]
-    : (displayJob.images ?? []);
-  const images = realImages.length > 0 ? realImages : [jobImage(displayJob, 0, 560, 420)];
+  // Resolve the correct image list based on the active view mode:
+  //   - Modified tab (viewMode='admin'): COMPLETED delivery files (what was sent to the client).
+  //   - Original tab (viewMode='client'): ORIGINAL files uploaded by the client.
+  const isClientView = showToggle && viewMode === 'client';
+  const resolvedUrls = isClientView ? clientImageUrls : modifiedImageUrls;
+  const fallbackImages = displayJob.images ?? [];
+  const images =
+    resolvedUrls && resolvedUrls.length > 0
+      ? resolvedUrls
+      : fallbackImages.length > 0
+        ? fallbackImages
+        : [jobImage(displayJob, 0, 560, 420)];
 
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
   const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
@@ -316,6 +375,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const isCsApproved = normalizedStatus(job) === 'CS_APPROVED';
   const canAcknowledge = normalizedStatus(job) === 'JOB_PLACED' && !job.acknowledgedAt;
   const isAcknowledged = !!job.acknowledgedAt;
+  const isDelivered = normalizedStatus(job) === 'DELIVERED';
 
   // Workflow "current" node is blue ONLY on the quote popup; every other
   // popup keeps the original crimson so non-quote popups are unchanged.
@@ -417,6 +477,82 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       const parsed = ackEtaHours ? parseFloat(ackEtaHours) : undefined;
       const etaHours = parsed != null && !isNaN(parsed) && parsed > 0 ? parsed : undefined;
       acknowledgeJob.mutate({ jobId: id, etaHours });
+    }
+  };
+
+  const handleSendMailSubmit = async () => {
+    if (sendMailConfirmText.trim().toUpperCase() !== 'CONFIRM') return;
+    const id = requireUuid('send mail');
+    if (!id) return;
+
+    if (allCompletedFiles.length + sendMailFiles.length === 0) {
+      toast.error('Upload at least one completed file before sending the email.');
+      return;
+    }
+
+    setSendMailPhase('uploading');
+    setSendMailUploadProgress(0);
+
+    const uploadedIds: string[] = [];
+    try {
+      for (let i = 0; i < sendMailFiles.length; i++) {
+        const fileId = await uploadCompletedFile(id, sendMailFiles[i]);
+        uploadedIds.push(fileId);
+        setSendMailUploadProgress(Math.round(((i + 1) / sendMailFiles.length) * 100));
+      }
+    } catch (err) {
+      setSendMailPhase('idle');
+      return;
+    }
+
+    setSendMailPhase('sending');
+    const existingFileIds = allCompletedFiles.map((f) => f.id);
+    const combinedFileIds = [...existingFileIds, ...uploadedIds];
+
+    notifyOrderReady.mutate(
+      { jobId: id, fileIds: combinedFileIds },
+      {
+        onSuccess: () => {
+          closeSendMailModal();
+          onClose();
+        },
+        onError: () => {
+          setSendMailPhase('idle');
+        },
+      },
+    );
+  };
+
+  const handleDownloadAllFiles = async () => {
+    const filesToDownload = [
+      ...(adminJobFiles ?? []),
+      ...(clientJobFiles ?? [])
+    ];
+    const uniqueFiles = filesToDownload.filter(
+      (f, index, self) => self.findIndex((u) => u.id === f.id) === index
+    );
+
+    if (uniqueFiles.length === 0) {
+      toast.error('No files available for this job.');
+      return;
+    }
+
+    const toastId = toast.loading(`Preparing to download ${uniqueFiles.length} file(s)…`);
+    try {
+      for (const f of uniqueFiles) {
+        const res = await adminService.getDownloadUrl(f.id);
+        const link = document.createElement('a');
+        link.href = res.url;
+        link.setAttribute('target', '_blank');
+        link.setAttribute('download', f.file_name);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      toast.success('Downloads started successfully.', { id: toastId });
+    } catch (err) {
+      toast.error('Failed to download files.', { id: toastId });
     }
   };
 
@@ -554,7 +690,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     <span>Send Acknowledgement</span>
                   </button>
                 )
-              ) : isAcknowledged && etaCountdown ? (
+              ) : !isDelivered && isAcknowledged && etaCountdown ? (
                 /* Live ETA countdown chip — replaces button once ack + ETA exist */
                 <div
                   style={{
@@ -604,7 +740,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     </span>
                   </div>
                 </div>
-              ) : isAcknowledged ? (
+              ) : !isDelivered && isAcknowledged ? (
                 /* Acknowledged but no ETA was set — simple confirmed chip */
                 <div
                   style={{
@@ -630,9 +766,10 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
         {/* ── ACK POPOVER ── */}
         {showAckPopover && canAcknowledge && (() => {
-          // Quote flow: ETA was already locked in when admin sent the price.
-          // Order flow: no prior ETA — admin must enter it now.
-          const etaIsLocked = job != null && job.etaHours != null && job.etaHours > 0;
+          // Quote flow only: ETA was already communicated to the client in the
+          // price email, so lock it. For regular order flow the admin can always
+          // edit the ETA here even if it was pre-set via the Edit modal.
+          const etaIsLocked = (isQuote || job?.project === 'Quote') && job != null && job.etaHours != null && job.etaHours > 0;
           const etaParsed = ackEtaHours ? parseFloat(ackEtaHours) : NaN;
           const etaValid = etaIsLocked || (!isNaN(etaParsed) && etaParsed > 0);
           const isDisabled = acknowledgeJob.isPending || !etaValid;
@@ -829,7 +966,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               >
                 <button
                   type="button"
-                  onClick={() => { setViewMode('client'); setShowCompare(false); }}
+                  onClick={() => { setViewMode('client'); setShowCompare(false); setCarPage(0); }}
                   style={{
                     padding: '5px 14px',
                     fontSize: 11,
@@ -846,7 +983,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setViewMode('admin'); setShowCompare(false); }}
+                  onClick={() => { setViewMode('admin'); setShowCompare(false); setCarPage(0); }}
                   style={{
                     padding: '5px 14px',
                     fontSize: 11,
@@ -866,7 +1003,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               {/* Compare button */}
               <button
                 type="button"
-                onClick={() => setShowCompare((v) => !v)}
+                onClick={() => { setShowCompare((v) => !v); setCarPage(0); }}
                 style={{
                   padding: '5px 14px',
                   fontSize: 11,
@@ -903,7 +1040,10 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
           {/* SIDE-BY-SIDE COMPARE VIEW */}
           {showCompare && originalJob && (
-            <CompareView adminJob={job} clientJob={originalJob} />
+            <CompareView
+              adminJob={job}
+              clientJob={originalJob}
+            />
           )}
           {showCompare && !originalJob && !originalJobQuery.isLoading && (
             <div className="text-[12px] text-center py-8" style={{ color: '#94A3B8' }}>
@@ -969,7 +1109,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           const visible = i >= carPage && i < carPage + 2;
                           return (
                             <img
-                              key={i}
+                              key={`${job.uuid}-${src}-${i}`}
                               src={src}
                               alt={i === 0 ? job.design : ''}
                               className="w-full rounded-xl object-cover"
@@ -1524,6 +1664,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             type="button"
             className="btn btn-outline"
             style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+            onClick={handleDownloadAllFiles}
           >
             <Download className="w-3.5 h-3.5" aria-hidden />
             Download Files
@@ -1544,24 +1685,23 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               fontSize: 12,
               padding: '7px 13px',
               gap: 6,
-              ...(isAcknowledged ? { opacity: 0.4, cursor: 'not-allowed', pointerEvents: 'none' } : {}),
             }}
-            onClick={() => !isAcknowledged && onEdit?.(job)}
-            disabled={isAcknowledged}
-            title={isAcknowledged ? 'Cannot edit after acknowledgement is sent' : undefined}
+            onClick={() => onEdit?.(job)}
           >
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
           </button>
-          <button
-            type="button"
-            className="btn btn-crimson"
-            style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
-            onClick={() => setShowSendMailModal(true)}
-          >
-            <Send className="w-3.5 h-3.5" aria-hidden />
-            Send Mail to Client
-          </button>
+          {!isQuote ? (
+            <button
+              type="button"
+              className="btn btn-crimson"
+              style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+              onClick={() => setShowSendMailModal(true)}
+            >
+              <Send className="w-3.5 h-3.5" aria-hidden />
+              Send Mail to Client
+            </button>
+          ) : null}
           {!isQuote && isCsApproved ? (
             <button
               type="button"
@@ -1836,7 +1976,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
         </div>
       ) : null}
 
-      {/* ── SEND MAIL TO CLIENT — UPLOAD + SEND MODAL ── */}
+      {/* ── SEND MAIL TO CLIENT — CONFIRM DIALOG ── */}
       {showSendMailModal ? (
         <div
           className="fixed inset-0 flex items-center justify-center p-4"
@@ -1847,11 +1987,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             zIndex: 60,
           }}
           onClick={(e) => {
-            if (e.target === e.currentTarget && !sendMailUploading) {
-              setShowSendMailModal(false);
-              setSendMailFiles([]);
-              setSendMailNote('');
-              setSendMailFileStatus({});
+            if (e.target === e.currentTarget && sendMailPhase === 'idle') {
+              closeSendMailModal();
             }
           }}
           role="presentation"
@@ -1859,8 +1996,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Send Order Ready Email"
-            className="relative w-full max-w-[520px] rounded-2xl flex flex-col overflow-hidden"
+            aria-label="Confirm Send Mail to Client"
+            className="relative w-full max-w-[480px] rounded-2xl flex flex-col overflow-hidden"
             style={{
               background: '#fff',
               boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)',
@@ -1872,202 +2009,253 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             <div
               className="flex items-start gap-3 px-6 py-5 shrink-0"
               style={{
-                background: 'linear-gradient(135deg, #EFF6FF, #DBEAFE)',
-                borderBottom: '1px solid #93C5FD',
+                background: 'linear-gradient(135deg, #FEF9EC, #FEF3C7)',
+                borderBottom: '1px solid #FCD34D',
               }}
             >
               <div
                 className="flex items-center justify-center shrink-0"
                 style={{
                   width: 36, height: 36, borderRadius: '50%',
-                  background: 'rgba(37,99,235,0.12)',
-                  border: '1.5px solid rgba(37,99,235,0.25)',
+                  background: 'rgba(217,119,6,0.12)',
+                  border: '1.5px solid rgba(217,119,6,0.3)',
                 }}
               >
-                <Send className="w-4 h-4" style={{ color: '#2563EB' }} aria-hidden />
+                <Send className="w-4 h-4" style={{ color: '#D97706' }} aria-hidden />
               </div>
               <div className="flex-1 min-w-0">
-                <div style={{ fontSize: 17, fontWeight: 800, color: '#1E3A8A', letterSpacing: '0.01em', marginBottom: 2 }}>
-                  Send Order Ready Email
+                <div style={{ fontSize: 17, fontWeight: 800, color: '#78350F', letterSpacing: '0.01em', marginBottom: 2 }}>
+                  Send Mail to Client
                 </div>
-                <div style={{ fontSize: 12, color: '#1D4ED8', opacity: 0.85 }}>
-                  Upload the files you want to deliver, then send the email.
+                <div style={{ fontSize: 12, color: '#92400E', opacity: 0.85 }}>
+                  This will notify the client that their order is ready for delivery.
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  if (!sendMailUploading) {
-                    setShowSendMailModal(false);
-                    setSendMailFiles([]);
-                    setSendMailNote('');
-                    setSendMailFileStatus({});
-                  }
-                }}
-                disabled={sendMailUploading}
+                onClick={closeSendMailModal}
+                disabled={sendMailPhase !== 'idle'}
                 aria-label="Close"
                 style={{
-                  color: '#1E3A8A', opacity: 0.6, background: 'none', border: 'none',
-                  fontSize: 18, cursor: sendMailUploading ? 'not-allowed' : 'pointer',
+                  color: '#78350F', opacity: 0.5, background: 'none', border: 'none',
+                  fontSize: 18, cursor: sendMailPhase !== 'idle' ? 'not-allowed' : 'pointer',
+                  lineHeight: 1, padding: 2,
                 }}
               >
                 ✕
               </button>
             </div>
 
-            {/* Body — scrollable */}
+            {/* Body */}
             <div className="px-6 py-5 flex flex-col gap-4 overflow-y-auto">
 
-              {/* Drop zone */}
-              <div
-                ref={sendMailDropRef}
-                role="button"
-                tabIndex={0}
-                aria-label="Upload files — click or drag and drop"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.multiple = true;
-                  input.accept = '.pdf,.jpg,.jpeg,.png,.gif,.svg,image/*,application/pdf';
-                  input.onchange = () => {
-                    if (!input.files) return;
-                    const newFiles = Array.from(input.files);
-                    setSendMailFiles((prev) => {
-                      const existing = new Set(prev.map((f) => f.name + f.size));
-                      return [...prev, ...newFiles.filter((f) => !existing.has(f.name + f.size))];
-                    });
-                  };
-                  input.click();
-                }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') (e.currentTarget as HTMLElement).click(); }}
-                onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).style.borderColor = '#2563EB'; }}
-                onDragLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#93C5FD'; }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  (e.currentTarget as HTMLElement).style.borderColor = '#93C5FD';
-                  const dropped = Array.from(e.dataTransfer.files);
-                  setSendMailFiles((prev) => {
-                    const existing = new Set(prev.map((f) => f.name + f.size));
-                    return [...prev, ...dropped.filter((f) => !existing.has(f.name + f.size))];
-                  });
-                }}
-                style={{
-                  border: '2px dashed #93C5FD',
-                  borderRadius: 14,
-                  padding: '28px 20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 8,
-                  cursor: 'pointer',
-                  background: '#F8FBFF',
-                  transition: 'border-color 0.15s',
-                }}
-              >
-                <UploadCloud className="w-8 h-8" style={{ color: '#93C5FD' }} aria-hidden />
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1E3A8A' }}>
-                  Click or drag &amp; drop files here
-                </div>
-                <div style={{ fontSize: 11, color: '#64748B' }}>
-                  PDF, JPG, PNG, GIF, SVG — up to 20 files
-                </div>
-              </div>
-
-              {/* File list */}
-              {sendMailFiles.length > 0 && (
+              {/* File upload zone */}
+              {sendMailPhase === 'idle' && (
                 <div className="flex flex-col gap-2">
-                  {sendMailFiles.map((file, idx) => {
-                    const status = sendMailFileStatus[idx] ?? 'pending';
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-3"
-                        style={{
-                          background: status === 'error' ? '#FEF2F2' : status === 'done' ? '#F0FDF4' : '#F8FBFF',
-                          border: `1.5px solid ${status === 'error' ? '#FCA5A5' : status === 'done' ? '#86EFAC' : '#DBEAFE'}`,
-                          borderRadius: 10,
-                          padding: '10px 14px',
-                        }}
-                      >
-                        <FileText className="w-4 h-4 shrink-0" style={{ color: status === 'error' ? '#EF4444' : status === 'done' ? '#16A34A' : '#2563EB' }} aria-hidden />
-                        <div className="flex-1 min-w-0">
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#1E293B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {file.name}
-                          </div>
-                          <div style={{ fontSize: 11, color: '#64748B' }}>
-                            {(file.size / 1024).toFixed(0)} KB
-                            {status === 'uploading' && ' — uploading…'}
-                            {status === 'done' && ' — uploaded'}
-                            {status === 'error' && ' — failed'}
-                          </div>
-                        </div>
-                        {!sendMailUploading && (
-                          <button
-                            type="button"
-                            aria-label={`Remove ${file.name}`}
-                            onClick={() => {
-                              setSendMailFiles((prev) => prev.filter((_, i) => i !== idx));
-                              setSendMailFileStatus((prev) => {
-                                const next = { ...prev };
-                                delete next[idx];
-                                return next;
-                              });
-                            }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: 2 }}
-                          >
-                            <Trash2 className="w-4 h-4" aria-hidden />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Upload Completed Deliverables <span style={{ color: '#B22234' }}>*</span>
+                  </div>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsSendMailDragging(true);
+                    }}
+                    onDragLeave={() => setIsSendMailDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsSendMailDragging(false);
+                      addSendMailFiles(e.dataTransfer.files);
+                    }}
+                    onClick={() => sendMailFileInputRef.current?.click()}
+                    style={{
+                      border: `2px dashed ${isSendMailDragging ? '#D97706' : '#CBD5E1'}`,
+                      borderRadius: 10,
+                      padding: '24px 16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: isSendMailDragging ? 'rgba(217,119,6,0.04)' : '#F8FAFC',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <Upload className="w-6 h-6 mx-auto mb-2" style={{ color: isSendMailDragging ? '#D97706' : '#94A3B8' }} />
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: '#475569' }}>
+                      Drop files here or <span style={{ color: '#D97706', textDecoration: 'underline' }}>browse</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
+                      PDF, PNG, JPG, AI, EPS, CDR — up to 500 MB each
+                    </div>
+                  </div>
+                  <input
+                    ref={sendMailFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"
+                    className="hidden"
+                    onChange={(e) => addSendMailFiles(e.target.files)}
+                  />
                 </div>
               )}
 
-              {/* Note */}
-              <div className="flex flex-col gap-1.5">
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
-                  Note to client <span style={{ fontWeight: 400, color: '#94A3B8' }}>(optional)</span>
+              {/* Progress Indicator */}
+              {sendMailPhase !== 'idle' && (
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '14px 16px' }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#D97706' }} />
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#78350F' }}>
+                      {sendMailPhase === 'uploading'
+                        ? `Uploading files (${sendMailUploadProgress}%)…`
+                        : 'Sending order notification email…'}
+                    </div>
+                  </div>
+                  {sendMailPhase === 'uploading' && (
+                    <div style={{ width: '100%', height: 6, background: '#FEF3C7', borderRadius: 3, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${sendMailUploadProgress}%`,
+                          height: '100%',
+                          background: '#D97706',
+                          transition: 'width 0.2s ease-out'
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Files to be sent */}
+              <div className="flex flex-col gap-2">
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Files to be sent ({allCompletedFiles.length + sendMailFiles.length})
+                </div>
+
+                {allCompletedFiles.length === 0 && sendMailFiles.length === 0 ? (
+                  <div
+                    className="flex items-start gap-2.5"
+                    style={{
+                      background: 'rgba(234,179,8,0.07)',
+                      border: '1px solid rgba(234,179,8,0.35)',
+                      borderRadius: 10, padding: '12px 14px',
+                    }}
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#B45309', marginTop: 1 }} aria-hidden />
+                    <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.55, fontWeight: 600 }}>
+                      No completed files found. Upload files to the job before sending the mail.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {/* Already Uploaded Files */}
+                    {allCompletedFiles.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          Completed Deliverables on Server ({allCompletedFiles.length})
+                        </div>
+                        {allCompletedFiles.map((f) => (
+                          <div
+                            key={f.id}
+                            className="flex items-center gap-2.5"
+                            style={{
+                              background: '#F8FAFC',
+                              border: '1px solid #E2E8F0',
+                              borderRadius: 8, padding: '9px 12px',
+                            }}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: '#22C55E' }} aria-hidden />
+                            <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              {f.file_name}
+                            </span>
+                            <span style={{ fontSize: 10.5, color: '#64748B' }}>
+                              Ready
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* New Files to Upload */}
+                    {sendMailFiles.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          New Files to Upload ({sendMailFiles.length})
+                        </div>
+                        {sendMailFiles.map((f, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-2.5"
+                            style={{
+                              background: '#FFFBEB',
+                              border: '1px solid #FDE68A',
+                              borderRadius: 8, padding: '9px 12px',
+                            }}
+                          >
+                            <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: '#D97706' }} aria-hidden />
+                            <span style={{ fontSize: 12, color: '#78350F', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              {f.name}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#92400E', marginRight: 4 }}>
+                              {(f.size / 1024 / 1024).toFixed(1)} MB
+                            </span>
+                            {sendMailPhase === 'idle' && (
+                              <button
+                                type="button"
+                                onClick={() => removeSendMailFile(i)}
+                                style={{
+                                  background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+                                  color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}
+                                aria-label={`Remove ${f.name}`}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Type to confirm */}
+              <div className="flex flex-col gap-2">
+                <label style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Type to Confirm
                 </label>
-                <textarea
-                  rows={3}
-                  maxLength={1000}
-                  placeholder="Add a personal note…"
-                  value={sendMailNote}
-                  onChange={(e) => setSendMailNote(e.target.value)}
-                  disabled={sendMailUploading}
+                <div style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Type <code style={{ background: '#F1F5F9', padding: '1px 6px', borderRadius: 4, fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 }}>CONFIRM</code> below to enable the send button
+                </div>
+                <input
+                  type="text"
+                  value={sendMailConfirmText}
+                  onChange={(e) => setSendMailConfirmText(e.target.value)}
+                  disabled={sendMailPhase !== 'idle'}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === 'Enter' &&
+                      sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' &&
+                      sendMailPhase === 'idle' &&
+                      (allCompletedFiles.length + sendMailFiles.length) > 0
+                    ) {
+                      handleSendMailSubmit();
+                    }
+                  }}
+                  placeholder="CONFIRM"
+                  autoFocus
+                  autoComplete="off"
+                  spellCheck={false}
                   style={{
-                    width: '100%',
-                    border: '1.5px solid #DBEAFE',
-                    borderRadius: 10,
-                    padding: '10px 12px',
-                    fontSize: 12.5,
-                    color: '#1E293B',
-                    background: '#F8FBFF',
-                    resize: 'vertical',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box',
+                    textAlign: 'center', fontWeight: 700, letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    border: `1.5px solid ${sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' ? '#D97706' : '#E2E8F0'}`,
+                    background: '#fff', color: '#0D1B2A',
+                    padding: '12px 16px', borderRadius: 10, width: '100%', outline: 'none',
+                    fontFamily: 'IBM Plex Mono, monospace', fontSize: 14,
+                    boxShadow: sendMailConfirmText.trim().toUpperCase() === 'CONFIRM'
+                      ? '0 0 0 3px rgba(217,119,6,0.18)' : 'none',
+                    transition: 'all 0.18s ease',
                   }}
                 />
               </div>
-
-              {/* Warning — must upload at least one file */}
-              {sendMailFiles.length === 0 && (
-                <div
-                  className="flex items-start gap-3"
-                  style={{
-                    background: 'rgba(234,179,8,0.07)',
-                    border: '1px solid rgba(234,179,8,0.35)',
-                    borderRadius: 10, padding: '11px 14px',
-                  }}
-                >
-                  <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#B45309', marginTop: 1 }} aria-hidden />
-                  <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.55, fontWeight: 600 }}>
-                    Please upload at least one file before sending the email.
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Footer */}
@@ -2077,83 +2265,44 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             >
               <button
                 type="button"
-                onClick={() => {
-                  if (!sendMailUploading) {
-                    setShowSendMailModal(false);
-                    setSendMailFiles([]);
-                    setSendMailNote('');
-                    setSendMailFileStatus({});
-                  }
-                }}
-                disabled={sendMailUploading}
+                onClick={closeSendMailModal}
+                disabled={sendMailPhase !== 'idle'}
                 style={{
                   border: '1.5px solid #E2E8F0', color: '#475569', fontWeight: 700,
                   background: 'transparent', borderRadius: 99, padding: '9px 20px',
-                  fontSize: 12.5, cursor: sendMailUploading ? 'not-allowed' : 'pointer',
+                  fontSize: 12.5, cursor: sendMailPhase !== 'idle' ? 'not-allowed' : 'pointer',
                   display: 'inline-flex', alignItems: 'center', gap: 6,
-                  opacity: sendMailUploading ? 0.5 : 1,
+                  opacity: sendMailPhase !== 'idle' ? 0.5 : 1,
                 }}
               >
                 ✕ Cancel
               </button>
-              <button
-                type="button"
-                disabled={sendMailUploading || sendMailFiles.length === 0}
-                onClick={async () => {
-                  const id = requireUuid('send mail');
-                  if (!id) return;
-                  setSendMailUploading(true);
-                  const initialStatus: Record<number, 'pending' | 'uploading' | 'done' | 'error'> = {};
-                  sendMailFiles.forEach((_, i) => { initialStatus[i] = 'uploading'; });
-                  setSendMailFileStatus(initialStatus);
-
-                  const fileIds: string[] = [];
-                  let anyError = false;
-                  for (let i = 0; i < sendMailFiles.length; i++) {
-                    try {
-                      const fid = await uploadCompletedFile(id, sendMailFiles[i]);
-                      fileIds.push(fid);
-                      setSendMailFileStatus((prev) => ({ ...prev, [i]: 'done' }));
-                    } catch {
-                      setSendMailFileStatus((prev) => ({ ...prev, [i]: 'error' }));
-                      anyError = true;
-                    }
-                  }
-
-                  if (anyError) {
-                    toast.error('Some files failed to upload. Please remove them and try again.');
-                    setSendMailUploading(false);
-                    return;
-                  }
-
-                  notifyOrderReady.mutate(
-                    { jobId: id, fileIds, note: sendMailNote || undefined },
-                    {
-                      onSettled: () => { setSendMailUploading(false); },
-                      onSuccess: () => {
-                        setShowSendMailModal(false);
-                        setSendMailFiles([]);
-                        setSendMailNote('');
-                        setSendMailFileStatus({});
-                      },
-                    },
-                  );
-                }}
-                style={{
-                  background: sendMailFiles.length === 0 ? '#94A3B8' : '#2563EB',
-                  border: `1.5px solid ${sendMailFiles.length === 0 ? '#94A3B8' : '#2563EB'}`,
-                  color: '#fff', padding: '9px 22px', fontSize: 12.5, fontWeight: 700,
-                  borderRadius: 99,
-                  cursor: (sendMailUploading || sendMailFiles.length === 0) ? 'not-allowed' : 'pointer',
-                  opacity: sendMailUploading ? 0.7 : 1,
-                  boxShadow: sendMailFiles.length === 0 ? 'none' : '0 4px 14px rgba(37,99,235,0.35)',
-                  transition: 'all 0.15s ease',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}
-              >
-                <Send className="w-3.5 h-3.5" aria-hidden />
-                {sendMailUploading ? 'Uploading…' : notifyOrderReady.isPending ? 'Sending…' : 'Send Email'}
-              </button>
+              {(() => {
+                const totalFilesCount = allCompletedFiles.length + sendMailFiles.length;
+                const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0;
+                const disabled = !ready || sendMailPhase !== 'idle';
+                return (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={handleSendMailSubmit}
+                    style={{
+                      background: ready ? '#D97706' : '#94A3B8',
+                      border: `1.5px solid ${ready ? '#D97706' : '#94A3B8'}`,
+                      color: '#fff', padding: '9px 22px', fontSize: 12.5, fontWeight: 700,
+                      borderRadius: 99,
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      opacity: disabled ? 0.6 : 1,
+                      boxShadow: ready ? '0 4px 14px rgba(217,119,6,0.45)' : 'none',
+                      transition: 'all 0.15s ease',
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5" aria-hidden />
+                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Sending…' : 'Send Email'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -2377,7 +2526,13 @@ function ScoreBar({ label, value, color }: { label: string; value: number; color
   );
 }
 
-function CompareView({ adminJob, clientJob }: { adminJob: Job; clientJob: Job }) {
+function CompareView({
+  adminJob,
+  clientJob,
+}: {
+  adminJob: Job;
+  clientJob: Job;
+}) {
   const fields: { label: string; get: (j: Job) => string }[] = [
     { label: 'Design Name', get: (j) => j.design || '—' },
     { label: 'Order Type', get: (j) => j.order || '—' },
