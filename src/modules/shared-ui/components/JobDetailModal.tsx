@@ -114,7 +114,7 @@ function orderAccent(order: string): string {
 
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
-    'In QC': 'teal', 'In Production': 'amber', 'Senior Review': 'purple',
+    'In QC': 'teal', 'In Production': 'amber', Pending: 'blue', 'Senior Review': 'purple',
     Sewout: 'purple', 'Ready to Deliver': 'teal', Delivered: 'green',
     'Quote Submitted': 'blue', 'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber', Cancelled: 'gray',
@@ -541,14 +541,25 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     try {
       for (const f of uniqueFiles) {
         const res = await adminService.getDownloadUrl(f.id);
-        const link = document.createElement('a');
-        link.href = res.url;
-        link.setAttribute('target', '_blank');
-        link.setAttribute('download', f.file_name);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        try {
+          // Fetch as blob so the browser triggers a real save-to-disk download
+          // instead of navigating to the S3 URL (cross-origin URLs ignore the
+          // download attribute and just open in a new tab).
+          const response = await fetch(res.url);
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = f.file_name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(objectUrl);
+        } catch {
+          // Fallback: open in new tab if blob fetch fails
+          window.open(res.url, '_blank', 'noopener,noreferrer');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
       toast.success('Downloads started successfully.', { id: toastId });
     } catch (err) {
@@ -690,29 +701,21 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     <span>Send Acknowledgement</span>
                   </button>
                 )
-              ) : !isDelivered && isAcknowledged && etaCountdown ? (
-                /* Live ETA countdown chip — replaces button once ack + ETA exist */
+              ) : !isDelivered && isAcknowledged && etaCountdown && !etaCountdown.expired ? (
+                /* ETA still counting down — chip only, no deliver button yet */
                 <div
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
-                    background: etaCountdown.expired
-                      ? 'linear-gradient(135deg,rgba(5,150,105,0.10),rgba(5,150,105,0.05))'
-                      : 'linear-gradient(135deg,rgba(37,99,235,0.10),rgba(37,99,235,0.05))',
-                    border: `1.5px solid ${etaCountdown.expired ? 'rgba(5,150,105,0.28)' : 'rgba(37,99,235,0.22)'}`,
+                    background: 'linear-gradient(135deg,rgba(37,99,235,0.10),rgba(37,99,235,0.05))',
+                    border: '1.5px solid rgba(37,99,235,0.22)',
                     borderRadius: 10,
                     padding: '6px 12px',
-                    boxShadow: etaCountdown.expired
-                      ? '0 2px 8px rgba(5,150,105,0.12)'
-                      : '0 2px 8px rgba(37,99,235,0.12)',
+                    boxShadow: '0 2px 8px rgba(37,99,235,0.12)',
                   }}
                 >
-                  <Timer
-                    className="w-3.5 h-3.5 shrink-0"
-                    style={{ color: etaCountdown.expired ? '#059669' : '#2563EB' }}
-                    aria-hidden
-                  />
+                  <Timer className="w-3.5 h-3.5 shrink-0" style={{ color: '#2563EB' }} aria-hidden />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.2 }}>
                     <span
                       style={{
@@ -720,7 +723,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                         fontSize: 12.5,
                         fontWeight: 700,
                         letterSpacing: '0.03em',
-                        color: etaCountdown.expired ? '#059669' : '#1D4ED8',
+                        color: '#1D4ED8',
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -730,35 +733,55 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                       style={{
                         fontSize: 9.5,
                         fontWeight: 600,
-                        color: etaCountdown.expired ? '#10B981' : '#60A5FA',
+                        color: '#60A5FA',
                         letterSpacing: '0.04em',
                         textTransform: 'uppercase',
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {etaCountdown.expired ? 'ETA reached' : 'ETA remaining'}
+                      ETA remaining
                     </span>
                   </div>
                 </div>
-              ) : !isDelivered && isAcknowledged ? (
-                /* Acknowledged but no ETA was set — simple confirmed chip */
-                <div
+              ) : !isDelivered && isAcknowledged && (!etaCountdown || etaCountdown.expired) ? (
+                /* ETA expired (or no ETA set) — replace chip with Deliver Project button */
+                <button
+                  type="button"
+                  onClick={() => setShowSendMailModal(true)}
                   style={{
+                    background: 'linear-gradient(135deg,#B22234,#8B1A28)',
+                    border: '1.5px solid rgba(255,255,255,0.18)',
+                    color: '#fff',
+                    padding: '7px 15px',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    letterSpacing: '0.01em',
+                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 5,
-                    background: 'linear-gradient(135deg,rgba(5,150,105,0.10),rgba(5,150,105,0.05))',
-                    border: '1.5px solid rgba(5,150,105,0.28)',
-                    borderRadius: 10,
-                    padding: '6px 11px',
-                    boxShadow: '0 2px 8px rgba(5,150,105,0.10)',
+                    gap: 7,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)',
+                    transition: 'all 0.18s ease',
                   }}
+                  onMouseOver={(e) => {
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    btn.style.background = 'linear-gradient(135deg,#991B2A,#7F1521)';
+                    btn.style.boxShadow = '0 6px 22px rgba(178,34,52,0.55), inset 0 1px 0 rgba(255,255,255,0.14)';
+                    btn.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseOut={(e) => {
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    btn.style.background = 'linear-gradient(135deg,#B22234,#8B1A28)';
+                    btn.style.boxShadow = '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)';
+                    btn.style.transform = 'translateY(0)';
+                  }}
+                  aria-label="Open deliver project panel"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: '#059669' }} aria-hidden />
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#059669', whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
-                    Acknowledged
-                  </span>
-                </div>
+                  <Send className="w-3.5 h-3.5" aria-hidden />
+                  <span>Deliver Project</span>
+                </button>
               ) : null}
             </div>
           </div>
@@ -1087,36 +1110,39 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   <div className="flex flex-col min-w-0">
                     <SectionLabel>JOB IMAGES</SectionLabel>
                     <div className="relative flex-1" style={{ minHeight: 0 }}>
-                      <button
-                        type="button"
-                        onClick={navPrev}
-                        disabled={atStart}
-                        aria-label="Previous image"
-                        style={{
-                          ...arrowBase,
-                          left: -14,
-                          opacity: atStart ? 0.25 : 1,
-                          cursor: atStart ? 'default' : 'pointer',
-                        }}
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                      </button>
+                      {totalImages !== 1 && (
+                        <button
+                          type="button"
+                          onClick={navPrev}
+                          disabled={atStart}
+                          aria-label="Previous image"
+                          style={{
+                            ...arrowBase,
+                            left: -14,
+                            opacity: atStart ? 0.25 : 1,
+                            cursor: atStart ? 'default' : 'pointer',
+                          }}
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <div
-                        className="grid grid-cols-2 gap-2.5"
+                        className={totalImages === 1 ? 'flex justify-center' : 'grid grid-cols-2 gap-2.5'}
                         style={{ height: '100%', minHeight: isQuote ? 220 : 180 }}
                       >
                         {images.map((src, i) => {
-                          const visible = i >= carPage && i < carPage + 2;
+                          const visible = totalImages === 1 || (i >= carPage && i < carPage + 2);
                           return (
                             <img
                               key={`${job.uuid}-${src}-${i}`}
                               src={src}
                               alt={i === 0 ? job.design : ''}
-                              className="w-full rounded-xl object-cover"
+                              className={totalImages === 1 ? 'rounded-xl object-cover' : 'w-full rounded-xl object-cover'}
                               style={{
                                 display: visible ? 'block' : 'none',
                                 height: '100%',
                                 minHeight: 150,
+                                maxWidth: totalImages === 1 ? '60%' : undefined,
                                 border: '1px solid rgba(15,23,42,0.06)',
                                 background: 'rgba(0,0,0,0.04)',
                               }}
@@ -1126,20 +1152,22 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           );
                         })}
                       </div>
-                      <button
-                        type="button"
-                        onClick={navNext}
-                        disabled={atEnd}
-                        aria-label="Next image"
-                        style={{
-                          ...arrowBase,
-                          right: -14,
-                          opacity: atEnd ? 0.25 : 1,
-                          cursor: atEnd ? 'default' : 'pointer',
-                        }}
-                      >
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                      {totalImages !== 1 && (
+                        <button
+                          type="button"
+                          onClick={navNext}
+                          disabled={atEnd}
+                          aria-label="Next image"
+                          style={{
+                            ...arrowBase,
+                            right: -14,
+                            opacity: atEnd ? 0.25 : 1,
+                            cursor: atEnd ? 'default' : 'pointer',
+                          }}
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1526,7 +1554,22 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <DetailRow label="Complexity" value={displayJob.complexity} />
                 {displayJob.process ? <DetailRow label="Process" value={displayJob.process} /> : null}
                 <DetailRow label="Colors" value={String(displayJob.colors)} />
-                {displayJob.finalFiles?.length ? <DetailRow label="Output Formats" value={displayJob.finalFiles.join(', ')} /> : null}
+                {displayJob.finalFiles?.length ? (
+                  <DetailRow
+                    label="Output Formats"
+                    value={(() => {
+                      const text = displayJob.notes || displayJob.summary;
+                      const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+                      const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+                      return displayJob.finalFiles.map(f => {
+                        if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+                          return customFormat || f;
+                        }
+                        return f;
+                      }).join(', ');
+                    })()}
+                  />
+                ) : null}
                 <DetailRow label="Assigned To" value={displayJob.assignedTo ?? 'Unassigned'} />
                 {displayJob.subType ? <DetailRow label="Sub-Type" value={displayJob.subType} /> : null}
               </div>
@@ -1555,6 +1598,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   value={displayJob.ref}
                   valueStyle={{ color: '#B22234', fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5 }}
                 />
+                {displayJob.clientPo ? (
+                  <DetailRow
+                    label="Client PO / Ref"
+                    value={displayJob.clientPo}
+                    valueStyle={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 10.5 }}
+                  />
+                ) : null}
                 <DetailRow
                   label="Client Budget"
                   value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString()}` : 'Not provided'}
@@ -1691,7 +1741,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
           </button>
-          {!isQuote ? (
+          {!isQuote && isAcknowledged ? (
             <button
               type="button"
               className="btn btn-crimson"
@@ -1699,7 +1749,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               onClick={() => setShowSendMailModal(true)}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
-              Send Mail to Client
+              Deliver Project
             </button>
           ) : null}
           {!isQuote && isCsApproved ? (
@@ -1996,7 +2046,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Confirm Send Mail to Client"
+            aria-label="Confirm Deliver Project"
             className="relative w-full max-w-[480px] rounded-2xl flex flex-col overflow-hidden"
             style={{
               background: '#fff',
@@ -2025,7 +2075,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </div>
               <div className="flex-1 min-w-0">
                 <div style={{ fontSize: 17, fontWeight: 800, color: '#78350F', letterSpacing: '0.01em', marginBottom: 2 }}>
-                  Send Mail to Client
+                  Deliver Project
                 </div>
                 <div style={{ fontSize: 12, color: '#92400E', opacity: 0.85 }}>
                   This will notify the client that their order is ready for delivery.
@@ -2299,7 +2349,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     }}
                   >
                     <Send className="w-3.5 h-3.5" aria-hidden />
-                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Sending…' : 'Send Email'}
+                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Delivering…' : 'Deliver Project'}
                   </button>
                 );
               })()}
@@ -2542,7 +2592,21 @@ function CompareView({
     { label: 'Priority', get: (j) => j.priority || '—' },
     { label: 'ETA Hours', get: (j) => j.etaHours != null ? `${j.etaHours}h` : '—' },
     { label: 'Colors', get: (j) => j.colors != null ? String(j.colors) : '—' },
-    { label: 'Output Formats', get: (j) => j.finalFiles?.length ? j.finalFiles.join(', ') : '—' },
+    {
+      label: 'Output Formats',
+      get: (j) => {
+        if (!j.finalFiles?.length) return '—';
+        const text = j.notes || j.summary;
+        const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+        const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+        return j.finalFiles.map(f => {
+          if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+            return customFormat || f;
+          }
+          return f;
+        }).join(', ');
+      }
+    },
     { label: 'Placement', get: (j) => j.placement || '—' },
     { label: 'Width (in)', get: (j) => j.width != null ? `${j.width}"` : '—' },
     { label: 'Height (in)', get: (j) => j.height != null ? `${j.height}"` : '—' },

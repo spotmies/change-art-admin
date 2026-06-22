@@ -20,6 +20,7 @@ export type JobComplexity = 'Simple' | 'Medium' | 'Super Medium' | 'Complex' | '
 export type JobStatus =
   | 'In QC'
   | 'In Production'
+  | 'Pending'
   | 'Senior Review'
   | 'Sewout'
   | 'Ready to Deliver'
@@ -103,6 +104,8 @@ export interface Job {
   parentJobId?: string | null;
   /** True on the original when an admin copy has been created for it. */
   hasAdminCopy?: boolean;
+  /** Client's own PO / reference number entered when placing the order. */
+  clientPo?: string | null;
 }
 
 export const JOBS: Job[] = [

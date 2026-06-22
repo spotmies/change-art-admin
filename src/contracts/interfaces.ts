@@ -142,6 +142,9 @@ export interface IJobCard {
   sewout_required: boolean | null;
   description: string | null;
   specific_type: string | null;
+  billing_address: string | null;
+  shipping_address: string | null;
+  client_po: string | null;
   stitch_count: number | null;
   /** Flat price the agency quoted to the client (set via /cs/jobs/:id/quote/send-price). */
   admin_price: number | null;

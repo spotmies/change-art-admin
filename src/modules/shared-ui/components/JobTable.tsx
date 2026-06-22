@@ -263,6 +263,7 @@ function statusBadgeAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal',
     'In Production': 'amber',
+    Pending: 'blue',
     'Senior Review': 'purple',
     Sewout: 'purple',
     'Ready to Deliver': 'teal',

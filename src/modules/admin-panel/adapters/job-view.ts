@@ -114,6 +114,14 @@ export function adaptJobCard(
 ): Job {
   const mapped = STATUS_MAP[card.status] ?? { status: 'In Review' as JobStatusDisplay, stage: 'junior' as JobStage };
 
+  // JOB_PLACED means CS created the job but the TL hasn't acknowledged it yet.
+  // Only flip to "In Production" once the ack has been sent; before that show
+  // "Pending" so staff can see the job still needs acknowledgement.
+  const displayStatus: JobStatusDisplay =
+    card.status === JobStatus.JOB_PLACED && !card.acknowledgement_sent_at
+      ? 'Pending'
+      : mapped.status;
+
   const assignedUserId =
     card.current_handler_id ??
     card.assigned_senior_id ??
@@ -148,7 +156,7 @@ export function adaptJobCard(
     process: card.process_type ? (PROCESS_DISPLAY[card.process_type] ?? null) : null,
     priority: PRIORITY_DISPLAY[card.priority] ?? 'Normal',
     etaHours: card.eta_hours,
-    status: mapped.status,
+    status: displayStatus,
     rawStatus: card.status,
     stage: mapped.stage,
     assignedTo,
@@ -175,5 +183,6 @@ export function adaptJobCard(
     isAdminCopy: card.is_admin_copy ?? false,
     parentJobId: card.parent_job_id ?? null,
     hasAdminCopy: card.has_admin_copy ?? false,
+    clientPo: card.client_po ?? null,
   };
 }

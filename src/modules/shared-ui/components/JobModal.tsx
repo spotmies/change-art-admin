@@ -103,7 +103,22 @@ export function JobModal({ job, onClose }: JobModalProps) {
     ['Created', formatDate(job.created)],
     ['Reference', job.ref, true],
     ['Colors', String(job.colors)],
-    ...(job.finalFiles?.length ? [['Output Formats', job.finalFiles.join(', ')] as [string, string]] : []),
+    ...(job.finalFiles?.length
+      ? [[
+          'Output Formats',
+          (() => {
+            const text = job.notes || job.summary;
+            const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+            const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+            return job.finalFiles.map(f => {
+              if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+                return customFormat || f;
+              }
+              return f;
+            }).join(', ');
+          })()
+        ] as [string, string]]
+      : []),
     ...(job.placement ? [['Placement', job.placement] as [string, string]] : []),
     ...(job.width    ? [['Width',     `${job.width}"`] as [string, string]] : []),
     ...(job.height   ? [['Height',    `${job.height}"`] as [string, string]] : []),

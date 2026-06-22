@@ -129,6 +129,8 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
   const formRef = useRef<HTMLFormElement>(null);
   const placementSectionRef = useRef<HTMLDivElement>(null);
   const [fieldErrors, setFieldErrors] = useState<Set<string>>(new Set());
+  const [selectedProcessType, setSelectedProcessType] = useState('');
+  const [selectedPlacement, setSelectedPlacement] = useState('');
 
   function markFieldError(id: string, message: string) {
     setFieldErrors(prev => new Set(prev).add(id));
@@ -249,6 +251,8 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
     setSpecificService('');
     setServiceError(false);
     setSelectedFormatOption('');
+    setSelectedProcessType('');
+    setSelectedPlacement('');
     const services = SPECIFIC_SERVICES[id] ?? [];
     if (services.length === 0) {
       if (id === 'swatches') {
@@ -319,6 +323,8 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
     setFiles([]);
     setError(null);
     setFieldErrors(new Set());
+    setSelectedProcessType('');
+    setSelectedPlacement('');
   }
 
   async function handleSaveDraft() {
@@ -412,6 +418,16 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
       if (!otherFormatVal) { markFieldError('format_other', 'Please specify your custom output format.'); return; }
     }
 
+    if (selectedProcessType === 'Others') {
+      const otherProcessVal = String(fd.get('process_type_other') ?? '').trim();
+      if (!otherProcessVal) { markFieldError('process_type_other', 'Please specify your custom process type.'); return; }
+    }
+
+    if (selectedPlacement === 'Others') {
+      const otherPlacementVal = String(fd.get('placement_other') ?? '').trim();
+      if (!otherPlacementVal) { markFieldError('placement_other', 'Please specify your custom placement.'); return; }
+    }
+
     if (selectedService === 'Logo Designing') {
       const fontStyle = String(fd.get('preferable_font_style') ?? '').trim();
       if (!fontStyle) { markFieldError('preferable_font_style', 'Please enter a preferable font style.'); return; }
@@ -465,7 +481,20 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
 
         const processVal = fd.get('process_type');
         if (processVal) {
-          desc += `\n[Process Type: ${processVal}]`;
+          const processOtherVal = String(fd.get('process_type_other') ?? '').trim();
+          if (processVal === 'Others' && processOtherVal) {
+            desc += `\n[Process Type: Others - ${processOtherVal}]`;
+          } else {
+            desc += `\n[Process Type: ${processVal}]`;
+          }
+        }
+
+        const placementVal = fd.get('placement');
+        if (placementVal) {
+          const placementOtherVal = String(fd.get('placement_other') ?? '').trim();
+          if (placementVal === 'Others' && placementOtherVal) {
+            desc += `\n[Placement: Others - ${placementOtherVal}]`;
+          }
         }
 
         const madeiraVal = fd.get('madeira_threads');
@@ -826,7 +855,17 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                           <label className="fl" htmlFor="process_type">
                             PROCESS TYPE <span style={{ color: '#c41e3a' }}>*</span>
                           </label>
-                          <select id="process_type" name="process_type" className="fi" defaultValue="" required>
+                          <select
+                            id="process_type"
+                            name="process_type"
+                            className="fi"
+                            value={selectedProcessType}
+                            onChange={(e) => {
+                              setSelectedProcessType(e.target.value);
+                              clearFieldError('process_type');
+                            }}
+                            required
+                          >
                             <option value="" disabled>Select process type</option>
                             <option value="Screen Printing">Screen Printing</option>
                             <option value="OffSet Printing">OffSet Printing</option>
@@ -834,6 +873,18 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                             <option value="Engraving">Engraving</option>
                             <option value="Others">Others</option>
                           </select>
+                          {selectedProcessType === 'Others' && (
+                            <input
+                              id="process_type_other"
+                              className="fi mt-2"
+                              name="process_type_other"
+                              placeholder="Please specify the process type (e.g. Heat Transfer, Sublimation, Laser Engraving…)"
+                              required
+                              autoFocus
+                              style={fieldErrors.has('process_type_other') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
+                              onChange={() => clearFieldError('process_type_other')}
+                            />
+                          )}
                         </div>
                       )}
 
@@ -873,8 +924,11 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                             id="placement"
                             name="placement"
                             className="fi"
-                            defaultValue=""
-                            onChange={() => clearFieldError('placement')}
+                            value={selectedPlacement}
+                            onChange={(e) => {
+                              setSelectedPlacement(e.target.value);
+                              clearFieldError('placement');
+                            }}
                             style={fieldErrors.has('placement') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
                           >
                             <option value="" disabled>Select placement</option>
@@ -903,6 +957,18 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                               <option value="Others">Others</option>
                             </optgroup>
                           </select>
+                          {selectedPlacement === 'Others' && (
+                            <input
+                              id="placement_other"
+                              className="fi mt-2"
+                              name="placement_other"
+                              placeholder="Please specify the placement location (e.g. Left Chest + Sleeve, Back Collar…)"
+                              required
+                              autoFocus
+                              style={fieldErrors.has('placement_other') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
+                              onChange={() => clearFieldError('placement_other')}
+                            />
+                          )}
                         </div>
                       )}
 
