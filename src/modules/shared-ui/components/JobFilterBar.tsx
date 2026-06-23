@@ -183,7 +183,8 @@ export function JobFilterBar({
           value={filters.orderType}
           onChange={(e) => set(filters, 'orderType', e.target.value, onChange)}
         >
-          <option value="">Order Type</option>
+          <option value="" disabled hidden>Order Type</option>
+          <option value="">All</option>
           {ORDER_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -198,7 +199,8 @@ export function JobFilterBar({
           value={filters.priority}
           onChange={(e) => set(filters, 'priority', e.target.value, onChange)}
         >
-          <option value="">Priority</option>
+          <option value="" disabled hidden>Priority</option>
+          <option value="">All</option>
           {PRIORITY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -214,7 +216,8 @@ export function JobFilterBar({
             value={filters.status}
             onChange={(e) => set(filters, 'status', e.target.value, onChange)}
           >
-            <option value="">Status</option>
+            <option value="" disabled hidden>Status</option>
+            <option value="">All</option>
             {statusOptions.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
@@ -231,7 +234,8 @@ export function JobFilterBar({
             value={filters.clientId}
             onChange={(e) => set(filters, 'clientId', e.target.value, onChange)}
           >
-            <option value="">All Clients</option>
+            <option value="" disabled hidden>Client</option>
+            <option value="">All</option>
             {clients.map((c) => (
               // Use human-readable client_id (e.g. "CLI0002") — matches Job.clientId
               <option key={c.id} value={c.client_id}>
@@ -244,22 +248,28 @@ export function JobFilterBar({
       )}
 
       {/* Date From */}
-      <input
-        type="date"
-        className={`filter-date${filters.dateFrom ? ' active' : ''}`}
-        title="From date"
-        value={filters.dateFrom}
-        onChange={(e) => set(filters, 'dateFrom', e.target.value, onChange)}
-      />
+      <div className="filter-date-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>From</span>
+        <input
+          type="date"
+          className={`filter-date${filters.dateFrom ? ' active' : ''}`}
+          title="From date"
+          value={filters.dateFrom}
+          onChange={(e) => set(filters, 'dateFrom', e.target.value, onChange)}
+        />
+      </div>
 
       {/* Date To */}
-      <input
-        type="date"
-        className={`filter-date${filters.dateTo ? ' active' : ''}`}
-        title="To date"
-        value={filters.dateTo}
-        onChange={(e) => set(filters, 'dateTo', e.target.value, onChange)}
-      />
+      <div className="filter-date-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>To</span>
+        <input
+          type="date"
+          className={`filter-date${filters.dateTo ? ' active' : ''}`}
+          title="To date"
+          value={filters.dateTo}
+          onChange={(e) => set(filters, 'dateTo', e.target.value, onChange)}
+        />
+      </div>
 
       {/* Clear */}
       {hasActive && (

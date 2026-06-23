@@ -8,6 +8,7 @@ import {
   type PillItem,
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { isJobEtaExpired } from '@lib/utils';
 
 const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
@@ -20,7 +21,7 @@ export function CSNewJobsPage() {
   const [page, setPage] = useState(1);
 
   const allJobs  = useMemo(
-    () => allData.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
+    () => allData.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j)),
     [allData],
   );
   const inProd   = useMemo(() => allJobs.filter((j) => j.stage === 'junior'),  [allJobs]);

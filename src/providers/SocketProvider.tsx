@@ -119,8 +119,8 @@ export function SocketProvider({ children }: SocketProviderProps) {
       );
     });
 
-    socket.on(SOCKET_EVENTS.FILE_UPLOAD_COMPLETE, (event: FileUploadCompleteEvent) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.files.forJob(event.jobId) });
+    socket.on(SOCKET_EVENTS.FILE_UPLOAD_COMPLETE, (_event: FileUploadCompleteEvent) => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
       // useAdminJobFiles uses a separate ['admin','files','forJob',...] key —
       // invalidate all admin file queries so the modal image carousel refreshes.
       queryClient.invalidateQueries({ queryKey: ['admin', 'files', 'forJob'] });

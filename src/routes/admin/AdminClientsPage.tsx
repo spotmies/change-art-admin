@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Pencil, Plus, Search } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { PaymentMode } from '@contracts';
@@ -21,10 +21,11 @@ type Tab = 'clients' | 'requests';
 function formatPaymentMode(mode: PaymentMode | null): string {
   if (!mode) return '—';
   const map: Record<PaymentMode, string> = {
-    [PaymentMode.BANK_TRANSFER]: 'Bank Transfer',
-    [PaymentMode.CASH]: 'Cash',
-    [PaymentMode.CARD]: 'Card',
-    [PaymentMode.CREDIT]: 'Credit',
+    [PaymentMode.CREDIT_CARD]: 'Credit Card',
+    [PaymentMode.CARD_ON_FILE]: 'Card on File',
+    [PaymentMode.ACH]: 'ACH',
+    [PaymentMode.PAYPAL]: 'PayPal',
+    [PaymentMode.CHECK]: 'Check',
   };
   return map[mode] ?? mode;
 }
@@ -66,8 +67,20 @@ function markSessionVerified(): void {
 
 export function AdminClientsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [pageGateOpen, setPageGateOpen] = useState(() => !isSessionVerified());
-  const [tab, setTab] = useState<Tab>('clients');
+
+  const initialTab = (searchParams.get('tab') === 'requests') ? 'requests' : 'clients';
+  const [tab, setTab] = useState<Tab>(initialTab);
+
+  // Sync tab state when URL search params change
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'requests' || t === 'clients') {
+      setTab(t);
+    }
+  }, [searchParams]);
+
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);

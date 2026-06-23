@@ -6,51 +6,94 @@ import {
   Pagination,
   SectionHeader,
   StatGrid,
-  applyJobFilters,
   EMPTY_FILTERS,
-  QUOTE_STATUS_OPTIONS,
   type JobFilters,
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useDebounced } from '@lib/use-debounced';
 
-const FETCH_SIZE = 100;
-const PER_PAGE   = 20;
+const PER_PAGE = 20;
+
+/** Map filter-bar order type → backend order_type enum. */
+function mapOrderType(ot: string): string | undefined {
+  if (ot === 'Artwork')             return 'ARTWORK';
+  if (ot === 'Digitizing')          return 'DIGITIZING';
+  if (ot === 'Digitizing + Sewout') return 'DIGITIZING_SEWOUT';
+  return undefined;
+}
+
+/** Map filter-bar priority → backend Priority enum. */
+function mapPriority(p: string): string | undefined {
+  if (p === 'Normal')     return 'NORMAL';
+  if (p === 'Rush')       return 'RUSH';
+  if (p === 'Super Rush') return 'SUPER_RUSH';
+  return undefined;
+}
 
 export function AdminNewQuotesPage() {
-  const { jobs, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
-  const clientsQuery = useAdminClients();
+  const [pendingFilters, setPendingFilters]   = useState<JobFilters>(EMPTY_FILTERS);
+  const [awaitingFilters, setAwaitingFilters] = useState<JobFilters>(EMPTY_FILTERS);
+  const [pendingPage, setPendingPage]         = useState(1);
+  const [awaitingPage, setAwaitingPage]       = useState(1);
+
+  const debouncedPendingSearch  = useDebounced(pendingFilters.search,  300);
+  const debouncedAwaitingSearch = useDebounced(awaitingFilters.search, 300);
+
+  // per_page: 500 — populate client filter dropdowns.
+  // Shared cache key with useAdminJobViews → one network request.
+  const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
 
-  const [filters, setFilters]         = useState<JobFilters>(EMPTY_FILTERS);
-  const [pendingPage, setPendingPage]   = useState(1);
-  const [awaitingPage, setAwaitingPage] = useState(1);
+  const pendingClientUuid = useMemo(() => {
+    if (!pendingFilters.clientId) return undefined;
+    return clients.find((c) => c.client_id === pendingFilters.clientId)?.id;
+  }, [pendingFilters.clientId, clients]);
 
-  const quoteJobs      = useMemo(() => jobs.filter((j) => j.stage === 'quote'), [jobs]);
-  const artwork        = useMemo(() => quoteJobs.filter((j) => j.order === 'Artwork'), [quoteJobs]);
-  const digit          = useMemo(() => quoteJobs.filter((j) => j.order === 'Digitizing'), [quoteJobs]);
+  const awaitingClientUuid = useMemo(() => {
+    if (!awaitingFilters.clientId) return undefined;
+    return clients.find((c) => c.client_id === awaitingFilters.clientId)?.id;
+  }, [awaitingFilters.clientId, clients]);
 
-  // Apply filter bar on top of quote-stage base set
-  const filteredQuotes = useMemo(() => applyJobFilters(quoteJobs, filters), [quoteJobs, filters]);
+  // ── "Pending Your Review" — QUOTE_SUBMITTED jobs, server-side paginated ──
+  const pendingQuery = useAdminJobViews(useMemo(() => ({
+    page: pendingPage,
+    per_page: PER_PAGE,
+    status: 'QUOTE_SUBMITTED',
+    search: debouncedPendingSearch.trim() || undefined,
+    order_type: mapOrderType(pendingFilters.orderType),
+    priority: mapPriority(pendingFilters.priority),
+    client_id: pendingClientUuid,
+    date_from: pendingFilters.dateFrom || undefined,
+    date_to: pendingFilters.dateTo || undefined,
+  }), [pendingPage, debouncedPendingSearch, pendingFilters.orderType, pendingFilters.priority, pendingClientUuid, pendingFilters.dateFrom, pendingFilters.dateTo]));
 
-  const pending        = useMemo(() => filteredQuotes.filter((j) => j.status === 'Quote Submitted'), [filteredQuotes]);
-  const awaitingClient = useMemo(() => filteredQuotes.filter((j) => j.status === 'Quote Approved'),  [filteredQuotes]);
+  // ── "Price Sent — Awaiting Client" — QUOTE_APPROVED jobs, server-side paginated ──
+  const awaitingQuery = useAdminJobViews(useMemo(() => ({
+    page: awaitingPage,
+    per_page: PER_PAGE,
+    status: 'QUOTE_APPROVED',
+    search: debouncedAwaitingSearch.trim() || undefined,
+    order_type: mapOrderType(awaitingFilters.orderType),
+    priority: mapPriority(awaitingFilters.priority),
+    client_id: awaitingClientUuid,
+    date_from: awaitingFilters.dateFrom || undefined,
+    date_to: awaitingFilters.dateTo || undefined,
+  }), [awaitingPage, debouncedAwaitingSearch, awaitingFilters.orderType, awaitingFilters.priority, awaitingClientUuid, awaitingFilters.dateFrom, awaitingFilters.dateTo]));
 
-  const pendingPages   = Math.ceil(pending.length / PER_PAGE);
-  const awaitingPages  = Math.ceil(awaitingClient.length / PER_PAGE);
+  const pendingPages  = Math.ceil(pendingQuery.total  / PER_PAGE);
+  const awaitingPages = Math.ceil(awaitingQuery.total / PER_PAGE);
 
-  const pendingPageItems  = useMemo(
-    () => pending.slice((pendingPage - 1) * PER_PAGE, pendingPage * PER_PAGE),
-    [pending, pendingPage],
-  );
-  const awaitingPageItems = useMemo(
-    () => awaitingClient.slice((awaitingPage - 1) * PER_PAGE, awaitingPage * PER_PAGE),
-    [awaitingClient, awaitingPage],
-  );
+  const isLoading = pendingQuery.isLoading || awaitingQuery.isLoading;
+  const isError   = pendingQuery.isError   || awaitingQuery.isError;
 
-  function handleFiltersChange(next: JobFilters) {
-    setFilters(next);
+  function handlePendingFiltersChange(next: JobFilters) {
+    setPendingFilters(next);
     setPendingPage(1);
+  }
+
+  function handleAwaitingFiltersChange(next: JobFilters) {
+    setAwaitingFilters(next);
     setAwaitingPage(1);
   }
 
@@ -74,10 +117,8 @@ export function AdminNewQuotesPage() {
 
       <StatGrid
         stats={[
-          { accent: 'crimson', label: 'Pending Review',  value: isLoading ? '…' : pending.length },
-          { accent: 'amber',   label: 'Awaiting Client', value: isLoading ? '…' : awaitingClient.length },
-          { accent: 'blue',    label: 'Artwork',         value: isLoading ? '…' : artwork.length },
-          { accent: 'teal',    label: 'Digitizing',      value: isLoading ? '…' : digit.length },
+          { accent: 'crimson', label: 'Pending Review',  value: isLoading ? '…' : pendingQuery.total },
+          { accent: 'amber',   label: 'Awaiting Client', value: isLoading ? '…' : awaitingQuery.total },
         ]}
       />
 
@@ -89,43 +130,57 @@ export function AdminNewQuotesPage() {
         <>
           <SectionHeader title="Pending Your Review" />
           <JobTable
-            jobs={pendingPageItems}
+            jobs={pendingQuery.jobs}
             showActions
             defaultView="grid"
             emptyLabel="No pending quotes match the current filters."
             quoteView
             toolbarSlot={
               <JobFilterBar
-                filters={filters}
-                onChange={handleFiltersChange}
-                statusOptions={QUOTE_STATUS_OPTIONS}
+                filters={pendingFilters}
+                onChange={handlePendingFiltersChange}
+                statusOptions={[]}
                 clients={clients}
               />
             }
           />
-          {pending.length > 0 && (
+          {pendingQuery.total > 0 && (
             <Pagination
               page={pendingPage}
               totalPages={pendingPages}
-              total={pending.length}
+              total={pendingQuery.total}
               perPage={PER_PAGE}
               onPageChange={setPendingPage}
             />
           )}
 
-          {awaitingClient.length > 0 && (
-            <div className="mt-6">
-              <SectionHeader title="Price Sent — Awaiting Client" />
-              <JobTable jobs={awaitingPageItems} showActions defaultView="grid" quoteView />
+          <div className="mt-6">
+            <SectionHeader title="Price Sent — Awaiting Client" />
+            <JobTable
+              jobs={awaitingQuery.jobs}
+              showActions
+              defaultView="grid"
+              quoteView
+              emptyLabel="No awaiting client quotes match the current filters."
+              toolbarSlot={
+                <JobFilterBar
+                  filters={awaitingFilters}
+                  onChange={handleAwaitingFiltersChange}
+                  statusOptions={[]}
+                  clients={clients}
+                />
+              }
+            />
+            {awaitingQuery.total > 0 && (
               <Pagination
                 page={awaitingPage}
                 totalPages={awaitingPages}
-                total={awaitingClient.length}
+                total={awaitingQuery.total}
                 perPage={PER_PAGE}
                 onPageChange={setAwaitingPage}
               />
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

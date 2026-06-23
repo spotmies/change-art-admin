@@ -1,8 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { CreateJobForm, GreetingHero } from '@modules/shared-ui';
+import { useAdminClients, useCreateJobCard, useProvisionClient } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 export function CSPlaceOrderPage() {
   const navigate = useNavigate();
+  const { data, isLoading, isError } = useAdminClients({ per_page: 200 });
+  const { mutateAsync: provisionClient } = useProvisionClient();
+  const { mutateAsync: createJobCard } = useCreateJobCard();
   return (
     <div className="page">
       <GreetingHero
@@ -11,10 +15,12 @@ export function CSPlaceOrderPage() {
       />
       <CreateJobForm
         mode="order"
-        onSubmit={(id) => {
-          console.info(`Order ${id} placed`);
-          navigate('/cs/new-jobs');
-        }}
+        clients={data?.items ?? []}
+        clientsLoading={isLoading}
+        clientsError={isError}
+        onProvisionClient={provisionClient}
+        onCreateJob={createJobCard}
+        onSubmit={() => navigate('/cs/new-jobs')}
       />
     </div>
   );

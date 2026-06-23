@@ -105,10 +105,11 @@ export enum JobStatus {
 }
 
 export enum PaymentMode {
-  CASH = 'CASH',
-  CARD = 'CARD',
-  BANK_TRANSFER = 'BANK_TRANSFER',
-  CREDIT = 'CREDIT',
+  CREDIT_CARD = 'CREDIT_CARD',
+  CARD_ON_FILE = 'CARD_ON_FILE',
+  ACH = 'ACH',
+  PAYPAL = 'PAYPAL',
+  CHECK = 'CHECK',
 }
 
 export enum QCRejectionReason {

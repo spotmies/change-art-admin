@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, Search } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
 import type { IUser } from '@contracts';
-import { useAdminUsers } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminUsers, useDeleteUser } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { ApiClientError } from '@lib/api-client';
 import { UserFormModal, type UserModalMode } from '../../modules/admin-panel/components/UserFormModal';
 
 const PER_PAGE = 20;
@@ -47,9 +49,11 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modal, setModal] = useState<{ mode: UserModalMode; user: IUser | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<IUser | null>(null);
 
   // Clients are excluded server-side by the hook; this only returns staff.
   const { data, isLoading, isError } = useAdminUsers({ per_page: FETCH_LIMIT });
+  const deleteMutation = useDeleteUser();
 
   const allUsers = useMemo<IUser[]>(() => data?.items ?? [], [data]);
 
@@ -212,15 +216,26 @@ export function AdminUsersPage() {
                         </span>
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          aria-label={`Edit ${u.name}`}
-                          onClick={() => setModal({ mode: 'edit', user: u })}
-                        >
-                          <Pencil aria-hidden className="w-3.5 h-3.5" />
-                          Edit
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            aria-label={`Edit ${u.name}`}
+                            onClick={() => setModal({ mode: 'edit', user: u })}
+                          >
+                            <Pencil aria-hidden className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            aria-label={`Delete ${u.name}`}
+                            style={{ color: 'var(--color-crimson)', borderColor: 'rgba(196,30,58,0.35)' }}
+                            onClick={() => setDeleteTarget(u)}
+                          >
+                            <Trash2 aria-hidden className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -242,6 +257,73 @@ export function AdminUsersPage() {
       {modal ? (
         <UserFormModal mode={modal.mode} user={modal.user} onClose={() => setModal(null)} />
       ) : null}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+          style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget && !deleteMutation.isPending) setDeleteTarget(null); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm delete user"
+            className="w-full max-w-[420px] rounded-2xl overflow-hidden"
+            style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border-bright)', boxShadow: '0 8px 32px rgba(15,23,42,0.12)' }}
+          >
+            <div className="px-5 py-4 font-semibold" style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--glass-border)' }}>
+              Delete user?
+            </div>
+            <div className="px-5 py-4 text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
+              <div className="mb-2">
+                <span className="font-bold" style={{ color: 'var(--text-main)' }}>{deleteTarget.name}</span>
+                <span className="ml-1">({deleteTarget.email})</span>
+              </div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>The user will be permanently removed.</li>
+                <li>All their sessions will be invalidated immediately.</li>
+                <li>This action cannot be undone.</li>
+              </ul>
+            </div>
+            {deleteMutation.isError && (
+              <div className="px-5 pb-3 text-[11.5px]" style={{ color: 'var(--color-crimson, #c41e3a)' }}>
+                {deleteMutation.error instanceof ApiClientError ? deleteMutation.error.toUserMessage() : 'Failed to delete user.'} — click Delete User to retry.
+              </div>
+            )}
+            <div className="flex justify-end gap-2 px-5 py-3.5" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--glass-bg-light, rgba(15,23,42,0.03))' }}>
+              <button
+                type="button"
+                className="btn btn-outline disabled:opacity-60"
+                disabled={deleteMutation.isPending}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteMutation.isPending}
+                className="btn btn-crimson disabled:opacity-50"
+                onClick={() => {
+                  deleteMutation.mutate(deleteTarget.id, {
+                    onSuccess: () => {
+                      toast.success(`${deleteTarget.name} has been deleted.`);
+                      setDeleteTarget(null);
+                    },
+                  });
+                }}
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 aria-hidden className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Trash2 aria-hidden className="w-3.5 h-3.5" />
+                )}
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

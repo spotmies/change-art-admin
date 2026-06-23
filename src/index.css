@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Scroll lock: toggled by JS via classList — avoids inline style conflicts ── */
+body.scroll-locked { overflow: hidden; }
+
 /* ── Strip browser spinner arrows from all number inputs ── */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
@@ -1181,6 +1184,8 @@ html[data-theme='light'] .mb-track {
 
   .jc-img {
     position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--glass-border);
   }
 
   .jc-img::after {
@@ -1194,7 +1199,7 @@ html[data-theme='light'] .mb-track {
   .jc-img img {
     width: 100%;
     height: 160px;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
     background: rgba(0, 0, 0, 0.06);
   }

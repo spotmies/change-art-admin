@@ -34,6 +34,7 @@ export const queryKeys = {
     timeline: (id: string) => ['jobs', 'timeline', id] as const,
     versions: (id: string) => ['jobs', 'versions', id] as const,
     adminCopy: (originalJobId: string) => ['jobs', 'adminCopy', originalJobId] as const,
+    badges: () => ['jobs', 'badges'] as const,
   },
 
   reviews: {

@@ -10,10 +10,11 @@ import type { UpdateClientBody } from '../services/admin.service';
 export type ClientModalMode = 'view' | 'edit';
 
 const PAYMENT_OPTIONS: { value: PaymentMode; label: string }[] = [
-  { value: PaymentMode.BANK_TRANSFER, label: 'Bank Transfer' },
-  { value: PaymentMode.CASH, label: 'Cash' },
-  { value: PaymentMode.CARD, label: 'Card' },
-  { value: PaymentMode.CREDIT, label: 'Credit' },
+  { value: PaymentMode.CREDIT_CARD, label: 'Credit Card' },
+  { value: PaymentMode.CARD_ON_FILE, label: 'Card on File' },
+  { value: PaymentMode.ACH, label: 'ACH' },
+  { value: PaymentMode.PAYPAL, label: 'PayPal' },
+  { value: PaymentMode.CHECK, label: 'Check' },
 ];
 
 function formatPaymentMode(mode: PaymentMode | null): string {

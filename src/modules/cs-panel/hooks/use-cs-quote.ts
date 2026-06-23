@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
-import { toastApiError } from '@lib/toast-error';
+import { toastApiError, ValidationError } from '@lib/toast-error';
 import {
   csQuoteService,
   type SendQuotePriceBody,
@@ -15,10 +15,14 @@ export type { SendQuotePriceBody, RejectQuoteBody, DispatchJobBody, MarkComplete
 export function useSendQuotePrice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ jobId, body }: { jobId: string; body: SendQuotePriceBody }) =>
-      csQuoteService.sendQuotePrice(jobId, body),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    mutationFn: ({ jobId, body }: { jobId: string; body: SendQuotePriceBody }) => {
+      if (!jobId?.trim()) throw new ValidationError('Job ID is required.');
+      if (!Number.isFinite(body.amount) || body.amount <= 0) throw new ValidationError('Amount must be a positive number.');
+      return csQuoteService.sendQuotePrice(jobId, body);
+    },
+    onSuccess: (job) => {
+      qc.setQueryData(queryKeys.jobs.byId(job.id), job);
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
       void qc.invalidateQueries({ queryKey: queryKeys.quotes.all() });
       toast.success('Price sent to client for confirmation.');
     },

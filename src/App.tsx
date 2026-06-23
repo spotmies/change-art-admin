@@ -22,7 +22,7 @@ export function App() {
               position="top-center"
               gutter={10}
               toastOptions={{
-                duration: 4000,
+                duration: 2500,
                 style: {
                   background: 'var(--glass-bg)',
                   color: 'var(--text-main)',

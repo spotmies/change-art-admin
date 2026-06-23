@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Mail, X, ShieldAlert, KeyRound } from 'lucide-react';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import { ApiClientError } from '@lib/api-client';
-import { ERROR_CODES } from '@contracts';
+import { ERROR_CODES, UserRole } from '@contracts';
 
 interface ClientSectionGateModalProps {
   /** Called when OTP is successfully verified. */
@@ -20,6 +20,7 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const otpRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -40,7 +41,10 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
 
   if (!user) return null;
 
-  const maskedEmail = user.email.replace(/(.{2}).+(@.+)/, '$1•••$2');
+  const displayEmail = sentToEmail || user.email;
+  const maskedEmail = displayEmail.includes('@')
+    ? displayEmail.replace(/(.{2}).+(@.+)/, '$1•••$2')
+    : displayEmail;
 
   async function handleRequestOtp(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +52,10 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
     setPending(true);
     try {
       const { adminService } = await import('../services/admin.service');
-      await adminService.requestAccessOtp();
+      const res = await adminService.requestAccessOtp();
+      if (res && res.email) {
+        setSentToEmail(res.email);
+      }
       setStep('verify');
     } catch {
       setError('Failed to send OTP. Check your connection and try again.');
@@ -136,8 +143,17 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
             >
               <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-text-faint" aria-hidden />
               <span className="text-text-muted leading-relaxed">
-                A one-time code will be sent to{' '}
-                <strong style={{ color: 'var(--text)' }}>{maskedEmail}</strong>.
+                {user.role === UserRole.CS ? (
+                  <>
+                    A one-time code will be sent to the{' '}
+                    <strong style={{ color: 'var(--text)' }}>{"administrator's email"}</strong>.
+                  </>
+                ) : (
+                  <>
+                    A one-time code will be sent to{' '}
+                    <strong style={{ color: 'var(--text)' }}>{maskedEmail}</strong>.
+                  </>
+                )}
               </span>
             </div>
 

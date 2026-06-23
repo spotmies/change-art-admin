@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useSessionUser, useAuthStore } from '@modules/auth/stores/auth-store';
@@ -46,6 +47,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
   const adminBadges = useAdminNavBadges(user?.role === UserRole.ADMIN);
 
   const [seen, setSeen] = useState<Record<string, number>>(readNavSeen);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const markSeen = useCallback((id: string, count: number) => {
     setSeen((prev) => {
@@ -80,6 +82,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
   const navConfig = NAV_CONFIG[user.role];
 
   async function handleSignOut() {
+    setConfirmOpen(false);
     await authService.signOut();
     reset();
   }
@@ -92,6 +95,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
   );
 
   return (
+    <>
     <aside className={asideClass} aria-label="Primary navigation">
       {/* Brand */}
       <div className="px-4 pt-3 pb-3 border-b border-glass-border">
@@ -164,7 +168,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
           </NavLink>
           <button
             type="button"
-            onClick={handleSignOut}
+            onClick={() => setConfirmOpen(true)}
             className="ml-auto px-2 py-1.5 rounded-md border border-glass-border text-text-muted text-[11px] hover:border-crimson/50 hover:text-crimson transition flex-shrink-0"
             aria-label="Sign out"
           >
@@ -173,6 +177,12 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
         </div>
       </div>
     </aside>
+    <LogoutConfirmDialog
+      open={confirmOpen}
+      onCancel={() => setConfirmOpen(false)}
+      onConfirm={handleSignOut}
+    />
+    </>
   );
 }
 
@@ -213,5 +223,57 @@ function SidebarItem({
         ) : null}
       </NavLink>
     </li>
+  );
+}
+
+function LogoutConfirmDialog({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm sign out"
+        className="glass-heavy rounded-2xl w-full max-w-[360px] p-6 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-[15px] font-bold mb-2">
+          Sign out?
+        </h2>
+        <p className="text-[13px] text-text-muted leading-relaxed mb-6">
+          You will need to log in again to access your account.
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={onCancel}
+          >
+            Stay signed in
+          </button>
+          <button
+            type="button"
+            className="btn btn-crimson"
+            onClick={onConfirm}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

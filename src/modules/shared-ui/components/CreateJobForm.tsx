@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Send, Save, Upload, Check, ArrowRight, ArrowLeft, X, Loader2, FileText } from 'lucide-react';
+import { Send, Save, Upload, Check, ArrowRight, ArrowLeft, X, Loader2, FileText, Eye, EyeOff, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   FinalFileFormat,
+  type IClient,
+  type IJobCard,
   OrderType,
   Placement,
   Priority,
   ProcessType,
   ProjectType,
+  FileCategory,
 } from '@contracts';
 import { cn } from '@lib/utils';
-import { CLIENTS } from '../mocks';
+import { apiClient } from '@lib/api-client';
 
 export interface ClientBriefData {
   client_id?: string;
   order_type: OrderType;
   project_type: ProjectType;
   design_name: string;
-  eta_hours: number;
+  eta_hours?: number;
   priority?: Priority;
   process_type?: ProcessType;
   num_colors?: number;
@@ -34,8 +37,50 @@ export interface ClientBriefData {
   files: File[];
 }
 
+interface NewClientProvisionBody {
+  client_name: string;
+  contact_name: string;
+  contact_number: string;
+  email: string;
+  password: string;
+  company_name?: string;
+}
+
+interface CreateJobCardBody {
+  client_id: string;
+  mail: string;
+  order_type: string;
+  project_type: string;
+  design_name: string;
+  eta_hours?: number;
+  priority?: string;
+  process_type?: string;
+  final_files?: string[];
+  placement?: string;
+  width_inches?: number;
+  height_inches?: number;
+  num_colors?: number;
+  fabric?: string;
+  sewout_required?: boolean;
+  description?: string;
+  billing_address?: string;
+  shipping_address?: string;
+  client_po?: string;
+}
+
+interface SendQuotePriceBody {
+  amount: number;
+  currency?: string;
+}
+
 interface CreateJobFormProps {
   mode: 'quote' | 'order';
+  clients?: IClient[];
+  clientsLoading?: boolean;
+  clientsError?: boolean;
+  onProvisionClient?: (body: NewClientProvisionBody) => Promise<IClient>;
+  onCreateJob?: (body: CreateJobCardBody) => Promise<IJobCard>;
+  onSendPrice?: (jobId: string, body: SendQuotePriceBody) => Promise<IJobCard>;
   onSubmit?: (id: string) => void | Promise<void>;
   onSaveDraft?: (data: Partial<ClientBriefData>) => void | Promise<void>;
   submitting?: boolean;
@@ -106,13 +151,77 @@ const PLACEMENT_MAP: Record<string, Placement> = {
   'Others': Placement.OTHER,
 };
 
+const ALLOWED_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/svg+xml',
+  'image/x-eps',
+  'application/postscript',
+  'application/illustrator',
+  'application/x-coreldraw',
+  'application/octet-stream',
+]);
+
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+function resolveFileType(file: File): string {
+  if (file.type && ALLOWED_TYPES.has(file.type)) {
+    return file.type;
+  }
+  // Reject files with unrecognised MIME types rather than silently treating
+  // them as generic binaries — prevents executables and scripts slipping through.
+  throw new Error(`File "${file.name}" has an unsupported type: "${file.type || '(empty)'}". Allowed types are PDF, images, EPS, AI, and CDR.`);
+}
+
+async function uploadSingleFile(jobId: string, file: File): Promise<void> {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`File "${file.name}" exceeds the 50 MB size limit.`);
+  }
+  const fileType = resolveFileType(file);
+  const presign = await apiClient.post<{ uploadUrl: string; storageKey: string }>('/api/v1/files/upload-url', {
+    job_card_id: jobId,
+    file_category: FileCategory.ORIGINAL,
+    file_name: file.name,
+    file_type: fileType,
+    file_size_bytes: file.size,
+  });
+
+  const res = await fetch(presign.uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': fileType },
+  });
+  if (!res.ok) {
+    throw new Error(`Storage upload failed for "${file.name}" (HTTP ${res.status}).`);
+  }
+
+  await apiClient.post('/api/v1/files/complete-upload', {
+    job_card_id: jobId,
+    storage_key: presign.storageKey,
+    file_category: FileCategory.ORIGINAL,
+    file_name: file.name,
+    file_type: fileType,
+    file_size_bytes: file.size,
+  });
+}
+
+async function uploadOriginalFiles(jobId: string, files: File[]): Promise<void> {
+  const results = await Promise.allSettled(files.map(file => uploadSingleFile(jobId, file)));
+  const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failures.length > 0) {
+    const messages = failures.map(f => (f.reason instanceof Error ? f.reason.message : String(f.reason)));
+    throw new Error(messages.join('\n'));
+  }
+}
+
 function toNum(v: FormDataEntryValue | null): number | undefined {
   if (v == null || v === '') return undefined;
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false, savingDraft = false }: CreateJobFormProps) {
+export function CreateJobForm({ mode, clients = [], clientsLoading = false, clientsError = false, onProvisionClient, onCreateJob, onSendPrice, onSubmit, onSaveDraft, submitting = false, savingDraft = false }: CreateJobFormProps) {
   const isOrder = mode === 'order';
   const [phase, setPhase] = useState<1 | 2>(1);
   const [clientId, setClientId] = useState('');
@@ -125,6 +234,20 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
   const [confirmOrderOpen, setConfirmOrderOpen] = useState(false);
   const [confirmOrderText, setConfirmOrderText] = useState('');
   const [pendingOrderData, setPendingOrderData] = useState<ClientBriefData | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+  const [newClientContact, setNewClientContact] = useState('');
+  const [newClientPassword, setNewClientPassword] = useState('');
+  const [newClientConfirmPassword, setNewClientConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [provisioningClient, setProvisioningClient] = useState(false);
+  const [newClientFieldErrors, setNewClientFieldErrors] = useState<Record<string, string>>({});
+  const [selectedClientData, setSelectedClientData] = useState<IClient | null>(null);
+  const [quotedPrice, setQuotedPrice] = useState('');
+  const [quoteCurrency] = useState('USD');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const placementSectionRef = useRef<HTMLDivElement>(null);
@@ -210,6 +333,18 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
   useEffect(() => {
     setSelectedFormatOption('');
   }, [selectedService]);
+
+  useEffect(() => {
+    if (!clientDropdownOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+        setClientSearch('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [clientDropdownOpen]);
 
   const formatOptions = useMemo(() => {
     if (specificService === 'Custom Embroidery Patches') return [];
@@ -325,6 +460,14 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
     setFieldErrors(new Set());
     setSelectedProcessType('');
     setSelectedPlacement('');
+    setNewClientContact('');
+    setNewClientPassword('');
+    setNewClientConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setNewClientFieldErrors({});
+    setSelectedClientData(null);
+    setQuotedPrice('');
   }
 
   async function handleSaveDraft() {
@@ -351,12 +494,14 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
       return mapped.length > 0 ? mapped : [FinalFileFormat.OTHERS];
     })();
 
+    const draftTurnaround = toNum(fd.get('eta'));
+
     const data: Partial<ClientBriefData> = {
       client_id: clientId !== 'new' ? clientId : undefined,
       order_type,
       project_type: isOrder ? ProjectType.LIVE : ProjectType.QUOTE,
       design_name: designName,
-      eta_hours: 24,
+      ...(draftTurnaround != null ? { eta_hours: draftTurnaround } : {}),
       ...(brief ? { description: brief } : {}),
       final_files: finalFiles,
       ...(PRIORITY_ENUM[priorityLabel] ? { priority: PRIORITY_ENUM[priorityLabel] } : {}),
@@ -389,14 +534,14 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || isSubmitting) return;
     const fd = new FormData(e.currentTarget);
 
     if (!clientId) { toast.error('Client selection is missing.'); return; }
 
     const designName = String(fd.get('design') ?? '').trim();
     const brief = String(fd.get('brief') ?? '').trim();
-    const turnaround = toNum(fd.get('eta')) ?? 24;
+    const turnaround = toNum(fd.get('eta'));
     const priorityLabel = String(fd.get('priority') ?? '');
 
     const isColorSeparation = specificService === 'Color Separation';
@@ -451,7 +596,7 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
       order_type,
       project_type: isOrder ? ProjectType.LIVE : ProjectType.QUOTE,
       design_name: designName,
-      eta_hours: turnaround,
+      ...(turnaround != null ? { eta_hours: turnaround } : {}),
       description: (() => {
         let desc = brief;
 
@@ -639,31 +784,138 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
     }
 
     if (isOrder) {
+      if (!selectedClientData) {
+        toast.error('Client data is missing. Please re-select the client.');
+        return;
+      }
       setPendingOrderData(data);
+      setConfirmOrderText('');
       setConfirmOrderOpen(true);
     } else {
-      toast.success('Quote request submitted');
-      const newId = `Q-2025-${String(80 + Math.floor(Math.random() * 50)).padStart(4, '0')}`;
-      if (onSubmit) {
-        await onSubmit(newId);
+      if (!onCreateJob) {
+        toast.error('Job creation is not configured.');
+        return;
       }
-      resetForm(e.currentTarget);
+      if (!selectedClientData) {
+        toast.error('Client data is missing. Please re-select the client.');
+        return;
+      }
+
+      const clientPO = String(fd.get('client_po') ?? '').trim();
+      const body: CreateJobCardBody = {
+        client_id: selectedClientData.id,
+        mail: selectedClientData.email,
+        order_type: data.order_type,
+        project_type: data.project_type,
+        design_name: data.design_name,
+        ...(data.eta_hours != null ? { eta_hours: data.eta_hours } : {}),
+        ...(data.description ? { description: data.description } : {}),
+        ...(data.priority ? { priority: data.priority } : {}),
+        ...(data.process_type ? { process_type: data.process_type } : {}),
+        ...(data.final_files?.length ? { final_files: data.final_files } : {}),
+        ...(data.placement ? { placement: data.placement } : {}),
+        ...(data.width_inches != null ? { width_inches: data.width_inches } : {}),
+        ...(data.height_inches != null ? { height_inches: data.height_inches } : {}),
+        ...(data.num_colors != null ? { num_colors: data.num_colors } : {}),
+        ...(data.fabric ? { fabric: data.fabric } : {}),
+        ...(data.sewout_required != null ? { sewout_required: data.sewout_required } : {}),
+        ...(data.billing_address ? { billing_address: data.billing_address } : {}),
+        ...(data.shipping_address ? { shipping_address: data.shipping_address } : {}),
+        ...(clientPO ? { client_po: clientPO } : {}),
+      };
+
+      setIsSubmitting(true);
+      try {
+        const job = await onCreateJob(body);
+
+        if (files.length > 0) {
+          try {
+            await uploadOriginalFiles(job.id, files);
+          } catch (err) {
+            toast.error('Quote created, but some files failed to upload. You can add them later.');
+          }
+        }
+
+        const priceAmount = parseFloat(quotedPrice);
+        if (quotedPrice && !isNaN(priceAmount) && priceAmount > 0 && onSendPrice) {
+          try {
+            await onSendPrice(job.id, { amount: priceAmount, currency: quoteCurrency });
+            toast.success(`Quote ${job.job_id} created and price sent to client`);
+          } catch {
+            toast.success(`Quote ${job.job_id} created`, { duration: 4000 });
+            toast.error('Price could not be sent — open the job and use "Send Price" to set it.', { duration: 8000 });
+          }
+        } else {
+          toast.success(`Quote ${job.job_id} created successfully`);
+        }
+
+        if (onSubmit) await onSubmit(job.id);
+        resetForm(e.currentTarget);
+      } catch {
+        // Job creation failed — error already toasted by the mutation's onError
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   }
 
   async function handleConfirmedOrder() {
-    if (!pendingOrderData) return;
+    if (!pendingOrderData || !selectedClientData) return;
+    if (!onCreateJob) {
+      toast.error('Order submission is not configured.');
+      return;
+    }
+
     setConfirmOrderOpen(false);
     setConfirmOrderText('');
-    toast.success('Order submitted');
-    const newId = `J-2025-${String(50 + Math.floor(Math.random() * 50)).padStart(4, '0')}`;
-    if (onSubmit) {
-      await onSubmit(newId);
+
+    const clientPO = formRef.current
+      ? String(new FormData(formRef.current).get('client_po') ?? '').trim()
+      : '';
+
+    const body: CreateJobCardBody = {
+      client_id: selectedClientData.id,
+      mail: selectedClientData.email,
+      order_type: pendingOrderData.order_type,
+      project_type: pendingOrderData.project_type,
+      design_name: pendingOrderData.design_name,
+      ...(pendingOrderData.eta_hours != null ? { eta_hours: pendingOrderData.eta_hours } : {}),
+      ...(pendingOrderData.description ? { description: pendingOrderData.description } : {}),
+      ...(pendingOrderData.priority ? { priority: pendingOrderData.priority } : {}),
+      ...(pendingOrderData.process_type ? { process_type: pendingOrderData.process_type } : {}),
+      ...(pendingOrderData.final_files?.length ? { final_files: pendingOrderData.final_files } : {}),
+      ...(pendingOrderData.placement ? { placement: pendingOrderData.placement } : {}),
+      ...(pendingOrderData.width_inches != null ? { width_inches: pendingOrderData.width_inches } : {}),
+      ...(pendingOrderData.height_inches != null ? { height_inches: pendingOrderData.height_inches } : {}),
+      ...(pendingOrderData.num_colors != null ? { num_colors: pendingOrderData.num_colors } : {}),
+      ...(pendingOrderData.fabric ? { fabric: pendingOrderData.fabric } : {}),
+      ...(pendingOrderData.sewout_required != null ? { sewout_required: pendingOrderData.sewout_required } : {}),
+      ...(pendingOrderData.billing_address ? { billing_address: pendingOrderData.billing_address } : {}),
+      ...(pendingOrderData.shipping_address ? { shipping_address: pendingOrderData.shipping_address } : {}),
+      ...(clientPO ? { client_po: clientPO } : {}),
+    };
+
+    setIsSubmitting(true);
+    try {
+      const job = await onCreateJob(body);
+
+      if (files.length > 0) {
+        try {
+          await uploadOriginalFiles(job.id, files);
+        } catch (err) {
+          toast.error('Order placed, but some files failed to upload. You can add them later.');
+        }
+      }
+
+      toast.success(`Order ${job.job_id} placed successfully`);
+      if (onSubmit) await onSubmit(job.id);
+      if (formRef.current) resetForm(formRef.current);
+      setPendingOrderData(null);
+    } catch {
+      // Error already toasted by the mutation's onError
+    } finally {
+      setIsSubmitting(false);
     }
-    if (formRef.current) {
-      resetForm(formRef.current);
-    }
-    setPendingOrderData(null);
   }
 
   return (
@@ -719,23 +971,158 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                 
                 <div style={{ marginBottom: '30px' }}>
                   <label className="fl">Select Existing Client <span style={{ color: '#c41e3a' }}>*</span></label>
-                  <select
-                    className="fi mb-2.5"
-                    value={clientId}
-                    onChange={(e) => {
-                      setClientId(e.target.value);
-                      setError(null);
-                    }}
-                    style={!clientId && fieldErrors.has('client') ? { borderColor: 'var(--color-crimson)' } : undefined}
-                  >
-                    <option value="">— Search or select an existing client —</option>
-                    {CLIENTS.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.company} — {c.name} ({c.id})
-                      </option>
-                    ))}
-                    <option value="new">+ Enter New Client</option>
-                  </select>
+                  {/* Custom searchable client dropdown */}
+                  <div ref={clientDropdownRef} style={{ position: 'relative' }}>
+                    {/* Trigger button */}
+                    <button
+                      type="button"
+                      className="fi mb-2.5"
+                      disabled={clientsLoading}
+                      onClick={() => {
+                        setClientDropdownOpen((o) => !o);
+                        setClientSearch('');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        textAlign: 'left',
+                        cursor: clientsLoading ? 'not-allowed' : 'pointer',
+                        ...((!clientId && fieldErrors.has('client')) ? { borderColor: 'var(--color-crimson)' } : {}),
+                      }}
+                    >
+                      <span style={{ color: clientId ? 'inherit' : 'var(--color-muted, #888)' }}>
+                        {clientsLoading
+                          ? 'Loading clients…'
+                          : clientsError
+                            ? 'Failed to load clients — try refreshing'
+                            : clientId === 'new'
+                              ? '+ Enter New Client'
+                              : clientId
+                                ? (() => { const c = clients.find((x) => x.client_id === clientId); return c ? `${c.company_name ?? c.client_name} — ${c.contact_name} (${c.client_id})` : clientId; })()
+                                : '— Search or select an existing client —'}
+                      </span>
+                      <span style={{ fontSize: 10, marginLeft: 8, opacity: 0.5 }}>{clientDropdownOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {/* Dropdown panel */}
+                    {clientDropdownOpen && !clientsLoading && !clientsError && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          zIndex: 50,
+                          background: 'var(--color-surface, #fff)',
+                          border: '1px solid var(--color-border, #e2e8f0)',
+                          borderRadius: 8,
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {/* Search input */}
+                        <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border, #e2e8f0)' }}>
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Search by name or company…"
+                            value={clientSearch}
+                            onChange={(e) => setClientSearch(e.target.value)}
+                            style={{
+                              width: '100%',
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: 13,
+                              color: 'inherit',
+                            }}
+                          />
+                        </div>
+
+                        {/* Scrollable list — 5 rows visible */}
+                        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                          {(() => {
+                            const term = clientSearch.trim().toLowerCase();
+                            const filtered = term
+                              ? clients.filter((c) =>
+                                  (c.company_name ?? '').toLowerCase().includes(term) ||
+                                  c.client_name.toLowerCase().includes(term) ||
+                                  c.contact_name.toLowerCase().includes(term) ||
+                                  c.client_id.toLowerCase().includes(term),
+                                )
+                              : clients;
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div style={{ padding: '10px 14px', fontSize: 13, opacity: 0.5 }}>
+                                  No clients found
+                                </div>
+                              );
+                            }
+
+                            return filtered.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setClientId(c.client_id);
+                                  setSelectedClientData(c);
+                                  setClientDropdownOpen(false);
+                                  setClientSearch('');
+                                  setError(null);
+                                }}
+                                style={{
+                                  display: 'block',
+                                  width: '100%',
+                                  textAlign: 'left',
+                                  padding: '9px 14px',
+                                  fontSize: 13,
+                                  background: clientId === c.client_id ? 'rgba(196,30,58,0.07)' : 'transparent',
+                                  color: 'inherit',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid var(--color-border, #f0f0f0)',
+                                }}
+                                onMouseEnter={(e) => { if (clientId !== c.client_id) (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-hover, rgba(0,0,0,0.04))'; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = clientId === c.client_id ? 'rgba(196,30,58,0.07)' : 'transparent'; }}
+                              >
+                                <span style={{ fontWeight: 500 }}>{c.company_name ?? c.client_name}</span>
+                                <span style={{ opacity: 0.6, marginLeft: 6 }}>— {c.contact_name} ({c.client_id})</span>
+                              </button>
+                            ));
+                          })()}
+                        </div>
+
+                        {/* Enter new client */}
+                        <div style={{ borderTop: '1px solid var(--color-border, #e2e8f0)' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClientId('new');
+                              setClientDropdownOpen(false);
+                              setClientSearch('');
+                              setError(null);
+                            }}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              padding: '9px 14px',
+                              fontSize: 13,
+                              color: 'var(--color-crimson, #c41e3a)',
+                              fontWeight: 600,
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            + Enter New Client
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {clientId === 'new' ? (
                     <div
@@ -750,11 +1137,205 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                         New Client Information
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <Field name="newClientName" label="Client Name *" placeholder="e.g. Ravi Kumar" />
-                        <Field name="newClientCompany" label="Company Name *" placeholder="e.g. Ravi Textiles" />
-                        <Field name="newClientContact" label="Contact Number" placeholder="+91 98765 43210" />
-                        <Field name="newClientEmail" label="Email Address" type="email" placeholder="client@company.com" />
+                        <div>
+                          <label className="fl">Client Name *</label>
+                          <input name="newClientName" className="fi" placeholder="e.g. Ravi Kumar"
+                            style={newClientFieldErrors.newClientName ? { borderColor: 'var(--color-crimson)' } : undefined}
+                            onChange={() => setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientName; return n; })}
+                          />
+                          {newClientFieldErrors.newClientName && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.newClientName}</p>}
+                        </div>
+                        <div>
+                          <label className="fl">Company Name</label>
+                          <input name="newClientCompany" className="fi" placeholder="e.g. Ravi Textiles" />
+                        </div>
+                        <div>
+                          <label className="fl">Contact Number *</label>
+                          <input
+                            name="newClientContact"
+                            className="fi"
+                            placeholder="+91 98765 43210"
+                            type="tel"
+                            inputMode="tel"
+                            value={newClientContact}
+                            onChange={(e) => {
+                              // Strip non-phone chars, then cap at 15 digits
+                              const filtered = e.target.value.replace(/[^+\d\s\-()]/g, '');
+                              const digits = filtered.replace(/\D/g, '');
+                              if (digits.length > 15) return;
+                              setNewClientContact(filtered);
+                              setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientContact; return n; });
+                            }}
+                            style={newClientFieldErrors.newClientContact ? { borderColor: 'var(--color-crimson)' } : undefined}
+                          />
+                          {newClientFieldErrors.newClientContact && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.newClientContact}</p>}
+                        </div>
+                        <div>
+                          <label className="fl">Email Address *</label>
+                          <input name="newClientEmail" className="fi" placeholder="client@company.com" type="email"
+                            style={newClientFieldErrors.newClientEmail ? { borderColor: 'var(--color-crimson)' } : undefined}
+                            onChange={() => setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientEmail; return n; })}
+                          />
+                          {newClientFieldErrors.newClientEmail && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.newClientEmail}</p>}
+                        </div>
+                        <div>
+                          <label className="fl">Password * <span style={{ color: '#888', fontSize: 10, fontWeight: 400, textTransform: 'none' }}>(min 8 chars)</span></label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              className="fi"
+                              type={showPassword ? 'text' : 'password'}
+                              placeholder="Set a password for the client"
+                              value={newClientPassword}
+                              onChange={(e) => { setNewClientPassword(e.target.value); setNewClientFieldErrors(p => { const n = {...p}; delete n.password; return n; }); }}
+                              autoComplete="new-password"
+                              style={{ paddingRight: 72, ...(newClientFieldErrors.password ? { borderColor: 'var(--color-crimson)' } : {}) }}
+                            />
+                            <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
+                              <button type="button" tabIndex={-1} title={showPassword ? 'Hide password' : 'Show password'}
+                                onClick={() => setShowPassword(v => !v)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--color-muted, #888)', display: 'flex', alignItems: 'center' }}>
+                                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                              </button>
+                              <button type="button" tabIndex={-1} title="Copy password"
+                                onClick={() => { void navigator.clipboard.writeText(newClientPassword); toast.success('Password copied'); }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--color-muted, #888)', display: 'flex', alignItems: 'center' }}>
+                                <Copy size={15} />
+                              </button>
+                            </div>
+                          </div>
+                          {newClientFieldErrors.password && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.password}</p>}
+                        </div>
+                        <div>
+                          <label className="fl">Confirm Password *</label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              className="fi"
+                              type={showConfirmPassword ? 'text' : 'password'}
+                              placeholder="Repeat the password"
+                              value={newClientConfirmPassword}
+                              onChange={(e) => { setNewClientConfirmPassword(e.target.value); setNewClientFieldErrors(p => { const n = {...p}; delete n.confirmPassword; return n; }); }}
+                              autoComplete="new-password"
+                              style={{ paddingRight: 72, ...(newClientFieldErrors.confirmPassword ? { borderColor: 'var(--color-crimson)' } : {}) }}
+                            />
+                            <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: 4 }}>
+                              <button type="button" tabIndex={-1} title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                                onClick={() => setShowConfirmPassword(v => !v)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--color-muted, #888)', display: 'flex', alignItems: 'center' }}>
+                                {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                              </button>
+                              <button type="button" tabIndex={-1} title="Copy password"
+                                onClick={() => { void navigator.clipboard.writeText(newClientConfirmPassword); toast.success('Password copied'); }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--color-muted, #888)', display: 'flex', alignItems: 'center' }}>
+                                <Copy size={15} />
+                              </button>
+                            </div>
+                          </div>
+                          {newClientFieldErrors.confirmPassword && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.confirmPassword}</p>}
+                        </div>
                       </div>
+
+                      {onProvisionClient && (
+                        <button
+                          type="button"
+                          disabled={provisioningClient}
+                          onClick={async () => {
+                            const form = formRef.current;
+                            if (!form) return;
+                            const fd = new FormData(form);
+                            const clientName = String(fd.get('newClientName') ?? '').trim();
+                            const company = String(fd.get('newClientCompany') ?? '').trim();
+                            const contact = String(fd.get('newClientContact') ?? '').trim();
+                            const email = String(fd.get('newClientEmail') ?? '').trim();
+
+                            const errors: Record<string, string> = {};
+
+                            if (!clientName) {
+                              errors.newClientName = 'Client name is required.';
+                            }
+
+                            // Contact: no letters, only phone-safe chars, 7–15 digits
+                            const digitsOnly = contact.replace(/\D/g, '');
+                            if (!contact) {
+                              errors.newClientContact = 'Contact number is required.';
+                            } else if (/[a-zA-Z]/.test(contact)) {
+                              errors.newClientContact = 'Contact number must not contain letters.';
+                            } else if (/[^+\d\s\-().]/.test(contact)) {
+                              errors.newClientContact = 'Only digits, spaces, +, -, and brackets are allowed.';
+                            } else if (digitsOnly.length < 7) {
+                              errors.newClientContact = 'Must have at least 7 digits (e.g. +91 98765 43210).';
+                            } else if (digitsOnly.length > 15) {
+                              errors.newClientContact = 'Must not exceed 15 digits.';
+                            }
+
+                            // Email: proper format check
+                            if (!email) {
+                              errors.newClientEmail = 'Email address is required.';
+                            } else if (!/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(email)) {
+                              errors.newClientEmail = 'Enter a valid email (e.g. name@company.com).';
+                            }
+
+                            if (newClientPassword.length < 8) {
+                              errors.password = 'Password must be at least 8 characters.';
+                            }
+                            if (newClientPassword && newClientConfirmPassword && newClientPassword !== newClientConfirmPassword) {
+                              errors.confirmPassword = 'Passwords do not match.';
+                            }
+
+                            if (Object.keys(errors).length > 0) {
+                              setNewClientFieldErrors(errors);
+                              return;
+                            }
+                            setNewClientFieldErrors({});
+
+                            setProvisioningClient(true);
+                            try {
+                              const created = await onProvisionClient({
+                                client_name: clientName,
+                                company_name: company || undefined,
+                                contact_name: clientName,
+                                contact_number: contact,
+                                email,
+                                password: newClientPassword,
+                              });
+                              setClientId(created.client_id);
+                              setSelectedClientData(created);
+                              setNewClientPassword('');
+                              setNewClientConfirmPassword('');
+                              toast.success(`Account created for ${created.client_name}. Login credentials sent to ${email}.`);
+                            } catch (err: unknown) {
+                              const code = (err as Record<string, unknown>)?.code as string | undefined;
+                              const isDuplicate =
+                                code === 'CLIENT_ID_TAKEN' || code === 'EMAIL_ALREADY_EXISTS';
+                              if (isDuplicate) {
+                                setNewClientFieldErrors((p) => ({
+                                  ...p,
+                                  newClientEmail: 'An account with this email already exists.',
+                                }));
+                              }
+                              // generic error already toasted by the mutation's onError
+                            } finally {
+                              setProvisioningClient(false);
+                            }
+                          }}
+                          style={{
+                            marginTop: 14,
+                            padding: '9px 20px',
+                            background: provisioningClient ? 'rgba(196,30,58,0.4)' : '#c41e3a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: provisioningClient ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                        >
+                          {provisioningClient && <Loader2 size={14} className="animate-spin" />}
+                          {provisioningClient ? 'Creating account…' : 'Create Client Account'}
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -839,12 +1420,31 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
 
                     <Field
                       name="eta"
-                      label="ESTIMATED TURNAROUND (HOURS) *"
+                      label="ESTIMATED TURNAROUND (HOURS)"
                       type="number"
                       min={2}
-                      defaultValue={24}
                       placeholder="e.g. 24"
                     />
+
+                    {/* Price — quote mode only */}
+                    {!isOrder && (
+                      <div>
+                        <label className="fl">QUOTED PRICE (USD)</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ color: 'var(--color-text-muted, #94a3b8)', fontWeight: 600, fontSize: 14 }}>$</span>
+                          <input
+                            className="fi"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 150.00"
+                            value={quotedPrice}
+                            onChange={(e) => setQuotedPrice(e.target.value)}
+                            style={{ flex: 1 }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {(selectedService === 'Vector Artwork' ||
                       selectedService === 'Business Card' ||
@@ -1347,13 +1947,13 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
                       )}
                       {savingDraft ? 'Saving...' : 'Save Draft'}
                     </button>
-                    <button type="submit" className="btn btn-navy disabled:opacity-60" disabled={submitting}>
-                      {submitting ? (
+                    <button type="submit" className="btn btn-navy disabled:opacity-60" disabled={submitting || isSubmitting}>
+                      {(submitting || isSubmitting) ? (
                         <Loader2 aria-hidden className="w-4 h-4 animate-spin" />
                       ) : (
                         <Send aria-hidden className="w-4 h-4" />
                       )}
-                      {isOrder ? 'Submit Order' : 'Submit Quote Request'}
+                      {isOrder ? 'Submit Order' : 'Submit Quote'}
                     </button>
                   </div>
                 </div>
@@ -1363,77 +1963,66 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
         </div>
       </form>
 
-    {/* Confirm Order dialog — order mode only, requires typing "confirm" */}
+    {/* Confirm Order dialog — order mode only */}
     {confirmOrderOpen && pendingOrderData && (
       <div
         className="fixed inset-0 z-[60] flex items-center justify-center px-4"
         style={{
-          background: 'rgba(3, 6, 15, 0.78)',
+          background: 'rgba(15,23,42,0.35)',
           backdropFilter: 'blur(6px)',
           WebkitBackdropFilter: 'blur(6px)',
         }}
-        onClick={(e) => { if (e.target === e.currentTarget && !submitting) { setConfirmOrderOpen(false); setConfirmOrderText(''); } }}
+        onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) { setConfirmOrderOpen(false); setConfirmOrderText(''); } }}
         role="presentation"
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Confirm place order"
-          className="w-full max-w-[420px] rounded-2xl overflow-hidden"
+          className="w-full max-w-[440px] rounded-2xl overflow-hidden"
           style={{
-            background: 'rgba(8, 14, 30, 0.96)',
+            background: 'var(--glass-bg)',
             border: '1px solid var(--glass-border-bright)',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+            boxShadow: '0 8px 32px rgba(15,23,42,0.12)',
           }}
         >
           {/* Header */}
           <div
-            className="flex items-center gap-3 px-5 py-4"
-            style={{ borderBottom: '1px solid var(--glass-border)' }}
+            className="px-5 py-4 font-semibold"
+            style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--glass-border)' }}
           >
-            <div
-              className="flex items-center justify-center w-8 h-8 rounded-full shrink-0"
-              style={{ background: 'rgba(196,30,58,0.18)', border: '1px solid rgba(196,30,58,0.4)' }}
-            >
-              <Send className="w-4 h-4" style={{ color: '#c41e3a' }} strokeWidth={2.5} aria-hidden />
-            </div>
-            <span className="text-white font-semibold text-[15px]">Place Order</span>
+            Place this order?
           </div>
 
           {/* Body */}
-          <div className="px-5 py-4 flex flex-col gap-4">
-            <div className="text-[12.5px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              You are about to submit&nbsp;
-              <span className="font-bold text-white">{pendingOrderData.design_name}</span>&nbsp;
-              as a live order. Our CS team will be notified and production will begin shortly.
+          <div className="px-5 py-4 text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
+            <div className="mb-2">
+              <span className="font-bold" style={{ color: 'var(--text-main)' }}>{pendingOrderData.design_name}</span>
+              {selectedClientData ? <> &mdash; {selectedClientData.client_name}</> : null}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="confirm-order-input"
-                className="text-[11px] font-bold uppercase tracking-widest"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Type&nbsp;<span style={{ color: '#c41e3a' }}>confirm</span>&nbsp;to proceed
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Order is placed directly into production.</li>
+              <li>The client will be notified by email.</li>
+              <li>This action cannot be undone.</li>
+            </ul>
+            <div className="mt-4">
+              <label className="block mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                Type <span className="font-bold" style={{ color: 'var(--text-main)' }}>CONFIRM</span> to proceed
               </label>
               <input
-                id="confirm-order-input"
                 type="text"
-                autoFocus
-                autoComplete="off"
                 value={confirmOrderText}
                 onChange={(e) => setConfirmOrderText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape' && !submitting) { setConfirmOrderOpen(false); setConfirmOrderText(''); }
-                  if (e.key === 'Enter' && confirmOrderText.trim().toLowerCase() === 'confirm' && !submitting) handleConfirmedOrder();
-                }}
-                placeholder="confirm"
-                className="w-full rounded-xl px-4 py-2.5 text-[13px] outline-none transition"
+                placeholder="CONFIRM"
+                autoFocus
+                className="w-full rounded-lg px-3 py-2 text-[12.5px] outline-none"
                 style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: confirmOrderText.trim().toLowerCase() === 'confirm' ? '1.5px solid #c41e3a' : '1.5px solid var(--glass-border-bright)',
-                  color: '#ffffff',
-                  caretColor: '#c41e3a',
+                  background: 'var(--glass-bg-light)',
+                  border: `1px solid ${confirmOrderText.trim().toUpperCase() === 'CONFIRM' ? '#22c55e' : 'var(--glass-border)'}`,
+                  color: 'var(--text-main)',
+                  transition: 'border-color 0.15s',
                 }}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -1441,28 +2030,28 @@ export function CreateJobForm({ mode, onSubmit, onSaveDraft, submitting = false,
           {/* Footer */}
           <div
             className="flex justify-end gap-2 px-5 py-3.5"
-            style={{ borderTop: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)' }}
+            style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--glass-bg-light, rgba(15,23,42,0.03))' }}
           >
             <button
               type="button"
-              className="btn btn-outline"
-              disabled={submitting}
+              className="btn btn-outline disabled:opacity-60"
+              disabled={isSubmitting}
               onClick={() => { setConfirmOrderOpen(false); setConfirmOrderText(''); }}
             >
               Cancel
             </button>
             <button
               type="button"
-              disabled={confirmOrderText.trim().toLowerCase() !== 'confirm' || submitting}
+              disabled={isSubmitting || confirmOrderText.trim().toUpperCase() !== 'CONFIRM'}
               className="btn btn-crimson disabled:opacity-50"
               onClick={handleConfirmedOrder}
             >
-              {submitting ? (
+              {isSubmitting ? (
                 <Loader2 aria-hidden className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Send aria-hidden className="w-3.5 h-3.5" />
               )}
-              {submitting ? 'Placing…' : 'Place Order'}
+              {isSubmitting ? 'Placing…' : 'Place Order'}
             </button>
           </div>
         </div>

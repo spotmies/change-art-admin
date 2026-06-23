@@ -41,6 +41,12 @@ class ApiClientError extends Error {
 
   /** Returns the human-readable copy registered in @contracts/error-codes. */
   public toUserMessage(): string {
+    if (this.code === 'VALIDATION_ERROR' && this.details) {
+      const messages = Object.values(this.details).flat().filter(Boolean);
+      if (messages.length > 0) {
+        return messages.join(', ');
+      }
+    }
     return ERROR_MESSAGES[this.code as ErrorCode] ?? this.message ?? ERROR_MESSAGES.UNKNOWN_ERROR;
   }
 

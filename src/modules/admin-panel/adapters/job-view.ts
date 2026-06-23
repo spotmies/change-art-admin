@@ -137,7 +137,9 @@ export function adaptJobCard(
       ? 'Junior'
       : null;
 
-  const clientInfo = clientsMap.get(card.client_id);
+  const clientInfo = card.client_info
+    ? { name: card.client_info.company_name ?? card.client_info.client_name, clientId: card.client_info.client_id }
+    : clientsMap.get(card.client_id);
 
   return {
     id: card.job_id,

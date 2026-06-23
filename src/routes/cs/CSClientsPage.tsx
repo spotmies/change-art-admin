@@ -1,9 +1,29 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
 
 const PER_PAGE = 20;
+
+const SESSION_FLAG = 'clients_otp_verified';
+
+function isSessionVerified(): boolean {
+  try {
+    return sessionStorage.getItem(SESSION_FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSessionVerified(): void {
+  try {
+    sessionStorage.setItem(SESSION_FLAG, '1');
+  } catch {
+    // sessionStorage unavailable
+  }
+}
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [debounced, setDebounced] = useState(value);
@@ -23,6 +43,8 @@ function currentMonthCount(items: { created_at: string }[]): number {
 }
 
 export function CSClientsPage() {
+  const navigate = useNavigate();
+  const [pageGateOpen, setPageGateOpen] = useState(() => !isSessionVerified());
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search, 300);
@@ -136,6 +158,17 @@ export function CSClientsPage() {
           </>
         )}
       </Panel>
+
+      {/* Page-level OTP gate — shown once per session on first visit */}
+      {pageGateOpen && (
+        <ClientSectionGateModal
+          onVerified={() => {
+            markSessionVerified();
+            setPageGateOpen(false);
+          }}
+          onDismiss={() => navigate(-1)}
+        />
+      )}
     </div>
   );
 }

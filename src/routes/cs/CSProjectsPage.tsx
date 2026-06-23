@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { isJobEtaExpired } from '@lib/utils';
 
 const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
@@ -9,8 +10,8 @@ export function CSProjectsPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
-  const open       = useMemo(() => allData.filter((j) => j.stage !== 'delivered'), [allData]);
-  const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver'), [allData]);
+  const open       = useMemo(() => allData.filter((j) => j.stage !== 'delivered' && !isJobEtaExpired(j)), [allData]);
+  const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
   const amend      = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
 
   const totalPages = Math.max(1, Math.ceil(allData.length / PER_PAGE));

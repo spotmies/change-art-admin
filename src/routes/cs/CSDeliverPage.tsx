@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Callout, GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { isJobEtaExpired } from '@lib/utils';
 
 const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
@@ -9,7 +10,7 @@ export function CSDeliverPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
-  const readyJobs      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver'), [allData]);
+  const readyJobs      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
   const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Delivered'), [allData]);
   const deliveredToday = useMemo(() => delivered.filter((j) => isToday(j.created)), [delivered]);
 

@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
-import { toastApiError } from '@lib/toast-error';
-import { adminService, type ClientFilters, type CreateClientBody, type ProvisionClientBody, type UpdateClientBody } from '../services/admin.service';
+import { toastApiError, ValidationError } from '@lib/toast-error';
+import { adminService, type ClientFilters, type CreateClientBody, type CreateJobCardBody, type ProvisionClientBody, type SendQuotePriceBody, type UpdateClientBody } from '../services/admin.service';
 
 export function useAdminClients(filters: ClientFilters = {}) {
   return useQuery({
@@ -58,6 +58,42 @@ export function useDeleteClient() {
       toast.success('Client deleted');
     },
     // Surfaces CLIENT_HAS_JOBS ("Cannot delete a client with associated Job Cards.")
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useCreateJobCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateJobCardBody) => {
+      if (!body.client_id?.trim()) throw new ValidationError('Client is required.');
+      if (!body.mail?.trim()) throw new ValidationError('Client email is required.');
+      if (!body.order_type?.trim()) throw new ValidationError('Order type is required.');
+      if (!body.project_type?.trim()) throw new ValidationError('Project type is required.');
+      if (!body.design_name?.trim()) throw new ValidationError('Design name is required.');
+      return adminService.createJobCard(body);
+    },
+    onSuccess: (job) => {
+      qc.setQueryData(queryKeys.jobs.byId(job.id), job);
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      void qc.invalidateQueries({ queryKey: queryKeys.jobs.badges() });
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+export function useSendQuotePrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, body }: { jobId: string; body: SendQuotePriceBody }) => {
+      if (!jobId?.trim()) throw new ValidationError('Job ID is required.');
+      if (!Number.isFinite(body.amount) || body.amount <= 0) throw new ValidationError('Amount must be a positive number.');
+      return adminService.sendQuotePrice(jobId, body);
+    },
+    onSuccess: (job) => {
+      qc.setQueryData(queryKeys.jobs.byId(job.id), job);
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+    },
     onError: (err) => toastApiError(err),
   });
 }

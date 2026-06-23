@@ -16,6 +16,7 @@ import {
 } from '@modules/shared-ui';
 import { Inbox, Cog, CheckCircle2, Package } from 'lucide-react';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { isJobEtaExpired } from '@lib/utils';
 
 export function CSDashboardPage() {
   const user = useSessionUser();
@@ -27,7 +28,7 @@ export function CSDashboardPage() {
   const { jobs: allJobs } = useAdminJobViews({ per_page: 100 });
 
   const newJobs = useMemo(
-    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered').slice(0, 4),
+    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j)).slice(0, 4),
     [allJobs],
   );
   const pendingQuotes = useMemo(

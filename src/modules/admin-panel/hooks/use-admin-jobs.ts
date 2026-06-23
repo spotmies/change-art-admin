@@ -9,8 +9,7 @@ import {
   type UpdateJobCardBody,
   type UserFilters,
 } from '../services/admin.service';
-import { adaptJobCard, type ClientInfo } from '../adapters/job-view';
-import { useAdminClients } from './use-admin-clients';
+import { adaptJobCard } from '../adapters/job-view';
 
 // Exported so pages that explicitly need user name resolution can opt in.
 // CLIENT accounts are excluded by default — User Management only covers
@@ -20,6 +19,16 @@ export function useAdminUsers(filters: UserFilters = {}) {
     queryKey: queryKeys.users.list({ exclude_role: UserRole.CLIENT, ...filters } as Record<string, unknown>),
     queryFn: () => adminService.getUsers({ exclude_role: UserRole.CLIENT, ...filters }),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminService.deleteUser(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.all() });
+    },
   });
 }
 
@@ -55,20 +64,11 @@ export function useAdminJobById(id: string) {
     enabled: !!id,
     staleTime: 30 * 1000,
   });
-  const clientsQuery = useAdminClients();
-
-  const clientsMap = useMemo(() => {
-    const map = new Map<string, ClientInfo>();
-    for (const c of clientsQuery.data?.items ?? []) {
-      map.set(c.id, { name: c.company_name ?? c.client_name, clientId: c.client_id });
-    }
-    return map;
-  }, [clientsQuery.data]);
 
   const job = useMemo(() => {
     if (!jobQuery.data) return null;
-    return adaptJobCard(jobQuery.data, clientsMap, new Map());
-  }, [jobQuery.data, clientsMap]);
+    return adaptJobCard(jobQuery.data, new Map(), new Map());
+  }, [jobQuery.data]);
 
   return { data: job, isLoading: jobQuery.isLoading, isError: jobQuery.isError };
 }
@@ -177,22 +177,9 @@ export function useAdminJobViews(filters: JobCardFilters = {}): {
   isError: boolean;
   error: unknown;
 } {
-  // Two queries only — job-cards (primary) + clients (client name resolution).
-  // Users are NOT eagerly fetched here; assignedTo falls back to null which
-  // the UI renders as "Pending". Pages that need user names call useAdminUsers.
+  // Client names are now embedded in each job card via a backend LEFT JOIN —
+  // no separate clients fetch is needed for name resolution.
   const jobsQuery = useAdminJobCards(filters);
-  const clientsQuery = useAdminClients();
-
-  const clientsMap = useMemo(() => {
-    const map = new Map<string, ClientInfo>();
-    for (const c of clientsQuery.data?.items ?? []) {
-      map.set(c.id, {
-        name: c.company_name ?? c.client_name,
-        clientId: c.client_id,
-      });
-    }
-    return map;
-  }, [clientsQuery.data]);
 
   // Preview thumbnails are resolved separately from job-cards: the job-card
   // payload carries no image, so we batch-fetch one presigned thumbnail per
@@ -212,17 +199,13 @@ export function useAdminJobViews(filters: JobCardFilters = {}): {
   const jobs = useMemo<Job[]>(() => {
     if (!jobsQuery.data) return [];
     const thumbs = thumbnailsQuery.data ?? {};
-    // Pass empty usersMap — assignedTo resolves to null → shown as "Pending".
     return jobsQuery.data.items.map((card) => {
-      const job = adaptJobCard(card, clientsMap, new Map());
+      const job = adaptJobCard(card, new Map(), new Map());
       const url = thumbs[card.id];
-      // Backend returns a single thumbnail per job. Store it as a single-entry
-      // array so the modal's carousel renders one tile (instead of duplicating
-      // the same preview into multiple carousel slots).
       if (url) job.images = [url];
       return job;
     });
-  }, [jobsQuery.data, clientsMap, thumbnailsQuery.data]);
+  }, [jobsQuery.data, thumbnailsQuery.data]);
 
   return {
     jobs,

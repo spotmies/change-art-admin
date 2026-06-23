@@ -9,11 +9,9 @@ import {
   SectionHeader,
   StatGrid,
 } from '@modules/shared-ui';
-import { AlertTriangle, CheckCircle2, Send, Target, TrendingUp } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Send, Sparkles, Target, TrendingUp } from 'lucide-react';
 import {
   useAdminJobViews,
-  useAdminJobCards,
-  useAdminUsers,
 } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 
@@ -22,9 +20,8 @@ export function AdminDashboardPage() {
   const firstName = user?.name.split(' ')[0] ?? 'Admin';
 
   const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
-  const { data: clientsData } = useAdminClients();
-  const { data: rawJobsData } = useAdminJobCards({ per_page: 100 });
-  const { data: usersData } = useAdminUsers();
+  // per_page: 1 — we only need meta.total for the "Total Clients" stat card; no items are used.
+  const { data: clientsData } = useAdminClients({ per_page: 1 });
 
   const active   = useMemo(
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
@@ -116,31 +113,7 @@ export function AdminDashboardPage() {
     return result.map((r) => ({ ...r, height: Math.max(Math.round((r.value / maxVal) * 100), 4) }));
   }, [jobs]);
 
-  // Top Performing Staff: staff ranked by number of active + delivered jobs handled
-  const topStaff = useMemo(() => {
-    const usersMap = new Map<string, string>();
-    for (const u of usersData?.items ?? []) usersMap.set(u.id, u.name);
 
-    const counts = new Map<string, { name: string; total: number; delivered: number }>();
-    for (const card of rawJobsData?.items ?? []) {
-      const handlerId =
-        card.current_handler_id ??
-        card.assigned_junior_id ??
-        card.assigned_senior_id ??
-        card.assigned_sewout_id ??
-        null;
-      if (!handlerId) continue;
-      const name = usersMap.get(handlerId) ?? 'Unknown';
-      const entry = counts.get(handlerId) ?? { name, total: 0, delivered: 0 };
-      entry.total++;
-      const isDelivered = [
-        'QC_APPROVED', 'READY_TO_DELIVER', 'DELIVERED', 'CLOSED',
-      ].includes(card.status);
-      if (isDelivered) entry.delivered++;
-      counts.set(handlerId, entry);
-    }
-    return [...counts.values()].sort((a, b) => b.total - a.total).slice(0, 5);
-  }, [rawJobsData, usersData]);
 
   const loading = (v: number | string) => (isLoading ? '…' : v);
 
@@ -149,6 +122,26 @@ export function AdminDashboardPage() {
       <GreetingHero
         title={`Good ${getGreeting()}, ${firstName}`}
         subtitle="Platform-wide overview. Full access to all modules."
+        action={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to="/admin/create-quote"
+              className="btn btn-outline"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+            >
+              <Sparkles className="w-3.5 h-3.5" aria-hidden />
+              New Quote
+            </Link>
+            <Link
+              to="/admin/place-order"
+              className="btn btn-crimson"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+            >
+              <Send className="w-3.5 h-3.5" aria-hidden />
+              Place Order
+            </Link>
+          </div>
+        }
       />
 
       {/* Row 1 — Core job volume stats */}
@@ -323,49 +316,6 @@ export function AdminDashboardPage() {
           {/* Production Trends — last 7 days */}
           <Panel title="Production Trends" className="panel-blue">
             <BarChart items={productionTrends} />
-          </Panel>
-
-          {/* Top Performing Staff */}
-          <Panel title="Top Performing Staff" className="panel-teal">
-            {topStaff.length === 0 ? (
-              <div className="text-[12px] text-text-faint py-2">No assignment data yet.</div>
-            ) : (
-              <div className="flex flex-col gap-2 mt-1">
-                {topStaff.map((s, idx) => {
-                  const pct = topStaff[0].total > 0 ? Math.round((s.total / topStaff[0].total) * 100) : 0;
-                  return (
-                    <div key={s.name} className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className="text-[10px] font-bold w-4 text-center"
-                            style={{ color: idx === 0 ? 'var(--color-amber)' : 'var(--text-faint)' }}
-                          >
-                            {idx + 1}
-                          </span>
-                          <span className="text-[12px] font-medium text-text-main truncate max-w-[110px]">
-                            {s.name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-text-faint">{s.delivered} done</span>
-                          <span className="text-[12px] font-bold text-text-main">{s.total}</span>
-                        </div>
-                      </div>
-                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--glass-border)' }}>
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${pct}%`,
-                            background: idx === 0 ? 'var(--color-teal)' : 'var(--color-blue)',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </Panel>
 
         </div>

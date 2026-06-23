@@ -1127,8 +1127,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                         </button>
                       )}
                       <div
-                        className={totalImages === 1 ? 'flex justify-center' : 'grid grid-cols-2 gap-2.5'}
-                        style={{ height: '100%', minHeight: isQuote ? 220 : 180 }}
+                        className={totalImages === 1 ? 'flex justify-center items-center' : 'grid grid-cols-2 gap-2.5'}
+                        style={{ height: isQuote ? 260 : 240, overflow: 'hidden' }}
                       >
                         {images.map((src, i) => {
                           const visible = totalImages === 1 || (i >= carPage && i < carPage + 2);
@@ -1137,12 +1137,12 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               key={`${job.uuid}-${src}-${i}`}
                               src={src}
                               alt={i === 0 ? job.design : ''}
-                              className={totalImages === 1 ? 'rounded-xl object-cover' : 'w-full rounded-xl object-cover'}
+                              className={totalImages === 1 ? 'rounded-xl object-contain' : 'w-full rounded-xl object-cover'}
                               style={{
                                 display: visible ? 'block' : 'none',
                                 height: '100%',
-                                minHeight: 150,
-                                maxWidth: totalImages === 1 ? '60%' : undefined,
+                                minHeight: 0,
+                                maxWidth: '100%',
                                 border: '1px solid rgba(15,23,42,0.06)',
                                 background: 'rgba(0,0,0,0.04)',
                               }}

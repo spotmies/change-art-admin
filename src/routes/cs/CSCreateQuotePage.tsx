@@ -1,8 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import { CreateJobForm, GreetingHero } from '@modules/shared-ui';
+import { useAdminClients, useCreateJobCard, useProvisionClient, useSendQuotePrice } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 export function CSCreateQuotePage() {
   const navigate = useNavigate();
+  const { data, isLoading, isError } = useAdminClients({ per_page: 200 });
+  const { mutateAsync: provisionClient } = useProvisionClient();
+  const { mutateAsync: createJobCard } = useCreateJobCard();
+  const { mutateAsync: sendQuotePrice } = useSendQuotePrice();
   return (
     <div className="page">
       <GreetingHero
@@ -11,10 +16,13 @@ export function CSCreateQuotePage() {
       />
       <CreateJobForm
         mode="quote"
-        onSubmit={(id) => {
-          console.info(`Quote ${id} created`);
-          navigate('/cs/new-quotes');
-        }}
+        clients={data?.items ?? []}
+        clientsLoading={isLoading}
+        clientsError={isError}
+        onProvisionClient={provisionClient}
+        onCreateJob={createJobCard}
+        onSendPrice={(jobId, body) => sendQuotePrice({ jobId, body })}
+        onSubmit={() => navigate('/cs/new-quotes')}
       />
     </div>
   );

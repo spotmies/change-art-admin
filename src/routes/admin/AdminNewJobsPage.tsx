@@ -6,7 +6,6 @@ import {
   Pagination,
   Pills,
   StatGrid,
-  applyJobFilters,
   EMPTY_FILTERS,
   JOB_STATUS_OPTIONS,
   type JobFilters,
@@ -14,59 +13,89 @@ import {
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useDebounced } from '@lib/use-debounced';
 
-const FETCH_SIZE = 100;
-const PER_PAGE   = 20;
+const PER_PAGE = 20;
 
 // Status options relevant to active production jobs (no quote / delivered states)
 const PIPELINE_STATUS_OPTIONS = JOB_STATUS_OPTIONS.filter(
   (o) => !['Quote Submitted', 'Quote Approved', 'Delivered', 'Cancelled'].includes(o.value),
 );
 
-export function AdminNewJobsPage() {
-  const { jobs, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
-  const clientsQuery = useAdminClients();
-  const clients = clientsQuery.data?.items ?? [];
+/** Map the stage-pill selection to a backend stage param. */
+function stageToParam(stageFilter: string): { stage?: string; exclude_stage?: string } {
+  switch (stageFilter) {
+    case 'In Production': return { stage: 'junior' };
+    case 'Senior Review': return { stage: 'senior' };
+    case 'In QC':         return { stage: 'qc' };
+    case 'Sewout':        return { stage: 'sewout' };
+    default:              return { exclude_stage: 'quote' }; // "all" — exclude quotes & delivered
+  }
+}
 
+/** Map the filter-bar order type to the backend order_type enum value. */
+function mapOrderType(ot: string): string | undefined {
+  if (ot === 'Artwork')            return 'ARTWORK';
+  if (ot === 'Digitizing')         return 'DIGITIZING';
+  if (ot === 'Digitizing + Sewout') return 'DIGITIZING_SEWOUT';
+  return undefined;
+}
+
+/** Map filter-bar priority to backend Priority enum. */
+function mapPriority(p: string): string | undefined {
+  if (p === 'Normal')     return 'NORMAL';
+  if (p === 'Rush')       return 'RUSH';
+  if (p === 'Super Rush') return 'SUPER_RUSH';
+  return undefined;
+}
+
+export function AdminNewJobsPage() {
   const [stageFilter, setStageFilter] = useState('all');
   const [filters, setFilters]         = useState<JobFilters>(EMPTY_FILTERS);
   const [page, setPage]               = useState(1);
 
-  // Active pipeline — exclude quote stage, delivered, and cancelled.
-  const active = useMemo(
-    () => jobs.filter(
-      (j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled',
-    ),
-    [jobs],
-  );
+  const debouncedSearch = useDebounced(filters.search, 300);
 
-  const inProd   = useMemo(() => active.filter((j) => j.stage === 'junior'),  [active]);
-  const srReview = useMemo(() => active.filter((j) => j.stage === 'senior'),  [active]);
-  const inQc     = useMemo(() => active.filter((j) => j.stage === 'qc'),      [active]);
-  const sewout   = useMemo(() => active.filter((j) => j.stage === 'sewout'),  [active]);
+  // per_page: 500 — needed to populate the client filter dropdown with all client names.
+  // React Query deduplicates this with the same call in useAdminJobViews, so only
+  // one network request goes out regardless of how many components call this hook.
+  const clientsQuery = useAdminClients({ per_page: 500 });
+  const clients = clientsQuery.data?.items ?? [];
 
+  // Resolve the selected client display-id (e.g. "CLI0002") to a database UUID
+  // so the backend can filter job cards by exact client_id foreign key.
+  const clientUuid = useMemo(() => {
+    if (!filters.clientId) return undefined;
+    return clients.find((c) => c.client_id === filters.clientId)?.id;
+  }, [filters.clientId, clients]);
+
+  // Build the server-side query: 20 records per page, all filters pushed to backend.
+  const queryFilters = useMemo(() => ({
+    page,
+    per_page: PER_PAGE,
+    search: debouncedSearch.trim() || undefined,
+    order_type: mapOrderType(filters.orderType),
+    priority: mapPriority(filters.priority),
+    client_id: clientUuid,
+    date_from: filters.dateFrom || undefined,
+    date_to: filters.dateTo || undefined,
+    ...stageToParam(stageFilter),
+  }), [page, debouncedSearch, filters.orderType, filters.priority, clientUuid, filters.dateFrom, filters.dateTo, stageFilter]);
+
+  const { jobs, total, isLoading, isError } = useAdminJobViews(queryFilters);
+
+  const totalPages = Math.ceil(total / PER_PAGE);
+
+  // Stage pills — counts come from the full server total (current filter scope only).
+  // We show the count for the active pill from meta.total; inactive pills don't have
+  // separate server counts without extra requests so we omit them (dash).
   const pills: PillItem[] = [
-    { id: 'all',           label: 'All',           count: active.length },
-    { id: 'In Production', label: 'In Production', count: inProd.length },
-    { id: 'Senior Review', label: 'Senior Review', count: srReview.length },
-    { id: 'In QC',         label: 'In QC',         count: inQc.length },
-    { id: 'Sewout',        label: 'Sewout',        count: sewout.length },
+    { id: 'all',           label: 'All Production' },
+    { id: 'In Production', label: 'In Production' },
+    { id: 'Senior Review', label: 'Senior Review' },
+    { id: 'In QC',         label: 'In QC' },
+    { id: 'Sewout',        label: 'Sewout' },
   ];
-
-  // Stage pill filter
-  const stageFiltered = useMemo(() => {
-    if (stageFilter === 'all') return active;
-    return active.filter((j) => j.status === stageFilter);
-  }, [active, stageFilter]);
-
-  // Filter bar criteria on top of stage filter
-  const filtered = useMemo(() => applyJobFilters(stageFiltered, filters), [stageFiltered, filters]);
-
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const pageItems  = useMemo(
-    () => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE),
-    [filtered, page],
-  );
 
   function handleStageChange(id: string) {
     setStageFilter(id);
@@ -98,10 +127,9 @@ export function AdminNewJobsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'teal',   label: 'Total Active',  value: isLoading ? '…' : active.length },
-          { accent: 'amber',  label: 'In Production', value: isLoading ? '…' : inProd.length },
-          { accent: 'purple', label: 'Senior Review', value: isLoading ? '…' : srReview.length },
-          { accent: 'green',  label: 'In QC',         value: isLoading ? '…' : inQc.length },
+          { accent: 'teal',  label: 'Jobs in View',  value: isLoading ? '…' : total },
+          { accent: 'amber', label: 'This Page',     value: isLoading ? '…' : jobs.length },
+          { accent: 'blue',  label: 'Page',          value: isLoading ? '…' : `${page} / ${totalPages || 1}` },
         ]}
       />
 
@@ -114,7 +142,7 @@ export function AdminNewJobsPage() {
       ) : (
         <>
           <JobTable
-            jobs={pageItems}
+            jobs={jobs}
             showActions
             defaultView="grid"
             emptyLabel="No jobs match the current filters."
@@ -127,11 +155,11 @@ export function AdminNewJobsPage() {
               />
             }
           />
-          {pageItems.length > 0 && (
+          {total > 0 && (
             <Pagination
               page={page}
               totalPages={totalPages}
-              total={filtered.length}
+              total={total}
               perPage={PER_PAGE}
               onPageChange={setPage}
             />

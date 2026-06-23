@@ -187,22 +187,28 @@ export function JobTable({
           />
         </>
       )}
-      <JobDetailModal
-        job={viewJob}
-        onClose={() => setViewJobId(null)}
-        onEdit={(j) => { setViewJobId(null); setEditJob(j); }}
-        onAssign={(j) => { setViewJobId(null); setAssignJob(j); }}
-        quoteView={quoteView}
-      />
-      <EditJobModal
-        job={editJob}
-        onClose={() => setEditJob(null)}
-        onBack={(j) => { setEditJob(null); setViewJobId(j.uuid ?? j.id); }}
-      />
-      <AssignJobModal
-        job={assignJob}
-        onClose={() => setAssignJob(null)}
-      />
+      {viewJob && (
+        <JobDetailModal
+          job={viewJob}
+          onClose={() => setViewJobId(null)}
+          onEdit={(j) => { setViewJobId(null); setEditJob(j); }}
+          onAssign={(j) => { setViewJobId(null); setAssignJob(j); }}
+          quoteView={quoteView}
+        />
+      )}
+      {editJob && (
+        <EditJobModal
+          job={editJob}
+          onClose={() => setEditJob(null)}
+          onBack={(j) => { setEditJob(null); setViewJobId(j.uuid ?? j.id); }}
+        />
+      )}
+      {assignJob && (
+        <AssignJobModal
+          job={assignJob}
+          onClose={() => setAssignJob(null)}
+        />
+      )}
     </div>
   );
 }
@@ -434,13 +440,17 @@ function GridView({
             }}
           >
             <div className="jc-img">
-              <img
-                className="w-full h-[90px] md:h-[110px] object-cover block"
-                src={jobImage(j, 0, 400, 300)}
-                alt={j.design}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
+              {j.images?.length ? (
+                <img
+                  className="w-full h-[90px] md:h-[110px] object-contain block"
+                  src={j.images[0]}
+                  alt={j.design}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-[160px]" />
+              )}
               {/* Order type badge — top-left */}
               <span className={cn('badge absolute top-[10px] left-[10px] z-[1] whitespace-nowrap', orderBadgeAccent(j.order))}>
                 {j.order}
