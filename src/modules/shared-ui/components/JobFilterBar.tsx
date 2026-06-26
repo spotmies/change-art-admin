@@ -6,7 +6,8 @@
  * filter values and passes them in via props so each page can layer its own
  * extra client-side logic on top.
  */
-import { ChevronDown, Search, X } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Search, X, SlidersHorizontal } from 'lucide-react';
 import type { IClient } from '@contracts';
 
 export interface JobFilters {
@@ -160,128 +161,162 @@ export function JobFilterBar({
   clients = [],
   className = '',
 }: JobFilterBarProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const activeFiltersCount = [
+    filters.orderType,
+    filters.priority,
+    filters.status,
+    filters.clientId,
+    filters.dateFrom,
+    filters.dateTo,
+  ].filter(Boolean).length;
+
   const hasActive = !isFiltersEmpty(filters);
 
   return (
-    <div className={`job-filter-bar ${className}`}>
-      {/* Search */}
-      <div className="filter-search-wrap">
-        <Search className="filter-search-icon w-3.5 h-3.5" />
-        <input
-          type="text"
-          className="filter-search"
-          placeholder="Search jobs, clients, designs…"
-          value={filters.search}
-          onChange={(e) => set(filters, 'search', e.target.value, onChange)}
-        />
-      </div>
-
-      {/* Order Type */}
-      <div className="filter-select-wrap">
-        <select
-          className={`filter-select${filters.orderType ? ' active' : ''}`}
-          value={filters.orderType}
-          onChange={(e) => set(filters, 'orderType', e.target.value, onChange)}
-        >
-          <option value="" disabled hidden>Order Type</option>
-          <option value="">All</option>
-          {ORDER_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="filter-chevron" aria-hidden />
-      </div>
-
-      {/* Priority */}
-      <div className="filter-select-wrap">
-        <select
-          className={`filter-select${filters.priority ? ' active' : ''}`}
-          value={filters.priority}
-          onChange={(e) => set(filters, 'priority', e.target.value, onChange)}
-        >
-          <option value="" disabled hidden>Priority</option>
-          <option value="">All</option>
-          {PRIORITY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="filter-chevron" aria-hidden />
-      </div>
-
-      {/* Status */}
-      {statusOptions.length > 0 && (
-        <div className="filter-select-wrap">
-          <select
-            className={`filter-select${filters.status ? ' active' : ''}`}
-            value={filters.status}
-            onChange={(e) => set(filters, 'status', e.target.value, onChange)}
-          >
-            <option value="" disabled hidden>Status</option>
-            <option value="">All</option>
-            {statusOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="filter-chevron" aria-hidden />
+    <>
+      {/* Compact toolbar row: search input + filters toggle button */}
+      <div className={`job-filter-bar-row ${className}`}>
+        {/* Search */}
+        <div className="filter-search-wrap">
+          <Search className="filter-search-icon" />
+          <input
+            type="text"
+            className="filter-search"
+            placeholder="Search jobs, clients, designs…"
+            value={filters.search}
+            onChange={(e) => set(filters, 'search', e.target.value, onChange)}
+          />
         </div>
-      )}
 
-      {/* Client */}
-      {clients.length > 0 && (
-        <div className="filter-select-wrap">
-          <select
-            className={`filter-select${filters.clientId ? ' active' : ''}`}
-            value={filters.clientId}
-            onChange={(e) => set(filters, 'clientId', e.target.value, onChange)}
-          >
-            <option value="" disabled hidden>Client</option>
-            <option value="">All</option>
-            {clients.map((c) => (
-              // Use human-readable client_id (e.g. "CLI0002") — matches Job.clientId
-              <option key={c.id} value={c.client_id}>
-                {c.company_name ?? c.client_name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="filter-chevron" aria-hidden />
-        </div>
-      )}
-
-      {/* Date From */}
-      <div className="filter-date-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>From</span>
-        <input
-          type="date"
-          className={`filter-date${filters.dateFrom ? ' active' : ''}`}
-          title="From date"
-          value={filters.dateFrom}
-          onChange={(e) => set(filters, 'dateFrom', e.target.value, onChange)}
-        />
-      </div>
-
-      {/* Date To */}
-      <div className="filter-date-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>To</span>
-        <input
-          type="date"
-          className={`filter-date${filters.dateTo ? ' active' : ''}`}
-          title="To date"
-          value={filters.dateTo}
-          onChange={(e) => set(filters, 'dateTo', e.target.value, onChange)}
-        />
-      </div>
-
-      {/* Clear */}
-      {hasActive && (
+        {/* Toggle Filters Button */}
         <button
           type="button"
-          className="filter-clear-btn"
-          onClick={() => onChange(EMPTY_FILTERS)}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`filter-toggle-btn${isOpen || activeFiltersCount > 0 ? ' active' : ''}`}
         >
-          <X className="w-3 h-3 inline mr-1" />
-          Clear
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>Filters</span>
+          {activeFiltersCount > 0 && (
+            <span className="filter-badge">{activeFiltersCount}</span>
+          )}
         </button>
+      </div>
+
+      {/* Expanded filters panel — renders BELOW the toolbar row as a sibling */}
+      {isOpen && (
+        <div className="filter-expanded-panel">
+          {/* Order Type */}
+          <div className="filter-select-wrap">
+            <select
+              className={`filter-select${filters.orderType ? ' active' : ''}`}
+              value={filters.orderType}
+              onChange={(e) => set(filters, 'orderType', e.target.value, onChange)}
+            >
+              <option value="" disabled hidden>Order Type</option>
+              <option value="">All</option>
+              {ORDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="filter-chevron" aria-hidden />
+          </div>
+
+          {/* Priority */}
+          <div className="filter-select-wrap">
+            <select
+              className={`filter-select${filters.priority ? ' active' : ''}`}
+              value={filters.priority}
+              onChange={(e) => set(filters, 'priority', e.target.value, onChange)}
+            >
+              <option value="" disabled hidden>Priority</option>
+              <option value="">All</option>
+              {PRIORITY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="filter-chevron" aria-hidden />
+          </div>
+
+          {/* Status */}
+          {statusOptions.length > 0 && (
+            <div className="filter-select-wrap">
+              <select
+                className={`filter-select${filters.status ? ' active' : ''}`}
+                value={filters.status}
+                onChange={(e) => set(filters, 'status', e.target.value, onChange)}
+              >
+                <option value="" disabled hidden>Status</option>
+                <option value="">All</option>
+                {statusOptions.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <ChevronDown className="filter-chevron" aria-hidden />
+            </div>
+          )}
+
+          {/* Client */}
+          {clients.length > 0 && (
+            <div className="filter-select-wrap">
+              <select
+                className={`filter-select${filters.clientId ? ' active' : ''}`}
+                value={filters.clientId}
+                onChange={(e) => set(filters, 'clientId', e.target.value, onChange)}
+              >
+                <option value="" disabled hidden>Client</option>
+                <option value="">All</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.client_id}>
+                    {c.company_name ?? c.client_name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="filter-chevron" aria-hidden />
+            </div>
+          )}
+
+          {/* Date range — always side-by-side, even on mobile */}
+          <div className="filter-date-row">
+            {/* Date From */}
+            <div className="filter-date-wrap">
+              <span className="filter-date-label">From</span>
+              <input
+                type="date"
+                className={`filter-date${filters.dateFrom ? ' active' : ''}`}
+                title="From date"
+                value={filters.dateFrom}
+                onChange={(e) => set(filters, 'dateFrom', e.target.value, onChange)}
+              />
+            </div>
+
+            {/* Date To */}
+            <div className="filter-date-wrap">
+              <span className="filter-date-label">To</span>
+              <input
+                type="date"
+                className={`filter-date${filters.dateTo ? ' active' : ''}`}
+                title="To date"
+                value={filters.dateTo}
+                onChange={(e) => set(filters, 'dateTo', e.target.value, onChange)}
+              />
+            </div>
+          </div>
+
+          {/* Clear */}
+          {hasActive && (
+            <button
+              type="button"
+              className="filter-clear-btn"
+              onClick={() => onChange(EMPTY_FILTERS)}
+              style={{ marginLeft: 'auto' }}
+            >
+              <X className="w-3 h-3 inline mr-1" />
+              Clear all
+            </button>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }

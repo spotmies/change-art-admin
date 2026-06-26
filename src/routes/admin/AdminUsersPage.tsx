@@ -9,8 +9,6 @@ import { ApiClientError } from '@lib/api-client';
 import { UserFormModal, type UserModalMode } from '../../modules/admin-panel/components/UserFormModal';
 
 const PER_PAGE = 20;
-// Internal staff lists are small; fetch the whole set once so the stat cards
-// reflect true totals (not just the visible page) and paginate client-side.
 const FETCH_LIMIT = 100;
 
 const ROLE_FILTERS: { value: string; label: string }[] = [
@@ -18,7 +16,7 @@ const ROLE_FILTERS: { value: string; label: string }[] = [
   { value: UserRole.CS, label: 'Client Servicing' },
   { value: UserRole.TEAM_LEAD, label: 'Team Lead' },
   { value: UserRole.DESIGNER, label: 'Designer' },
-  { value: UserRole.DIGITATOR, label: 'Digitator' },
+  { value: UserRole.DIGITATOR, label: 'Digitizor' },
   { value: UserRole.SEWOUT, label: 'Sewout' },
   { value: UserRole.QC, label: 'QC Reviewer' },
   { value: UserRole.ADMIN, label: 'Admin' },
@@ -35,12 +33,7 @@ function subTypeBadge(sub: UserSubType | null) {
 }
 
 function nameInitials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
+  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
 export function AdminUsersPage() {
@@ -51,17 +44,15 @@ export function AdminUsersPage() {
   const [modal, setModal] = useState<{ mode: UserModalMode; user: IUser | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<IUser | null>(null);
 
-  // Clients are excluded server-side by the hook; this only returns staff.
   const { data, isLoading, isError } = useAdminUsers({ per_page: FETCH_LIMIT });
   const deleteMutation = useDeleteUser();
 
   const allUsers = useMemo<IUser[]>(() => data?.items ?? [], [data]);
 
-  // Stat cards reflect the full staff set (not the filtered/paged view).
   const total        = allUsers.length;
-  const activeCount   = allUsers.filter((u) => u.is_active).length;
+  const activeCount  = allUsers.filter((u) => u.is_active).length;
   const inactiveCount = total - activeCount;
-  const adminCount    = allUsers.filter((u) => u.role === UserRole.ADMIN).length;
+  const adminCount   = allUsers.filter((u) => u.role === UserRole.ADMIN).length;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -82,10 +73,7 @@ export function AdminUsersPage() {
   );
 
   function resetToFirstPage<T>(setter: (v: T) => void) {
-    return (v: T) => {
-      setter(v);
-      setPage(1);
-    };
+    return (v: T) => { setter(v); setPage(1); };
   }
 
   return (
@@ -104,7 +92,6 @@ export function AdminUsersPage() {
         ]}
       />
 
-      {/* Toolbar: search + filters + create */}
       <div className="flex flex-wrap items-center gap-2.5 mb-4">
         <div className="relative flex-1 min-w-[220px]">
           <Search
@@ -128,9 +115,7 @@ export function AdminUsersPage() {
           aria-label="Filter by role"
         >
           {ROLE_FILTERS.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
+            <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>
         <select
@@ -156,17 +141,13 @@ export function AdminUsersPage() {
 
       <Panel title={`All Users${filtered.length ? ` (${filtered.length})` : ''}`}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-12 text-text-faint text-sm">
-            Loading users…
-          </div>
+          <div className="flex items-center justify-center py-12 text-text-faint text-sm">Loading users…</div>
         ) : isError ? (
           <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
             Failed to load users. Please refresh and try again.
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-text-faint text-sm">
-            No users match your filters.
-          </div>
+          <div className="flex items-center justify-center py-12 text-text-faint text-sm">No users match your filters.</div>
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -192,10 +173,7 @@ export function AdminUsersPage() {
                         <div className="flex items-center gap-2.5">
                           <span
                             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0"
-                            style={{
-                              background:
-                                'linear-gradient(135deg, var(--color-crimson), var(--color-crimson-dim))',
-                            }}
+                            style={{ background: 'linear-gradient(135deg, var(--color-crimson), var(--color-crimson-dim))' }}
                             aria-hidden
                           >
                             {nameInitials(u.name)}
@@ -207,11 +185,14 @@ export function AdminUsersPage() {
                       <td>{subTypeBadge((u.sub_type as UserSubType | null) ?? null)}</td>
                       <td className="text-text-muted">{u.email}</td>
                       <td>
-                        <span className="flex items-center gap-1.5 text-[11.5px]">
-                          <span
-                            className={`status-dot ${u.is_active ? 'available' : 'offline'}`}
-                            aria-hidden
-                          />
+                        <span
+                          className="inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1 rounded-md"
+                          style={u.is_active
+                            ? { background: 'rgba(34,197,94,0.12)', color: 'var(--color-green)', border: '1px solid rgba(34,197,94,0.25)' }
+                            : { background: 'rgba(100,116,139,0.12)', color: 'var(--text-muted)', border: '1px solid rgba(100,116,139,0.25)' }
+                          }
+                        >
+                          <span className={`status-dot ${u.is_active ? 'available' : 'offline'}`} aria-hidden />
                           {u.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -234,6 +215,7 @@ export function AdminUsersPage() {
                             onClick={() => setDeleteTarget(u)}
                           >
                             <Trash2 aria-hidden className="w-3.5 h-3.5" />
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -288,7 +270,12 @@ export function AdminUsersPage() {
             </div>
             {deleteMutation.isError && (
               <div className="px-5 pb-3 text-[11.5px]" style={{ color: 'var(--color-crimson, #c41e3a)' }}>
-                {deleteMutation.error instanceof ApiClientError ? deleteMutation.error.toUserMessage() : 'Failed to delete user.'} — click Delete User to retry.
+                {deleteMutation.error instanceof ApiClientError
+                  ? deleteMutation.error.toUserMessage()
+                  : 'Failed to delete user.'}
+                {deleteMutation.error instanceof ApiClientError && deleteMutation.error.code !== 'USER_HAS_HISTORY'
+                  ? ' — click Delete User to retry.'
+                  : null}
               </div>
             )}
             <div className="flex justify-end gap-2 px-5 py-3.5" style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--glass-bg-light, rgba(15,23,42,0.03))' }}>

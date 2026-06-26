@@ -51,7 +51,7 @@ export function CSNewQuotesPage() {
     <div className="page">
       <GreetingHero
         title="Quote Requests"
-        subtitle="Review incoming quotes, set your agency price, and send to the client for confirmation."
+        subtitle="Review incoming quotes, set your quoted price, and send to the client for confirmation."
       />
 
       <StatGrid
@@ -96,7 +96,7 @@ export function CSNewQuotesPage() {
             <div className="mt-1">
               <SectionHeader title="Pending Your Review & Pricing" />
               <Callout tone="info">
-                Click a job to open it, review the brief and files, then set your agency price and
+                Click a job to open it, review the brief and files, then set your quoted price and
                 send it to the client.
               </Callout>
               <div className="mt-3">

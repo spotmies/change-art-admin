@@ -60,7 +60,7 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
       { label: 'Team Lead',        users: filter((u) => u.role === UserRole.TEAM_LEAD) },
       { label: 'Senior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.SENIOR) },
       { label: 'Junior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.JUNIOR) },
-      { label: 'Digitator',        users: filter((u) => u.role === UserRole.DIGITATOR) },
+      { label: 'Digitizor',        users: filter((u) => u.role === UserRole.DIGITATOR) },
       { label: 'Sewout',           users: filter((u) => u.role === UserRole.SEWOUT) },
       { label: 'QC Reviewer',      users: filter((u) => u.role === UserRole.QC) },
       { label: 'Client Servicing', users: filter((u) => u.role === UserRole.CS) },

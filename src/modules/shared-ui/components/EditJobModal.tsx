@@ -623,10 +623,6 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                   <input className={FIELD_READONLY_CLS} value={form.design} readOnly tabIndex={-1} />
                 </Field>
 
-                <Field label="Client">
-                  <input className={FIELD_READONLY_CLS} value={form.client} readOnly tabIndex={-1} />
-                </Field>
-
                 <Field label="Order Type">
                   <input className={FIELD_READONLY_CLS} value={form.order} readOnly tabIndex={-1} />
                 </Field>

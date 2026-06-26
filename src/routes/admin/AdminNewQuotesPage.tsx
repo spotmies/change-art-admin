@@ -100,7 +100,7 @@ export function AdminNewQuotesPage() {
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="Quote Requests" subtitle="Incoming quote requests across all CS." />
+        <GreetingHero title="Quote Requests" subtitle="Incoming quote requests across all Client Servicing." />
         <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
           Failed to load quotes. Please refresh and try again.
         </div>
@@ -112,7 +112,7 @@ export function AdminNewQuotesPage() {
     <div className="page">
       <GreetingHero
         title="Quote Requests"
-        subtitle="Incoming quote requests across all CS — track turnaround pressure, value, and conversion rate."
+        subtitle="Incoming quote requests across all Client Servicing — track turnaround pressure, value, and conversion rate."
       />
 
       <StatGrid

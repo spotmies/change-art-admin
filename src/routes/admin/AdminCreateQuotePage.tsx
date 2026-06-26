@@ -12,7 +12,7 @@ export function AdminCreateQuotePage() {
     <div className="page">
       <GreetingHero
         title="Create Quote (Admin)"
-        subtitle="Author a quote with full override — bypass the catalogue, attach custom terms, send on behalf of any CS."
+        subtitle="Author a quote with full override — bypass the catalogue, attach custom terms, send on behalf of any Client Servicing."
       />
       <CreateJobForm
         mode="quote"

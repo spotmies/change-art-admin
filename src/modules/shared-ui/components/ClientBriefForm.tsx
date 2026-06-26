@@ -159,7 +159,7 @@ export function ClientBriefForm({ mode, onSubmit }: ClientBriefFormProps) {
               />
             </div>
 
-            <p className="qf-eta-note">CS will confirm the final ETA after review.</p>
+            <p className="qf-eta-note">Client Servicing will confirm the final ETA after review.</p>
 
             <div className="mb-4">
               <label className="fl" htmlFor="brief">

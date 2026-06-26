@@ -3,7 +3,7 @@ import { GreetingHero, Panel, StatGrid, TEAM, type TeamMember } from '@modules/s
 const ROLE_ORDER: Array<{ role: TeamMember['role']; title: string }> = [
   { role: 'senior_designer', title: 'Senior Designers' },
   { role: 'jr_designer', title: 'Junior Designers' },
-  { role: 'digitator', title: 'Digitators' },
+  { role: 'digitator', title: 'Digitizors' },
   { role: 'sewout', title: 'Sewout' },
 ];
 

@@ -20,13 +20,12 @@ export interface SignUpPayload {
   name: string;
 }
 
-/** Better Auth's session shape. We only need the user portion. */
-interface BetterAuthSessionResponse {
-  data?: {
-    session?: { id: string; userId: string; expiresAt: string };
-    user?: BetterAuthUser;
-  } | null;
+/** Better Auth's sign-in / sign-up response shape. */
+interface BetterAuthResponse {
   user?: BetterAuthUser;
+  // error body (Better Auth returns { code, message } on failure)
+  code?: string;
+  message?: string;
 }
 
 interface BetterAuthUser {
@@ -61,12 +60,8 @@ export const authService = {
   /** Fetch the current session. Returns null when the cookie is missing or invalid. */
   async fetchSession(): Promise<SessionUser | null> {
     try {
-      const res = await apiClient.raw.get<BetterAuthSessionResponse>('/api/auth/get-session', {
-        validateStatus: (status) => status < 500,
-      });
-      if (res.status === 401 || res.status === 403) return null;
-      const u = res.data.user ?? res.data.data?.user ?? null;
-      return adaptUser(u);
+      const data = await apiClient.get<{ user: SessionUser } | null>('/api/v1/auth/session');
+      return data?.user ?? null;
     } catch (err) {
       if (err instanceof ApiClientError && err.code === ERROR_CODES.NETWORK_ERROR) {
         throw err;
@@ -76,27 +71,53 @@ export const authService = {
   },
 
   async signIn(payload: SignInPayload): Promise<SessionUser> {
-    const res = await apiClient.raw.post<BetterAuthSessionResponse>(
-      '/api/auth/sign-in/email',
-      payload,
-    );
-    const user = adaptUser(res.data.user ?? res.data.data?.user ?? null);
-    if (!user) {
-      throw new ApiClientError({
-        code: ERROR_CODES.INVALID_CREDENTIALS,
-        message: 'Sign-in succeeded but no session user was returned.',
-        status: 500,
-      });
+    try {
+      const res = await apiClient.raw.post<BetterAuthResponse>(
+        '/api/auth/sign-in/email',
+        payload,
+      );
+      const user = adaptUser(res.data.user ?? null);
+      if (!user) {
+        throw new ApiClientError({
+          code: ERROR_CODES.INVALID_CREDENTIALS,
+          message: 'Sign-in succeeded but no session user was returned.',
+          status: 500,
+        });
+      }
+      if (!user.is_active) {
+        await authService.signOut().catch(() => {});
+        throw new ApiClientError({
+          code: ERROR_CODES.ACCOUNT_DEACTIVATED,
+          message: 'Your account has been deactivated. Contact an administrator.',
+          status: 403,
+        });
+      }
+      return user;
+    } catch (err) {
+      // Re-throw our own typed errors unchanged.
+      if (err instanceof ApiClientError) throw err;
+      // Better Auth returns its own error shape on 4xx — convert to ApiClientError
+      // so LoginForm's catch block can display a proper message instead of
+      // falling through to the generic "An unexpected error occurred."
+      const axiosErr = err as { response?: { status?: number; data?: { code?: string; message?: string } } };
+      const status = axiosErr.response?.status ?? 500;
+      const baCode = axiosErr.response?.data?.code ?? '';
+      if (baCode === 'INVALID_EMAIL_OR_PASSWORD' || status === 401) {
+        throw new ApiClientError({ code: ERROR_CODES.INVALID_CREDENTIALS, message: 'Email or password is incorrect.', status });
+      }
+      if (baCode === 'EMAIL_NOT_VERIFIED' || status === 403) {
+        throw new ApiClientError({ code: ERROR_CODES.UNAUTHENTICATED, message: axiosErr.response?.data?.message ?? 'Sign-in failed. Please try again.', status });
+      }
+      throw new ApiClientError({ code: ERROR_CODES.INTERNAL_ERROR, message: 'Sign-in failed. Please try again.', status });
     }
-    return user;
   },
 
   async signUp(payload: SignUpPayload): Promise<SessionUser> {
-    const res = await apiClient.raw.post<BetterAuthSessionResponse>(
+    const res = await apiClient.raw.post<BetterAuthResponse>(
       '/api/auth/sign-up/email',
       payload,
     );
-    const user = adaptUser(res.data.user ?? res.data.data?.user ?? null);
+    const user = adaptUser(res.data.user ?? null);
     if (!user) {
       throw new ApiClientError({
         code: ERROR_CODES.INTERNAL_ERROR,

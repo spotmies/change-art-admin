@@ -1,5 +1,5 @@
 import { RouterProvider } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, ToastBar, toast } from 'react-hot-toast';
 import { router } from './router';
 import { QueryProvider } from './providers/QueryProvider';
 import { AuthProvider } from './providers/AuthProvider';
@@ -31,7 +31,41 @@ export function App() {
                   fontSize: '13px',
                 },
               }}
-            />
+            >
+              {(t) => (
+                <ToastBar toast={t}>
+                  {({ icon, message }) => (
+                    <>
+                      {icon}
+                      {message}
+                      {t.type !== 'loading' && (
+                        <button
+                          type="button"
+                          onClick={() => toast.dismiss(t.id)}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            marginLeft: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            opacity: 0.5,
+                            transition: 'opacity 0.2s',
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.opacity = '1')}
+                          onMouseOut={(e) => (e.currentTarget.style.opacity = '0.5')}
+                          aria-label="Dismiss toast"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </>
+                  )}
+                </ToastBar>
+              )}
+            </Toaster>
           </SocketProvider>
         </AuthProvider>
       </QueryProvider>

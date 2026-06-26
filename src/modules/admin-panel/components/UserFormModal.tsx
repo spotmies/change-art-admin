@@ -21,7 +21,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: UserRole.CS, label: 'Client Servicing' },
   { value: UserRole.TEAM_LEAD, label: 'Team Lead' },
   { value: UserRole.DESIGNER, label: 'Designer' },
-  { value: UserRole.DIGITATOR, label: 'Digitator' },
+  { value: UserRole.DIGITATOR, label: 'Digitizor' },
   { value: UserRole.SEWOUT, label: 'Sewout' },
   { value: UserRole.QC, label: 'QC Reviewer' },
   { value: UserRole.ADMIN, label: 'Admin' },
@@ -132,7 +132,7 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
           name: form.name.trim(),
           password: form.password,
           role: form.role,
-          sub_type: subTypeValue,
+          ...(subTypeValue ? { sub_type: subTypeValue } : {}),
         },
         { onSuccess: onClose },
       );
@@ -247,7 +247,7 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
                   value={form.email}
                   disabled={!isCreate}
                   onChange={(e) => set('email', e.target.value)}
-                  placeholder="name@spotmies.com"
+                  placeholder="name@changeartwork.com"
                   style={!isCreate ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                 />
               </div>

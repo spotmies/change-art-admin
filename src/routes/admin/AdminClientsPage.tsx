@@ -130,7 +130,7 @@ export function AdminClientsPage() {
     <div className="page">
       <GreetingHero
         title="Client Management"
-        subtitle="Master client directory — onboarding state, lifetime spend, churn risk, and assigned CS owner."
+        subtitle="Master client directory — onboarding state, lifetime spend, churn risk, and assigned Client Servicing owner."
       />
 
       <StatGrid

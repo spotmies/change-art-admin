@@ -49,6 +49,9 @@ export const ERROR_CODES = {
   FILE_INFECTED: 'FILE_INFECTED',
   STORAGE_ERROR: 'STORAGE_ERROR',
 
+  // Users
+  USER_HAS_HISTORY: 'USER_HAS_HISTORY',
+
   // Clients
   CLIENT_HAS_JOBS: 'CLIENT_HAS_JOBS',
   CLIENT_NOT_FOUND: 'CLIENT_NOT_FOUND',
@@ -126,6 +129,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   FILE_INFECTED: 'This file failed the virus scan and cannot be used.',
   STORAGE_ERROR: 'The file storage service is temporarily unavailable.',
 
+  USER_HAS_HISTORY: 'This user has existing job history and cannot be permanently deleted. Please deactivate the account instead.',
   CLIENT_HAS_JOBS: 'This client has active jobs and cannot be deleted.',
   CLIENT_NOT_FOUND: 'This client was not found.',
   CLIENT_ID_TAKEN: 'A client with this ID already exists.',

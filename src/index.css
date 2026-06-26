@@ -1024,42 +1024,92 @@ html[data-theme='light'] .mb-track {
     overflow: visible;
   }
 
+  /* ══════════════════════════════════════════════════════
+     TABLE TOOLBAR
+     Outer card stacks vertically:
+       Row 1 — search + [Filters btn] + [Grid/List/Table]
+       Row 2 — expanded filter panel (conditional)
+  ══════════════════════════════════════════════════════ */
   .tbl-top {
     display: flex;
-    align-items: center;
-    padding: 8px 12px;
+    flex-direction: column;
+    padding: 0;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     border-radius: 12px;
     box-shadow: var(--glass-shadow);
-    gap: 8px;
     margin-bottom: 12px;
     overflow: hidden;
   }
 
-  /* Slot that holds the external filter bar — takes all remaining space */
+  /* Row 1: search/filter-bar + view-toggle always on same horizontal line */
+  .tbl-top-row {
+    display: flex;
+    align-items: flex-start;  /* anchor everything to the top */
+    gap: 10px;
+    padding: 8px 12px;
+  }
+
+  /* Toolbar slot: wrapping flex — bar-row on line 1, panel on line 2 (wrapped) */
   .tbl-toolbar-slot {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;          /* lets panel break onto a new line inside the slot */
+    align-content: flex-start;
   }
-  /* Strip the filter bar's own padding/background when embedded in tbl-top */
-  .tbl-toolbar-slot .job-filter-bar {
-    padding: 0;
-    background: none;
-    border: none;
-    box-shadow: none;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .tbl-toolbar-slot .job-filter-bar::-webkit-scrollbar { display: none; }
 
-  /* Pin the view toggle to the right */
+  /* The compact search + Filters button row — takes 100% of line 1 */
+  .job-filter-bar-row {
+    flex: 0 0 100%;           /* 100% basis → claims full line 1, panel wraps to line 2 */
+    min-width: 0;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Panel: 100% width forces it onto a new wrapped line inside the slot */
+  /* (view toggle is NOT inside tbl-toolbar-slot, so it stays on row 1) */
+
+  /* View toggle — top-aligned; 1px nudge optically centers the 34px toggle with the 36px search bar */
   .tbl-toggle-right {
-    margin-left: auto;
     flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+  @media (max-width: 640px) {
+    .tbl-top-row {
+      flex-wrap: wrap;
+      align-items: stretch;
+      gap: 8px;
+      padding: 8px;
+    }
+    .tbl-toolbar-slot {
+      width: 100%;
+      flex: 0 0 100%;
+    }
+    .job-filter-bar-row {
+      min-height: 40px;
+      height: auto;
+    }
+    .filter-search-wrap { flex: 1; min-width: 0; }
+    .filter-toggle-btn {
+      flex-shrink: 0;
+      height: 40px;
+      padding: 0 14px;
+      font-size: 13px;
+    }
+    .tbl-toggle-right {
+      width: 100%;
+      margin-top: 0;
+      align-self: auto;
+      display: flex;
+    }
+    .tbl-toggle-right button { flex: 1; text-align: center; }
   }
 
   .tbl-search-wrap {
@@ -1132,10 +1182,10 @@ html[data-theme='light'] .mb-track {
   .view-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     padding: 3px;
-    border: 1px solid var(--glass-border);
-    border-radius: 999px;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.03);
   }
 
@@ -1143,21 +1193,23 @@ html[data-theme='light'] .mb-track {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    padding: 6px 14px;
-    border-radius: 999px;
+    padding: 5px 14px;
+    border-radius: 7px;
     cursor: pointer;
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     font-size: 12.5px;
     font-weight: 600;
     transition: var(--transition);
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
   }
 
   .view-toggle button.on {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-main);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
   }
-
 
 
   /* ─ Job card (grid view) ─ */
@@ -1499,23 +1551,143 @@ html[data-theme='light'] .mb-track {
     color: var(--crimson);
   }
 
-  /* ─ Job filter bar ─ */
-  .job-filter-bar {
-    display: flex;
+  /* ──────────────────────────────────────────────
+     FILTER BAR — Premium clean design
+  ────────────────────────────────────────────── */
+
+  /* Filters toggle button */
+  .filter-toggle-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding: 10px 0 8px 0;
-    scrollbar-width: none;
+    gap: 7px;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
   }
-  .job-filter-bar::-webkit-scrollbar { display: none; }
+  .filter-toggle-btn:hover {
+    border-color: var(--color-crimson, #c41e3a);
+    color: var(--color-crimson, #c41e3a);
+    background: rgba(196, 30, 58, 0.04);
+  }
+  .filter-toggle-btn.active {
+    border-color: var(--color-crimson, #c41e3a);
+    background: rgba(196, 30, 58, 0.07);
+    color: var(--color-crimson, #c41e3a);
+  }
+
+  /* Badge showing active filter count */
+  .filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-crimson, #c41e3a);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 99px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    line-height: 1;
+    margin-left: 2px;
+  }
+
+  /* Expanded filter panel — wraps to line 2 inside tbl-toolbar-slot */
+  /* Expanded filter panel — wraps to line 2 inside tbl-toolbar-slot */
+  .filter-expanded-panel {
+    flex: 0 0 100%;           /* 100% width forces wrap to new line inside slot */
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding: 10px 6px 12px;
+    border-top: 1px solid var(--glass-border);
+    background: rgba(0, 0, 0, 0.015);
+    animation: filterSlideDown 0.16s ease-out;
+  }
+  @keyframes filterSlideDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  html[data-theme='light'] .filter-expanded-panel {
+    background: rgba(15, 23, 42, 0.02);
+  }
+
+  /* mobile ≤ 480px — single column */
+  @media (max-width: 480px) {
+    .filter-expanded-panel {
+      grid-template-columns: 1fr;
+      gap: 7px;
+      padding: 8px;
+    }
+    /* pair the two date pickers side-by-side even on tiny phones */
+    .filter-date-wrap {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+    .filter-date { height: 36px; font-size: 11.5px; }
+    /* Put both date wrappers in a single row that spans the full grid */
+    .filter-date-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 639px) {
+    .filter-expanded-panel {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .filter-date-row {
+      grid-column: span 2;   /* span both columns */
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .filter-expanded-panel {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .filter-date-row {
+      grid-column: span 3;   /* span all 3 columns */
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .filter-expanded-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 2px 10px;
+    }
+  }
 
   .filter-select-wrap {
     position: relative;
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    flex-shrink: 0;
+    width: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .filter-select-wrap {
+      display: inline-flex;
+      flex-shrink: 0;
+      width: 120px;
+    }
   }
 
   .filter-select-wrap svg.filter-chevron {
@@ -1530,12 +1702,12 @@ html[data-theme='light'] .mb-track {
   }
 
   .filter-select {
-    height: 32px;
-    padding: 0 26px 0 10px;
-    font-size: 12px;
+    height: 34px;
+    padding: 0 28px 0 12px;
+    font-size: 12.5px;
     font-weight: 500;
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
     background: var(--glass-bg);
     color: var(--text-main);
     cursor: pointer;
@@ -1545,100 +1717,204 @@ html[data-theme='light'] .mb-track {
     -webkit-appearance: none;
     -moz-appearance: none;
     min-width: 0;
-    width: 118px;
+    width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .filter-select:focus { border-color: var(--crimson); }
+  @media (min-width: 1024px) {
+    .filter-select {
+      width: 120px;
+    }
+  }
+
+  .filter-select:focus { border-color: var(--color-crimson, #c41e3a); }
   .filter-select.active {
-    border-color: var(--crimson);
-    background: rgba(196,30,58,0.08);
-    color: var(--crimson);
+    border-color: var(--color-crimson, #c41e3a);
+    background: rgba(196,30,58,0.06);
+    color: var(--color-crimson, #c41e3a);
     font-weight: 600;
   }
-  .filter-select.active + svg.filter-chevron { color: var(--crimson); }
+  .filter-select.active + svg.filter-chevron { color: var(--color-crimson, #c41e3a); }
 
+  /* Main search input */
   .filter-search {
     width: 100%;
-    height: 32px;
-    padding: 0 10px 0 32px;
-    font-size: 12px;
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
+    height: 36px;
+    padding: 0 12px 0 36px;
+    font-size: 13px;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
     background: var(--glass-bg);
     color: var(--text-main);
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-
-  .filter-search:focus { border-color: var(--crimson); }
+  .filter-search:focus {
+    border-color: var(--color-crimson, #c41e3a);
+    box-shadow: 0 0 0 3px rgba(196, 30, 58, 0.08);
+  }
   .filter-search::placeholder { color: var(--text-faint); }
+
+  @media (max-width: 640px) {
+    .filter-search {
+      height: 40px;
+      font-size: 14px;   /* prevent iOS zoom on focus */
+      padding: 0 12px 0 38px;
+    }
+    .filter-search-icon {
+      left: 12px;
+      width: 15px;
+      height: 15px;
+    }
+  }
 
   .filter-search-wrap {
     position: relative;
     flex: 1;
-    min-width: 160px;
-    max-width: 240px;
-    flex-shrink: 0;
+    min-width: 0;
   }
 
   .filter-search-icon {
     position: absolute;
-    left: 10px;
+    left: 11px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
     pointer-events: none;
-    width: 13px;
-    height: 13px;
+    width: 14px;
+    height: 14px;
   }
 
+  /* Date picker controls in expanded panel */
   .filter-date {
-    height: 32px;
-    padding: 0 8px;
-    font-size: 11.5px;
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
+    height: 34px;
+    padding: 0 10px;
+    font-size: 12px;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
     background: var(--glass-bg);
     color: var(--text-main);
     outline: none;
     transition: border-color 0.15s;
     cursor: pointer;
-    width: 120px;
-    flex-shrink: 0;
+    width: 100%;
   }
+
+  @media (min-width: 1024px) {
+    .filter-date {
+      width: 130px;
+      flex-shrink: 0;
+    }
+  }
+
   .filter-date::-webkit-calendar-picker-indicator {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: pointer;
     width: 12px;
     height: 12px;
   }
-
-  .filter-date:focus { border-color: var(--crimson); }
+  .filter-date:focus { border-color: var(--color-crimson, #c41e3a); }
   .filter-date.active {
-    border-color: var(--crimson);
-    background-color: rgba(196,30,58,0.08);
-    color: var(--crimson);
+    border-color: var(--color-crimson, #c41e3a);
+    background-color: rgba(196,30,58,0.06);
+    color: var(--color-crimson, #c41e3a);
     font-weight: 600;
   }
 
-  .filter-clear-btn {
-    height: 32px;
-    padding: 0 12px;
-    font-size: 11.5px;
+  .filter-date-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .filter-date-wrap {
+      width: auto;
+      flex-shrink: 0;
+    }
+  }
+
+  /* Wrapper that keeps both date pickers side-by-side at all sizes */
+  .filter-date-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    /* span both columns of the grid-based panel on mobile */
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  @media (min-width: 1024px) {
+    .filter-date-row {
+      display: flex;
+      gap: 6px;
+      width: auto;
+      flex-shrink: 0;
+      grid-column: unset;
+    }
+  }
+
+  .filter-date-label {
+    font-size: 11px;
+    color: var(--text-muted);
     font-weight: 600;
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .filter-clear-btn {
+    height: 34px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
     white-space: nowrap;
-    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     transition: all 0.15s;
   }
-  .filter-clear-btn:hover { border-color: var(--crimson); color: var(--crimson); background: rgba(196,30,58,0.06); }
+
+  @media (max-width: 480px) {
+    .filter-clear-btn {
+      grid-column: 1 / -1;   /* span full width in single-col layout */
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 639px) {
+    .filter-clear-btn {
+      grid-column: span 2;
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .filter-clear-btn {
+      grid-column: span 3;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .filter-clear-btn {
+      width: auto;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+  }
+
+  .filter-clear-btn:hover {
+    border-color: var(--color-crimson, #c41e3a);
+    color: var(--color-crimson, #c41e3a);
+    background: rgba(196,30,58,0.05);
+  }
 
   /* ─ Table view inline cells ─ */
   .job-cell {
@@ -1683,6 +1959,24 @@ html[data-theme='light'] .mb-track {
     gap: 6px;
     flex-wrap: wrap;
     margin-bottom: 14px;
+  }
+
+  @media (max-width: 640px) {
+    .pills {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 4px;
+      margin-bottom: 10px;
+    }
+    .pills::-webkit-scrollbar { display: none; }
+    .pill {
+      flex-shrink: 0;
+      font-size: 11px;
+      padding: 5px 10px;
+    }
   }
 
   .pill {

@@ -35,9 +35,11 @@ export function AuthLayout() {
   }
 
   if (status === 'authenticated' && user) {
-    const fallback = pathForRole(user.role);
+    const home = pathForRole(user.role);
     const from = (location.state as { from?: string } | null)?.from;
-    return <Navigate to={from ?? fallback} replace />;
+    // Validate `from` belongs to this user's section to avoid cross-role redirects.
+    const to = from?.startsWith(home) ? from : home;
+    return <Navigate to={to} replace />;
   }
 
   return (

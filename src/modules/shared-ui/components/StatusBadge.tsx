@@ -16,7 +16,7 @@ const STATUS_PRESENTATION: Record<JobStatusType, { accent: BadgeAccent; label: s
   [JobStatus.QUOTE_APPROVED]: { accent: 'green', label: 'Quote Approved' },
   [JobStatus.QUOTE_REJECTED]: { accent: 'red', label: 'Quote Rejected' },
   [JobStatus.JOB_PLACED]: { accent: 'blue', label: 'Job Placed' },
-  [JobStatus.CS_APPROVED]: { accent: 'blue', label: 'CS Approved' },
+  [JobStatus.CS_APPROVED]: { accent: 'blue', label: 'Client Servicing Approved' },
   [JobStatus.ASSIGNED]: { accent: 'blue', label: 'Assigned' },
   [JobStatus.IN_PROGRESS]: { accent: 'amber', label: 'In Progress' },
   [JobStatus.SUBMITTED_TO_SENIOR]: { accent: 'purple', label: 'To Senior' },

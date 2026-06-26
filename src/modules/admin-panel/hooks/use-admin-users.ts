@@ -30,9 +30,13 @@ export function useUpdateUser() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateUserBody }) =>
       adminService.updateUser(id, body),
-    onSuccess: (user) => {
+    onSuccess: (user, { body }) => {
       void qc.invalidateQueries({ queryKey: queryKeys.users.all() });
-      toast.success(`${user.name} updated`);
+      if (body.is_active === true) {
+        toast.success(`${user.name} reactivated. If they cannot log in, ask them to check their email for a password reset link.`, { duration: 6000 });
+      } else {
+        toast.success(`${user.name} updated`);
+      }
     },
     onError: (err) => toastApiError(err),
   });

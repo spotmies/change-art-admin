@@ -137,7 +137,7 @@ export const NAV_CONFIG = {
   },
 
   [UserRole.DIGITATOR]: {
-    label: 'Digitator',
+    label: 'Digitizor',
     sections: [
       {
         id: 'main',

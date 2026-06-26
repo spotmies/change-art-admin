@@ -75,7 +75,7 @@ export function RequestModificationModal({ job, onClose, onSubmit }: RequestModi
           >
             <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden style={{ color: 'var(--color-blue)' }} />
             <div className="text-[12.5px] leading-relaxed">
-              Your CS team will receive this request, reopen the job, and route it back through the production workflow. A new delivery will be made once revisions pass QC.
+              Your Client Servicing team will receive this request, reopen the job, and route it back through the production workflow. A new delivery will be made once revisions pass QC.
             </div>
           </div>
 

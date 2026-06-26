@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Mail, X, ShieldAlert, KeyRound } from 'lucide-react';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import { ApiClientError } from '@lib/api-client';
-import { ERROR_CODES } from '@contracts';
+import { ERROR_CODES, UserRole } from '@contracts';
 import type { IClient } from '@contracts';
 import type { ClientModalMode } from './ClientDetailModal';
 
@@ -28,7 +28,22 @@ export function ClientAccessGateModal({
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sentToEmail, setSentToEmail] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState<string | null>(null);
+  const [loadingRecipient, setLoadingRecipient] = useState(true);
   const otpRef = useRef<HTMLInputElement>(null);
+
+  // Pre-fetch the recipient email so it can be shown before the OTP is sent.
+  useEffect(() => {
+    if (!client) return;
+    setLoadingRecipient(true);
+    import('../services/admin.service').then(({ adminService }) => {
+      adminService.getOtpRecipient()
+        .then((res) => setRecipientEmail(res.email))
+        .catch(() => {})
+        .finally(() => setLoadingRecipient(false));
+    });
+  }, [client]);
 
   // Reset state whenever the modal opens for a new client.
   useEffect(() => {
@@ -37,6 +52,7 @@ export function ClientAccessGateModal({
       setOtp('');
       setError(null);
       setPending(false);
+      setSentToEmail(null);
     }
   }, [client]);
 
@@ -66,7 +82,8 @@ export function ClientAccessGateModal({
     setPending(true);
     try {
       const { adminService } = await import('../services/admin.service');
-      await adminService.requestAccessOtp();
+      const res = await adminService.requestAccessOtp();
+      if (res?.email) setSentToEmail(res.email);
       setStep('verify');
     } catch {
       setError('Failed to send OTP. Check your connection and try again.');
@@ -109,7 +126,10 @@ export function ClientAccessGateModal({
     }
   }
 
-  const maskedEmail = user.email.replace(/(.{2}).+(@.+)/, '$1•••$2');
+  // For CS users the OTP goes to the admin's email (fetched from DB).
+  // recipientEmail is pre-loaded; sentToEmail is set after OTP is sent.
+  const resolvedEmail = sentToEmail ?? recipientEmail ?? (user.role === UserRole.CS ? null : user.email);
+  const maskedEmail = resolvedEmail ? resolvedEmail.replace(/(.{2}).+(@.+)/, '$1•••$2') : null;
 
   const modal = (
     <div
@@ -165,7 +185,10 @@ export function ClientAccessGateModal({
             >
               <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-text-faint" aria-hidden />
               <span className="text-text-muted leading-relaxed">
-                A one-time code will be sent to <strong style={{ color: 'var(--text)' }}>{maskedEmail}</strong>.
+                A one-time code will be sent to{' '}
+                <strong style={{ color: 'var(--text)' }}>
+                  {loadingRecipient ? '…' : maskedEmail ?? "the administrator's email"}
+                </strong>.
                 Enter it on the next screen to unlock access.
               </span>
             </div>
@@ -211,7 +234,10 @@ export function ClientAccessGateModal({
             >
               <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0 text-text-faint" aria-hidden />
               <span className="text-text-muted leading-relaxed">
-                A 6-digit code was sent to <strong style={{ color: 'var(--text)' }}>{maskedEmail}</strong>.
+                A 6-digit code was sent to{' '}
+                <strong style={{ color: 'var(--text)' }}>
+                  {maskedEmail ?? "the administrator's email"}
+                </strong>.
                 It expires in 10 minutes.
               </span>
             </div>
@@ -261,7 +287,7 @@ export function ClientAccessGateModal({
               <button
                 type="button"
                 className="btn btn-outline flex-1"
-                onClick={() => { setStep('request'); setOtp(''); setError(null); }}
+                onClick={() => { setStep('request'); setOtp(''); setError(null); setSentToEmail(null); }}
                 disabled={pending}
               >
                 Resend

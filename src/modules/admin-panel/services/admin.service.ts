@@ -271,6 +271,11 @@ export const adminService = {
     return apiClient.post<void>(`/api/v1/clients/${clientId}/access-log`);
   },
 
+  /** Resolve which email will receive the OTP — without generating one (for pre-display). */
+  getOtpRecipient(): Promise<{ email: string }> {
+    return apiClient.get<{ email: string }>('/api/v1/clients/otp-recipient');
+  },
+
   /** Send a 6-digit OTP to the current admin's email for client-section access. */
   requestAccessOtp(): Promise<{ email: string }> {
     return apiClient.post<{ email: string }>('/api/v1/clients/request-access-otp');

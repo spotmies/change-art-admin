@@ -48,18 +48,25 @@ function formatDate(d: string) {
 type StepState = 'done' | 'cur' | 'pending';
 
 function buildSteps(job: Job): { role: string; note: string; state: StepState }[] {
-  const hasSewout = job.order.includes('Sewout');
-  const base: [string, string][] = hasSewout
-    ? [['CS', 'Created'], ['Team Lead', 'Assigned'], ['Production', job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress'], ['Sewout', 'Pending'], ['QC', 'Review'], ['CS', 'Dispatch']]
-    : [['CS', 'Created'], ['Team Lead', 'Assigned'], ['Production', job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress'], ['QC', 'Review'], ['CS', 'Dispatch']];
+  const raw = (job.rawStatus ?? '').toUpperCase();
+  let productionNote = 'In Progress';
+  if (raw === 'JOB_PLACED' || raw === 'CS_APPROVED') {
+    productionNote = 'Pending';
+  } else if (job.etaHours) {
+    productionNote = `ETA: ${job.etaHours}h`;
+  }
+
+  const base: [string, string][] = [
+    ['Client Servicing', 'Created'],
+    ['In Production', productionNote],
+    ['Client Servicing', 'Dispatch']
+  ];
 
   const stageIdx: Record<string, number> = {
-    quote: 0, junior: 2, senior: 2,
-    sewout: hasSewout ? 3 : 2,
-    qc: hasSewout ? 4 : 3,
-    delivered: hasSewout ? 5 : 4,
+    quote: 0,
+    delivered: 2,
   };
-  const cur = stageIdx[job.stage] ?? 0;
+  const cur = stageIdx[job.stage] ?? 1;
 
   return base.map(([role, note], i) => ({
     role,
@@ -89,7 +96,6 @@ export function JobModal({ job, onClose }: JobModalProps) {
   const steps = buildSteps(job);
 
   const details: [string, string][] = [
-    ['Client', job.client],
     ['Client ID', job.clientId],
     ['Order Type', job.order],
     ...(job.specificType ? [['Specific Service', job.specificType] as [string, string]] : []),
@@ -109,10 +115,16 @@ export function JobModal({ job, onClose }: JobModalProps) {
           (() => {
             const text = job.notes || job.summary;
             const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
-            const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+            const customFormat = match && match[1] ? match[1].trim() : null;
             return job.finalFiles.map(f => {
               if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
-                return customFormat || f;
+                if (customFormat) {
+                  if (/^others:\s*/i.test(customFormat)) {
+                    return customFormat.replace(/^others:\s*/i, 'Others: ');
+                  }
+                  return `Others: ${customFormat}`;
+                }
+                return f;
               }
               return f;
             }).join(', ');

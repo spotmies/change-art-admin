@@ -21,7 +21,19 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sentToEmail, setSentToEmail] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState<string | null>(null);
+  const [loadingRecipient, setLoadingRecipient] = useState(true);
   const otpRef = useRef<HTMLInputElement>(null);
+
+  // Pre-fetch the recipient email so we can show it before the OTP is sent.
+  useEffect(() => {
+    import('../services/admin.service').then(({ adminService }) => {
+      adminService.getOtpRecipient()
+        .then((res) => setRecipientEmail(res.email))
+        .catch(() => {})
+        .finally(() => setLoadingRecipient(false));
+    });
+  }, []);
 
   useEffect(() => {
     if (step === 'verify') {
@@ -145,8 +157,14 @@ export function ClientSectionGateModal({ onVerified, onDismiss }: ClientSectionG
               <span className="text-text-muted leading-relaxed">
                 {user.role === UserRole.CS ? (
                   <>
-                    A one-time code will be sent to the{' '}
-                    <strong style={{ color: 'var(--text)' }}>{"administrator's email"}</strong>.
+                    A one-time code will be sent to{' '}
+                    <strong style={{ color: 'var(--text)' }}>
+                      {loadingRecipient
+                        ? '…'
+                        : recipientEmail
+                          ? recipientEmail.replace(/(.{2}).+(@.+)/, '$1•••$2')
+                          : "the administrator's email"}
+                    </strong>.
                   </>
                 ) : (
                   <>

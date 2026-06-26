@@ -24,7 +24,7 @@ export function TeamLeadDashboardPage() {
     <div className="page">
       <GreetingHero
         title={`Good ${getGreeting()}, ${firstName}`}
-        subtitle="Assign approved jobs to the right designer or digitator, watch the team's load, and unblock at-risk work."
+        subtitle="Assign approved jobs to the right designer or digitizor, watch the team's load, and unblock at-risk work."
       />
 
       <StatGrid

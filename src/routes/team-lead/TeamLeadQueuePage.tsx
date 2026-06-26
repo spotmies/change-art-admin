@@ -18,7 +18,7 @@ export function TeamLeadQueuePage() {
     <div className="page">
       <GreetingHero
         title="Assignment Queue"
-        subtitle="Approved jobs waiting to be assigned to a designer or digitator."
+        subtitle="Approved jobs waiting to be assigned to a designer or digitizor."
       />
 
       <StatGrid

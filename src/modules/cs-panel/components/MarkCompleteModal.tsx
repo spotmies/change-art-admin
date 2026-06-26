@@ -10,11 +10,12 @@ interface Props {
   jobDesign: string;
   /** e.g. 'Digitizing' or 'Digitizing + Sewout' — controls stitch count field visibility */
   orderType: string;
+  allowedFormats?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function MarkCompleteModal({ jobId, jobDesign, orderType, onClose, onSuccess }: Props) {
+export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats, onClose, onSuccess }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [stitchCount, setStitchCount] = useState('');
   const [note, setNote] = useState('');
@@ -29,9 +30,21 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, onClose, onSucc
 
   function addFiles(incoming: FileList | null) {
     if (!incoming) return;
+    const incomingFiles = Array.from(incoming);
+    if (allowedFormats && allowedFormats.length > 0) {
+      const invalidFiles = incomingFiles.filter(f => {
+        const dotIdx = f.name.lastIndexOf('.');
+        const ext = dotIdx !== -1 ? f.name.slice(dotIdx + 1).toLowerCase() : '';
+        return !allowedFormats.includes(ext);
+      });
+      if (invalidFiles.length > 0) {
+        toast.error(`Only ${allowedFormats.map(e => e.toUpperCase()).join(', ')} formats can be uploaded for this job.`);
+        return;
+      }
+    }
     setFiles((prev) => {
       const existing = new Set(prev.map((f) => f.name + f.size));
-      const next = Array.from(incoming).filter((f) => !existing.has(f.name + f.size));
+      const next = incomingFiles.filter((f) => !existing.has(f.name + f.size));
       return [...prev, ...next];
     });
   }
@@ -128,9 +141,14 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, onClose, onSucc
 
           {/* File upload */}
           <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 2 }}>
               Completed Files <span style={{ color: '#B22234' }}>*</span>
             </div>
+            {allowedFormats && allowedFormats.length > 0 && (
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                Expected Format: <span style={{ color: '#059669', fontWeight: 700 }}>{allowedFormats.map(f => f.toUpperCase()).join(', ')}</span>
+              </div>
+            )}
             <div
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
@@ -151,14 +169,18 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, onClose, onSucc
                 Drop files here or <span style={{ color: '#059669', textDecoration: 'underline' }}>browse</span>
               </div>
               <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                PDF, PNG, JPG, AI, EPS, CDR — up to 500 MB each
+                {allowedFormats && allowedFormats.length > 0
+                  ? allowedFormats.map(f => f.toUpperCase()).join(', ')
+                  : 'PDF, PNG, JPG, AI, EPS, CDR'} — up to 500 MB each
               </div>
             </div>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"
+              accept={allowedFormats && allowedFormats.length > 0
+                ? allowedFormats.map(ext => `.${ext}`).join(',')
+                : ".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"}
               className="hidden"
               disabled={isPending}
               onChange={(e) => addFiles(e.target.files)}

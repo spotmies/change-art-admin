@@ -62,45 +62,19 @@ interface JobDetailModalProps {
   quoteView?: boolean;
 }
 
-function buildFlowSteps(hasSewout: boolean): { role: string; sub: string }[] {
-  return hasSewout
-    ? [
-      { role: 'CS', sub: 'Created' },
-      { role: 'TL', sub: 'Assigned' },
-      { role: 'Execution', sub: '' },
-      { role: 'Sewout', sub: 'Pending' },
-      { role: 'QC', sub: 'Review' },
-      { role: 'CS', sub: 'Dispatch' },
-    ]
-    : [
-      { role: 'CS', sub: 'Created' },
-      { role: 'TL', sub: 'Assigned' },
-      { role: 'Execution', sub: '' },
-      { role: 'QC', sub: 'Review' },
-      { role: 'CS', sub: 'Dispatch' },
-    ];
+function buildFlowSteps(): { role: string; sub: string }[] {
+  return [
+    { role: 'Client Servicing', sub: 'Created' },
+    { role: 'In Production', sub: 'Pending' },
+    { role: 'Client Servicing', sub: 'Dispatch' },
+  ];
 }
 
-function currentStepIndex(job: Job, hasSewout: boolean): number {
-  const raw = (job.rawStatus ?? '').toUpperCase();
-
-  // Steps (no sewout): 0=CS Created, 1=TL Assigned, 2=Execution, 3=QC Review, 4=CS Dispatch
-  // Steps (sewout):    0=CS Created, 1=TL Assigned, 2=Execution, 3=Sewout, 4=QC Review, 5=CS Dispatch
-  // The returned index is the ACTIVE step; all steps before it render as completed ✓.
-
+function currentStepIndex(job: Job): number {
   switch (job.stage) {
     case 'quote': return 0;
-    case 'junior':
-    case 'senior': {
-      // Job placed / CS-approved: job is in the CS queue, not yet assigned to anyone → TL step is next
-      if (raw === 'JOB_PLACED' || raw === 'CS_APPROVED') return 1;
-      // Assigned / IN_PROGRESS / Senior stages: someone is actively working → Execution step is active
-      return 2;
-    }
-    case 'sewout': return hasSewout ? 3 : 2;
-    case 'qc': return hasSewout ? 4 : 3;
-    case 'delivered': return hasSewout ? 5 : 4;
-    default: return 0;
+    case 'delivered': return 2;
+    default: return 1;
   }
 }
 
@@ -166,7 +140,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [noteToClient, setNoteToClient] = useState('');
   // Field-specific invalid flags so the error message + border colour
   // can call out exactly which input is missing, instead of the old
-  // single boolean that always read "Please enter a valid agency price"
+  // single boolean that always read "Please enter a valid quoted price"
   // even when the price was fine and only the ETA was empty.
   const [priceInvalid, setPriceInvalid] = useState(false);
   const [etaInvalid, setEtaInvalid] = useState(false);
@@ -184,9 +158,21 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   const addSendMailFiles = (incoming: FileList | null) => {
     if (!incoming) return;
+    const incomingFiles = Array.from(incoming);
+    if (allowedFormats && allowedFormats.length > 0) {
+      const invalidFiles = incomingFiles.filter(f => {
+        const dotIdx = f.name.lastIndexOf('.');
+        const ext = dotIdx !== -1 ? f.name.slice(dotIdx + 1).toLowerCase() : '';
+        return !allowedFormats.includes(ext);
+      });
+      if (invalidFiles.length > 0) {
+        toast.error(`Only ${allowedFormats.map(e => e.toUpperCase()).join(', ')} formats can be uploaded for this job.`);
+        return;
+      }
+    }
     setSendMailFiles((prev) => {
       const existing = new Set(prev.map((f) => f.name + f.size));
-      const next = Array.from(incoming).filter((f) => !existing.has(f.name + f.size));
+      const next = incomingFiles.filter((f) => !existing.has(f.name + f.size));
       return [...prev, ...next];
     });
   };
@@ -335,9 +321,19 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const showToggle = job.isAdminCopy === true;
   const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
 
-  const hasSewout = job.order.includes('Sewout');
-  const flowSteps = buildFlowSteps(hasSewout);
-  const stepIdx = currentStepIndex(job, hasSewout);
+  const allowedFormats = useMemo(() => {
+    const text = (job?.notes || '') + '\n' + (job?.summary || '') + '\n' + (originalJob?.notes || '') + '\n' + (originalJob?.summary || '');
+    const match = text.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+    if (!match || !match[1]) return null;
+    const formatStr = match[1].trim().toLowerCase().replace(/^others:\s*/i, '');
+    return formatStr
+      .split(/[\s,;/\\|+]+/i)
+      .map(s => s.trim().replace(/^\./, ''))
+      .filter(Boolean);
+  }, [job, originalJob]);
+
+  const flowSteps = buildFlowSteps();
+  const stepIdx = currentStepIndex(job);
 
   // Resolve the correct image list based on the active view mode:
   //   - Modified tab (viewMode='admin'): COMPLETED delivery files (what was sent to the client).
@@ -1365,8 +1361,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               // specifically failed.
                               const priceMsg = priceInvalid
                                 ? (parseFloat(agencyPrice) > MAX_PRICE
-                                  ? `Agency price must be at most $${MAX_PRICE.toLocaleString()}.`
-                                  : 'Please enter a valid agency price.')
+                                  ? `Quoted price must be at most $${MAX_PRICE.toLocaleString()}.`
+                                  : 'Please enter a valid quoted price.')
                                 : null;
                               const etaMsg = etaInvalid
                                 ? (parseFloat(confirmedEta) > MAX_ETA_HOURS
@@ -1486,14 +1482,14 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   const raw = (job.rawStatus ?? '').toUpperCase();
                   let subLabel = step.sub;
                   if (i === 1) {
-                    // TL Assigned step: show "Pending" when job is awaiting assignment
-                    if (state === 'current') subLabel = 'Pending';
-                  } else if (i === 2) {
-                    // Execution step: show who it's assigned to, or ETA, or fallback
                     if (state === 'current') {
-                      if (raw === 'ASSIGNED' && job.assignedTo) subLabel = job.assignedTo;
-                      else if (raw === 'ASSIGNED') subLabel = 'Assigned';
-                      else subLabel = job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress';
+                      if (raw === 'JOB_PLACED' || raw === 'CS_APPROVED') {
+                        subLabel = 'Pending';
+                      } else if (job.assignedTo) {
+                        subLabel = job.assignedTo;
+                      } else {
+                        subLabel = job.etaHours ? `ETA: ${job.etaHours}h` : 'In Progress';
+                      }
                     }
                   }
                   return (
@@ -1547,7 +1543,6 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <div className="text-[10px] font-bold uppercase tracking-[0.13em] mb-2" style={{ color: '#94A3B8' }}>
                   JOB DETAILS
                 </div>
-                <DetailRow label="Client" value={displayJob.client} />
                 <DetailRow label="Client ID" value={displayJob.clientId} />
                 <DetailRow label="Order Type" value={displayJob.order} />
                 {displayJob.specificType ? <DetailRow label="Specific Service" value={displayJob.specificType} /> : null}
@@ -1560,10 +1555,16 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     value={(() => {
                       const text = displayJob.notes || displayJob.summary;
                       const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
-                      const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+                      const customFormat = match && match[1] ? match[1].trim() : null;
                       return displayJob.finalFiles.map(f => {
                         if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
-                          return customFormat || f;
+                          if (customFormat) {
+                            if (/^others:\s*/i.test(customFormat)) {
+                              return customFormat.replace(/^others:\s*/i, 'Others: ');
+                            }
+                            return `Others: ${customFormat}`;
+                          }
+                          return f;
                         }
                         return f;
                       }).join(', ');
@@ -1737,11 +1738,12 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               gap: 6,
             }}
             onClick={() => onEdit?.(job)}
+            disabled={isDelivered}
           >
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
           </button>
-          {!isQuote && isAcknowledged ? (
+          {!isQuote && isAcknowledged && !isDelivered ? (
             <button
               type="button"
               className="btn btn-crimson"
@@ -1784,6 +1786,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           jobId={jobUuid}
           jobDesign={job.design}
           orderType={job.order}
+          allowedFormats={allowedFormats ?? undefined}
           onClose={() => setShowMarkComplete(false)}
           onSuccess={() => { setShowMarkComplete(false); handleClose(); }}
         />
@@ -1886,7 +1889,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     }}
                   >
                     <div style={{ fontSize: 11, fontWeight: 800, color: '#92400E', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      Agency Price Proposal
+                      Quoted Price Proposal
                     </div>
                     <div
                       style={{
@@ -2105,6 +2108,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     Upload Completed Deliverables <span style={{ color: '#B22234' }}>*</span>
                   </div>
+                  {allowedFormats && allowedFormats.length > 0 && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginTop: -2, marginBottom: 2 }}>
+                      Expected Format: <span style={{ color: '#D97706', fontWeight: 700 }}>{allowedFormats.map(f => f.toUpperCase()).join(', ')}</span>
+                    </div>
+                  )}
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -2132,14 +2140,18 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                       Drop files here or <span style={{ color: '#D97706', textDecoration: 'underline' }}>browse</span>
                     </div>
                     <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
-                      PDF, PNG, JPG, AI, EPS, CDR — up to 500 MB each
+                      {allowedFormats && allowedFormats.length > 0
+                        ? allowedFormats.map(f => f.toUpperCase()).join(', ')
+                        : 'PDF, PNG, JPG, AI, EPS, CDR'} — up to 500 MB each
                     </div>
                   </div>
                   <input
                     ref={sendMailFileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"
+                    accept={allowedFormats && allowedFormats.length > 0
+                      ? allowedFormats.map(ext => `.${ext}`).join(',')
+                      : ".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"}
                     className="hidden"
                     onChange={(e) => addSendMailFiles(e.target.files)}
                   />
@@ -2598,10 +2610,16 @@ function CompareView({
         if (!j.finalFiles?.length) return '—';
         const text = j.notes || j.summary;
         const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
-        const customFormat = match && match[1] ? match[1].trim().replace(/^others:\s*/i, '') : null;
+        const customFormat = match && match[1] ? match[1].trim() : null;
         return j.finalFiles.map(f => {
           if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
-            return customFormat || f;
+            if (customFormat) {
+              if (/^others:\s*/i.test(customFormat)) {
+                return customFormat.replace(/^others:\s*/i, 'Others: ');
+              }
+              return `Others: ${customFormat}`;
+            }
+            return f;
           }
           return f;
         }).join(', ');

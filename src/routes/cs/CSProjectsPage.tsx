@@ -23,7 +23,7 @@ export function CSProjectsPage() {
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="All Projects" subtitle="All jobs across the CS pipeline." />
+        <GreetingHero title="All Projects" subtitle="All jobs across the Client Servicing pipeline." />
         <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
           Failed to load projects. Please refresh and try again.
         </div>
@@ -35,7 +35,7 @@ export function CSProjectsPage() {
     <div className="page">
       <GreetingHero
         title="All Projects"
-        subtitle="Browse every active, delivered, and amendment job across the CS pipeline."
+        subtitle="Browse every active, delivered, and amendment job across the Client Servicing pipeline."
       />
 
       <StatGrid

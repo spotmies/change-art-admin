@@ -9,6 +9,7 @@ import { useAuthStore } from '@modules/auth/stores/auth-store';
 import { ApiClientError } from '@lib/api-client';
 import { ERROR_CODES, ERROR_MESSAGES, UserRole } from '@contracts';
 import { pathForRole } from '@/router';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@lib/utils';
 
 const LoginSchema = z.object({
@@ -22,6 +23,7 @@ export function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const setUser = useAuthStore((s) => s.setUser);
+  const queryClient = useQueryClient();
   const isDeactivated = !!(location.state as { deactivated?: boolean } | null)?.deactivated;
   const [serverError, setServerError] = useState<string | null>(
     isDeactivated ? 'Your account has been deactivated. Contact an administrator.' : null,
@@ -45,9 +47,16 @@ export function LoginForm() {
         setServerError('Access denied. This platform is for internal staff only.');
         return;
       }
+      // Clear stale cache from any previous session before setting the new user.
+      queryClient.clear();
       setUser(user);
+      const home = pathForRole(user.role);
       const from = (location.state as { from?: string } | null)?.from;
-      navigate(from ?? pathForRole(user.role), { replace: true });
+      // Only honour `from` if it lives under this user's home section.
+      // Otherwise a previous session (e.g. CS) would send a freshly-signed-in
+      // admin to /cs instead of /admin.
+      const destination = from?.startsWith(home) ? from : home;
+      navigate(destination, { replace: true });
       toast.success(`Welcome back, ${user.name.split(' ')[0]}`);
     } catch (err) {
       if (err instanceof ApiClientError) {

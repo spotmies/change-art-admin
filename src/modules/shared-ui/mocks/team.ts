@@ -49,8 +49,8 @@ export const TEAM: TeamMember[] = [
   { id: 'U020', name: 'Siddharth Rao', initials: 'SR', role: 'jr_designer', roleLabel: 'Junior Designer', status: 'available', jobs: 2 },
   { id: 'U021', name: 'Lakshmi Pillai', initials: 'LP', role: 'jr_designer', roleLabel: 'Junior Designer', status: 'busy', jobs: 1 },
   // Digitator
-  { id: 'U030', name: 'Sanjay Kumar', initials: 'SK', role: 'digitator', roleLabel: 'Digitator', status: 'available', jobs: 2 },
-  { id: 'U031', name: 'Renu Iyer', initials: 'RI', role: 'digitator', roleLabel: 'Digitator', status: 'in_progress', jobs: 1 },
+  { id: 'U030', name: 'Sanjay Kumar', initials: 'SK', role: 'digitator', roleLabel: 'Digitizor', status: 'available', jobs: 2 },
+  { id: 'U031', name: 'Renu Iyer', initials: 'RI', role: 'digitator', roleLabel: 'Digitizor', status: 'in_progress', jobs: 1 },
   // Sewout
   { id: 'U040', name: 'Vinay Kumar', initials: 'VK', role: 'sewout', roleLabel: 'Sewout', status: 'available', jobs: 1 },
   // QC

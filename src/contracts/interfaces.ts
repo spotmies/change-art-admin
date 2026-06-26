@@ -63,7 +63,6 @@ export interface IUser {
   sub_type: UserSubType | null;
   is_active: boolean;
   avatar_url: string | null;
-  fcm_tokens: string[];
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }
@@ -111,6 +110,7 @@ export interface IClientSelfView {
   client_name: string;
   company_name: string | null;
   contact_name: string;
+  email: string;
   date: IsoDateTime;
   location: string | null;
 }

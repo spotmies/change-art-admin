@@ -91,14 +91,6 @@ export function JobTable({
       >
         View
       </button>
-      <button
-        type="button"
-        className="btn btn-crimson"
-        onClick={() => setEditJob(j)}
-        aria-label={`Edit ${j.id}`}
-      >
-        Edit
-      </button>
     </div>
   ), []);
 
@@ -119,41 +111,44 @@ export function JobTable({
     <div className={variant === 'delivered' ? 'w-full' : 'jobs-root'} data-view={view}>
       {withControls ? (
         <div className="tbl-top">
-          {/* Left slot: external filter bar OR built-in search */}
-          {toolbarSlot ? (
-            <div className="tbl-toolbar-slot">{toolbarSlot}</div>
-          ) : !hideSearch ? (
-            <div className="tbl-search-wrap">
-              <Search className="tbl-search-icon" aria-hidden />
-              <input
-                type="text"
-                className="tbl-search"
-                placeholder="Search jobs, clients, designs..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search jobs"
-              />
+          {/* Inner row: search/filter-bar + view toggle always on same line */}
+          <div className="tbl-top-row">
+            {/* Left slot: external filter bar OR built-in search */}
+            {toolbarSlot ? (
+              <div className="tbl-toolbar-slot">{toolbarSlot}</div>
+            ) : !hideSearch ? (
+              <div className="tbl-search-wrap">
+                <Search className="tbl-search-icon" aria-hidden />
+                <input
+                  type="text"
+                  className="tbl-search"
+                  placeholder="Search jobs, clients, designs..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search jobs"
+                />
+              </div>
+            ) : null}
+            {/* Right: view toggle */}
+            <div className="view-toggle tbl-toggle-right" role="tablist" aria-label="Job views">
+              {(['grid', 'list', 'table'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v}
+                  className={cn(
+                    view === v && 'on',
+                    v === 'table' && 'hidden md:inline-block'
+                  )}
+                  onClick={() => setView(v)}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
             </div>
-          ) : null}
-          {/* Right: view toggle */}
-          <div className="view-toggle tbl-toggle-right" role="tablist" aria-label="Job views">
-            {(['grid', 'list', 'table'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                role="tab"
-                aria-selected={view === v}
-                className={cn(
-                  view === v && 'on',
-                  v === 'table' && 'hidden md:inline-block'
-                )}
-                onClick={() => setView(v)}
-              >
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
+            {controlsExtra}
           </div>
-          {controlsExtra}
         </div>
       ) : null}
 
@@ -464,14 +459,14 @@ function GridView({
               <div className="jc-title">{j.design}</div>
               <div className="jc-desc">{briefText(j.summary)}</div>
               <div className="jc-meta">
-                <span className="truncate max-w-[90px]">{j.client}</span>
+                <span className="jc-id">{j.id}</span>
                 <PriorityChip priority={j.priority} />
               </div>
               {actionRequired ? (
                 <div className="jc-action">
                   <CheckCircle2 aria-hidden className="w-3.5 h-3.5 mt-px shrink-0" />
                   <span>
-                    Agency price ready{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
+                    Quoted price ready{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
                     <strong>Tap to confirm &amp; start production</strong>
                   </span>
                 </div>
@@ -528,10 +523,8 @@ function ListView({
               </div>
             </div>
 
-            {/* Client + ref */}
+            {/* Ref */}
             <div className="flex items-center gap-2">
-              {j.client && <span className="list-client">{j.client}</span>}
-              {j.client && (j.ref || j.id) && <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>·</span>}
               <span className="list-ref">{j.ref || j.id}</span>
               {j.specificType && (
                 <>
