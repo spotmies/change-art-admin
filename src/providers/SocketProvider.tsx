@@ -13,6 +13,7 @@ import {
   type ReviewSubmittedEvent,
   type ModificationRequestedEvent,
   type AttendanceClockEvent,
+  type QueryRaisedEvent,
 } from '@contracts';
 import { useIsAuthenticated, useSessionUser } from '@modules/auth/stores/auth-store';
 import { connectSocket, disconnectSocket, ensureSocketConnected } from '@lib/socket-client';
@@ -152,6 +153,11 @@ export function SocketProvider({ children }: SocketProviderProps) {
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
     });
 
+    socket.on(SOCKET_EVENTS.QUERY_RAISED, (event: QueryRaisedEvent) => {
+      if (!event?.jobId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.queries.forJob(event.jobId) });
+    });
+
     // Re-attach on tab focus — Chrome/Safari sometimes background-throttle the
     // socket and the auto-reconnect may have given up. This is idempotent.
     const onVisibilityChange = () => {
@@ -179,6 +185,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       socket.off(SOCKET_EVENTS.MODIFICATION_REQUESTED);
       socket.off(SOCKET_EVENTS.ATTENDANCE_CLOCK);
       socket.off(SOCKET_EVENTS.JOB_ACKNOWLEDGED);
+      socket.off(SOCKET_EVENTS.QUERY_RAISED);
     };
   }, [isAuthenticated, user, queryClient]);
 

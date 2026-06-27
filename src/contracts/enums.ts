@@ -162,6 +162,7 @@ export enum NotificationType {
   DELIVERY = 'DELIVERY',
   SYSTEM = 'SYSTEM',
   CLIENT_DATA_ACCESSED = 'CLIENT_DATA_ACCESSED',
+  QUERY = 'QUERY',
 }
 
 export enum FileCategory {
@@ -198,6 +199,13 @@ export enum EmailIngestionStatus {
   PROCESSED = 'PROCESSED',
   FAILED = 'FAILED',
   IGNORED = 'IGNORED',
+}
+
+/** Approval lifecycle for self-registered clients. Null = manually created by admin/CS. */
+export enum ClientApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
 }
 
 // ─── FE-only enums (not in backend; UI-presentation concerns) ───

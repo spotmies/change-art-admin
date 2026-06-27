@@ -1896,6 +1896,53 @@ html[data-theme='light'] .mb-track {
     }
   }
 
+  /* Actions row containing Clear All + Apply */
+  .filter-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  @media (max-width: 480px) {
+    .filter-actions-row {
+      grid-column: 1 / -1;
+      margin-left: 0;
+    }
+  }
+
+  @media (min-width: 481px) and (max-width: 639px) {
+    .filter-actions-row {
+      grid-column: span 2;
+      margin-left: 0;
+    }
+  }
+
+  .filter-apply-btn {
+    height: 34px;
+    padding: 0 18px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1.5px solid var(--glass-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+
+  .filter-apply-btn.has-changes,
+  .filter-apply-btn:hover {
+    background: var(--color-crimson, #c41e3a);
+    border-color: var(--color-crimson, #c41e3a);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(196,30,58,0.25);
+  }
+
   @media (min-width: 640px) and (max-width: 1023px) {
     .filter-clear-btn {
       grid-column: span 3;

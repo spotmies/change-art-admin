@@ -111,17 +111,21 @@ export function ProfileChangeRequestsTab({ search }: Props) {
 
   return (
     <div>
-      {/* Status filter chips */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-1 mb-4 border-b border-[var(--glass-border)]">
         {STATUS_FILTERS.map((f) => (
           <button
             key={f.id}
             type="button"
-            className={`btn ${status === f.id ? 'btn-crimson' : 'btn-outline'}`}
             onClick={() => {
               setStatus(f.id);
               setPage(1);
             }}
+            className={[
+              'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+              status === f.id
+                ? 'border-[var(--crimson)] text-[var(--crimson)]'
+                : 'border-transparent text-text-muted hover:text-text-base',
+            ].join(' ')}
           >
             {f.label}
           </button>

@@ -53,6 +53,7 @@ export interface JobCardFilters {
   stage?: string;
   pipeline?: string;
   exclude_stage?: string;
+  unacknowledged?: boolean;
 }
 
 export interface ClientFilters {
@@ -229,6 +230,8 @@ export const adminService = {
     });
   },
 
+
+
   createClient(body: CreateClientBody): Promise<IClient> {
     return apiClient.post<IClient, CreateClientBody>('/api/v1/clients', body);
   },
@@ -243,6 +246,45 @@ export const adminService = {
 
   deleteClient(id: string): Promise<void> {
     return apiClient.delete<void>(`/api/v1/clients/${id}`);
+  },
+
+  /** List self-registered clients awaiting admin approval. */
+  getPendingClients(): Promise<IClient[]> {
+    return apiClient.get<IClient[]>('/api/v1/clients/pending');
+  },
+
+  /** List self-registered clients that have been approved. */
+  getApprovedClients(): Promise<IClient[]> {
+    return apiClient.get<IClient[]>('/api/v1/clients/approved');
+  },
+
+  /** List self-registered clients that have been rejected. */
+  getRejectedClients(): Promise<IClient[]> {
+    return apiClient.get<IClient[]>('/api/v1/clients/rejected');
+  },
+
+  /**
+   * Approve a pending client. Optionally override their auto-generated client_id.
+   * Activates the user account so the client can log in.
+   */
+  approveClient(id: string, clientId?: string): Promise<IClient> {
+    return apiClient.post<IClient, { client_id?: string }>(
+      `/api/v1/clients/${id}/approve`,
+      clientId ? { client_id: clientId } : {},
+    );
+  },
+
+  /** Reject a pending client signup with a mandatory note (emailed to the client). */
+  rejectClient(id: string, note: string): Promise<void> {
+    return apiClient.post<void, { note: string }>(`/api/v1/clients/${id}/reject`, { note });
+  },
+
+  /** Real-time check: returns true if the given 5-digit client_id is available. */
+  checkClientIdAvailable(clientId: string, excludeId?: string): Promise<{ available: boolean }> {
+    const url = excludeId
+      ? `/api/v1/clients/check-id/${clientId}?excludeId=${excludeId}`
+      : `/api/v1/clients/check-id/${clientId}`;
+    return apiClient.get<{ available: boolean }>(url);
   },
 
   getUsers(filters: UserFilters = {}): Promise<PaginatedList<IUser>> {

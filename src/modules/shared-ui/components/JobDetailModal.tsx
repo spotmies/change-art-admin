@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { JobQueriesSection } from './JobQueriesSection';
 import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2 } from 'lucide-react';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import toast from 'react-hot-toast';
@@ -154,6 +155,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [sendMailPhase, setSendMailPhase] = useState<'idle' | 'uploading' | 'sending'>('idle');
   const [sendMailUploadProgress, setSendMailUploadProgress] = useState(0);
   const [isSendMailDragging, setIsSendMailDragging] = useState(false);
+  const [sendMailNote, setSendMailNote] = useState('');
   const sendMailFileInputRef = useRef<HTMLInputElement>(null);
 
   const addSendMailFiles = (incoming: FileList | null) => {
@@ -188,6 +190,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     setSendMailPhase('idle');
     setSendMailUploadProgress(0);
     setIsSendMailDragging(false);
+    setSendMailNote('');
   };
 
   const [showMarkComplete, setShowMarkComplete] = useState(false);
@@ -256,10 +259,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   const etaCountdown = useEtaCountdown(job?.acknowledgedAt, job?.etaHours);
 
-  // Subscribe to the job's room while the modal is open. Lets the backend
-  // push per-job events (file uploads, reviews, etc.) to this admin
-  // without depending on the broader broadcast channels.
-  useJobRoom(job?.uuid ?? null);
+  // Subscribe to the job's room while the modal is open. Use the canonical
+  // (non-admin-copy) job ID so query events — which are stored and broadcast
+  // against the original job — are received correctly.
+  const canonicalRoomId = (job?.isAdminCopy && job?.parentJobId) ? job.parentJobId : (job?.uuid ?? null);
+  useJobRoom(canonicalRoomId);
 
   useEffect(() => {
     if (job) {
@@ -314,13 +318,6 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     return () => window.removeEventListener('keydown', onKey);
   }, [job, handleClose, showConfirm, sendPrice.isPending, showDispatchConfirm, dispatchJob.isPending]);
 
-  if (!job) return null;
-
-  // The data source for all detail fields. Toggle switches this between
-  // the admin-edited copy and the original client submission.
-  const showToggle = job.isAdminCopy === true;
-  const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
-
   const allowedFormats = useMemo(() => {
     const text = (job?.notes || '') + '\n' + (job?.summary || '') + '\n' + (originalJob?.notes || '') + '\n' + (originalJob?.summary || '');
     const match = text.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
@@ -331,6 +328,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       .map(s => s.trim().replace(/^\./, ''))
       .filter(Boolean);
   }, [job, originalJob]);
+
+  if (!job) return null;
+
+  // The data source for all detail fields. Toggle switches this between
+  // the admin-edited copy and the original client submission.
+  const showToggle = job.isAdminCopy === true;
+  const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
 
   const flowSteps = buildFlowSteps();
   const stepIdx = currentStepIndex(job);
@@ -506,7 +510,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     const combinedFileIds = [...existingFileIds, ...uploadedIds];
 
     notifyOrderReady.mutate(
-      { jobId: id, fileIds: combinedFileIds },
+      { jobId: id, fileIds: combinedFileIds, note: sendMailNote.trim() || undefined },
       {
         onSuccess: () => {
           closeSendMailModal();
@@ -1704,6 +1708,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             ) : null}
 
           </>)}
+
+          {/* ── QUERIES ── always use the canonical (non-admin-copy) job ID so
+              the thread is shared with the client viewing the original job. */}
+          {!showCompare && (
+            <JobQueriesSection jobId={(job.isAdminCopy && job.parentJobId) ? job.parentJobId : (job.uuid ?? null)} />
+          )}
+
         </div>
 
         {/* ── FOOTER ── */}
@@ -2276,6 +2287,40 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Note to client */}
+              <div className="flex flex-col gap-2">
+                <label style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Note <span style={{ fontWeight: 500, textTransform: 'none', fontSize: 10.5, color: '#94A3B8' }}>(optional — included in delivery email)</span>
+                </label>
+                <textarea
+                  value={sendMailNote}
+                  onChange={(e) => setSendMailNote(e.target.value)}
+                  disabled={sendMailPhase !== 'idle'}
+                  placeholder="Add a message for the client…"
+                  maxLength={1000}
+                  rows={3}
+                  style={{
+                    resize: 'vertical',
+                    border: `1.5px solid ${sendMailNote.trim() ? '#D97706' : '#E2E8F0'}`,
+                    background: '#fff',
+                    color: '#0D1B2A',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    width: '100%',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    fontSize: 13.5,
+                    lineHeight: 1.55,
+                    boxShadow: sendMailNote.trim() ? '0 0 0 3px rgba(217,119,6,0.12)' : 'none',
+                    transition: 'all 0.18s ease',
+                    opacity: sendMailPhase !== 'idle' ? 0.6 : 1,
+                  }}
+                />
+                <div style={{ fontSize: 10.5, color: '#94A3B8', textAlign: 'right' }}>
+                  {sendMailNote.length}/1000
+                </div>
               </div>
 
               {/* Type to confirm */}

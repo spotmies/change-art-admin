@@ -97,3 +97,77 @@ export function useSendQuotePrice() {
     onError: (err) => toastApiError(err),
   });
 }
+
+// ── Admin client approval workflow ────────────────────────────────────────────
+
+/** Lists self-registered clients awaiting admin approval. */
+export function usePendingClients() {
+  return useQuery({
+    queryKey: queryKeys.clients.pending(),
+    queryFn: () => adminService.getPendingClients(),
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Lists self-registered clients that have been approved by admin. */
+export function useApprovedClients() {
+  return useQuery({
+    queryKey: queryKeys.clients.approved(),
+    queryFn: () => adminService.getApprovedClients(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Lists self-registered clients that have been rejected by admin. */
+export function useRejectedClients() {
+  return useQuery({
+    queryKey: queryKeys.clients.rejected(),
+    queryFn: () => adminService.getRejectedClients(),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Mutation to approve a pending client (optionally override the client_id). */
+export function useApproveClient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, clientId }: { id: string; clientId?: string }) =>
+      adminService.approveClient(id, clientId),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.pending() });
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.approved() });
+      toast.success(`${client.company_name ?? client.client_name} approved — they can now log in.`);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Mutation to reject a pending client signup (sends rejection email with note). */
+export function useRejectClient() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      adminService.rejectClient(id, note),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.pending() });
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.rejected() });
+      toast.success('Client registration rejected. Rejection email sent.');
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/**
+ * Real-time uniqueness check for a proposed client_id.
+ * Only fires when the input is exactly 5 digits.
+ */
+export function useCheckClientId(clientId: string, excludeId?: string) {
+  const isValid = /^\d{5}$/.test(clientId);
+  return useQuery({
+    queryKey: ['clients', 'check-id', clientId, excludeId],
+    queryFn: () => adminService.checkClientIdAvailable(clientId, excludeId),
+    enabled: isValid,
+    staleTime: 10 * 1000,
+  });
+}

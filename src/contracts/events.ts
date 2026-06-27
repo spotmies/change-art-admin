@@ -101,6 +101,14 @@ export interface JobAcknowledgedEvent {
   etaHours: number | null;
 }
 
+export interface QueryRaisedEvent {
+  jobId: string;
+  queryId: string;
+  raisedByRole: 'ADMIN' | 'CLIENT';
+  message: string;
+  timestamp: IsoDateTime;
+}
+
 // ─── Client → Server events ──────────────────────────────────
 
 export interface JoinJobRoomEvent {
@@ -129,6 +137,7 @@ export const SOCKET_EVENTS = {
   MODIFICATION_REQUESTED: 'modification-requested',
   ATTENDANCE_CLOCK: 'attendance-clock',
   JOB_ACKNOWLEDGED: 'job-acknowledged',
+  QUERY_RAISED: 'query-raised',
 
   JOIN_JOB_ROOM: 'join-job-room',
   LEAVE_JOB_ROOM: 'leave-job-room',

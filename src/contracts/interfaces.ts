@@ -13,6 +13,7 @@
  */
 
 import type {
+  ClientApprovalStatus,
   DesignComplexity,
   EmailIngestionStatus,
   FileCategory,
@@ -84,6 +85,7 @@ export interface IClient {
   payment_mode: PaymentMode | null;
   card_on_file: ICardOnFile | null;
   user_id: string | null;
+  approval_status: ClientApprovalStatus | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }
@@ -273,6 +275,18 @@ export interface IFcmToken {
   token: string;
   device_info: string | null;
   created_at: IsoDateTime;
+}
+
+export interface IJobQuery {
+  id: string;
+  tenant_id: string;
+  job_card_id: string;
+  raised_by_user_id: string;
+  raised_by_role: 'ADMIN' | 'CLIENT';
+  message: string;
+  is_resolved: boolean;
+  created_at: IsoDateTime;
+  raised_by_name?: string;
 }
 
 export interface IAttendanceRecord {

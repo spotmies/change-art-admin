@@ -13,10 +13,12 @@ import {
 import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
 import { ProfileChangeRequestsTab } from '../../modules/admin-panel/components/ProfileChangeRequestsTab';
 import { AddClientModal } from '../../modules/admin-panel/components/AddClientModal';
+import { ClientApproveTab } from '../../modules/admin-panel/components/ClientApproveTab';
+import { usePendingClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 const PER_PAGE = 20;
 
-type Tab = 'clients' | 'requests';
+type Tab = 'clients' | 'requests' | 'approve';
 
 function formatPaymentMode(mode: PaymentMode | null): string {
   if (!mode) return '—';
@@ -70,13 +72,13 @@ export function AdminClientsPage() {
   const [searchParams] = useSearchParams();
   const [pageGateOpen, setPageGateOpen] = useState(() => !isSessionVerified());
 
-  const initialTab = (searchParams.get('tab') === 'requests') ? 'requests' : 'clients';
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const initialTab = (searchParams.get('tab') as Tab) || 'clients';
+  const [tab, setTab] = useState<Tab>(['requests', 'approve'].includes(initialTab) ? initialTab : 'clients');
 
   // Sync tab state when URL search params change
   useEffect(() => {
-    const t = searchParams.get('tab');
-    if (t === 'requests' || t === 'clients') {
+    const t = searchParams.get('tab') as Tab;
+    if (['requests', 'clients', 'approve'].includes(t)) {
       setTab(t);
     }
   }, [searchParams]);
@@ -99,6 +101,9 @@ export function AdminClientsPage() {
     per_page: 100,
   });
   const pendingCount = pendingCRs?.meta.total ?? 0;
+
+  const { data: pendingApprovals } = usePendingClients();
+  const pendingApprovalsCount = pendingApprovals?.length ?? 0;
 
   const clientsFilters = useMemo(
     () => ({
@@ -135,8 +140,8 @@ export function AdminClientsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'blue',    label: 'Active Accounts', value: isLoading ? '…' : total },
-          { accent: 'green',   label: 'New (mo.)',        value: isLoading ? '…' : currentMonthCount(clients) },
+          { accent: 'blue', label: 'Active Accounts', value: isLoading ? '…' : total },
+          { accent: 'green', label: 'New (mo.)', value: isLoading ? '…' : currentMonthCount(clients) },
           { accent: 'crimson', label: 'Profile Requests', value: pendingCount },
           {
             accent: 'gold',
@@ -150,7 +155,9 @@ export function AdminClientsPage() {
         title={
           tab === 'clients'
             ? `All Clients${total ? ` (${total})` : ''}`
-            : 'Profile Change Requests'
+            : tab === 'requests'
+              ? 'Profile Change Requests'
+              : 'Pending Client Approvals'
         }
       >
         {/* Tab toggle + search bar */}
@@ -162,6 +169,26 @@ export function AdminClientsPage() {
               onClick={() => setTab('clients')}
             >
               Clients
+            </button>
+            <button
+              type="button"
+              className={`btn ${tab === 'approve' ? 'btn-crimson' : 'btn-outline'}`}
+              onClick={() => setTab('approve')}
+            >
+              Client Approve
+              {pendingApprovalsCount > 0 ? (
+                <span
+                  className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
+                  style={{
+                    background: 'var(--crimson)',
+                    color: 'white',
+                    minWidth: 16,
+                    height: 16,
+                  }}
+                >
+                  {pendingApprovalsCount}
+                </span>
+              ) : null}
             </button>
             <button
               type="button"
@@ -197,7 +224,9 @@ export function AdminClientsPage() {
               placeholder={
                 tab === 'clients'
                   ? 'Search by name, company, email, or client ID…'
-                  : 'Search by client name, company, or proposed value…'
+                  : tab === 'requests'
+                    ? 'Search by client name, company, or proposed value…'
+                    : 'Search by client name, email, or ID…'
               }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -217,7 +246,9 @@ export function AdminClientsPage() {
           )}
         </div>
 
-        {tab === 'requests' ? (
+        {tab === 'approve' ? (
+          <ClientApproveTab />
+        ) : tab === 'requests' ? (
           <ProfileChangeRequestsTab search={debouncedSearch} />
         ) : isLoading ? (
           <div className="flex items-center justify-center py-12 text-text-faint text-sm">

@@ -25,6 +25,9 @@ export const queryKeys = {
     me: () => ['clients', 'me'] as const,
     changeRequests: (filters?: Record<string, unknown>) =>
       ['clients', 'change-requests', filters ?? {}] as const,
+    pending: () => ['clients', 'pending'] as const,
+    approved: () => ['clients', 'approved'] as const,
+    rejected: () => ['clients', 'rejected'] as const,
   },
 
   jobs: {
@@ -85,5 +88,9 @@ export const queryKeys = {
     all: () => ['contact-submissions'] as const,
     list: () => ['contact-submissions', 'list'] as const,
     byId: (id: string) => ['contact-submissions', 'byId', id] as const,
+  },
+
+  queries: {
+    forJob: (jobId: string) => ['queries', 'forJob', jobId] as const,
   },
 } as const;

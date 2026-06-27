@@ -5,6 +5,10 @@
  * status, client, and date range. All state is lifted — the parent owns the
  * filter values and passes them in via props so each page can layer its own
  * extra client-side logic on top.
+ *
+ * Panel filters (order type, priority, status, client, dates) are staged in
+ * local draft state and only committed to the parent via `onChange` when the
+ * user clicks Apply. Search fires immediately (debounced by the parent).
  */
 import { useState } from 'react';
 import { ChevronDown, Search, X, SlidersHorizontal } from 'lucide-react';
@@ -33,7 +37,7 @@ export const EMPTY_FILTERS: JobFilters = {
 interface JobFilterBarProps {
   filters: JobFilters;
   onChange: (next: JobFilters) => void;
-  /** Status options to show — varies by page (e.g. jobs vs quotes) */
+  /** Status options to show — pass empty array to hide the status select */
   statusOptions?: { value: string; label: string }[];
   clients?: IClient[];
   className?: string;
@@ -69,15 +73,6 @@ export const QUOTE_STATUS_OPTIONS = [
   { value: 'Quote Approved',  label: 'Quote Approved' },
 ];
 
-function set<K extends keyof JobFilters>(
-  filters: JobFilters,
-  key: K,
-  value: JobFilters[K],
-  onChange: (f: JobFilters) => void,
-) {
-  onChange({ ...filters, [key]: value });
-}
-
 export function isFiltersEmpty(f: JobFilters): boolean {
   return (
     !f.search &&
@@ -92,7 +87,6 @@ export function isFiltersEmpty(f: JobFilters): boolean {
 
 /**
  * Apply the filter bar's values to a Job array.
- * `Job` is imported from shared-ui mocks shape (design, order, priority, status, client, clientId, created, ref, id).
  */
 export function applyJobFilters<
   T extends {
@@ -146,12 +140,36 @@ export function applyJobFilters<
   }
 
   if (f.dateTo) {
-    // Include the whole "to" day by setting time to end-of-day.
     const to = new Date(f.dateTo).getTime() + 86_399_999;
     result = result.filter((j) => new Date(j.created).getTime() <= to);
   }
 
   return result;
+}
+
+type PanelDraft = Pick<JobFilters, 'orderType' | 'priority' | 'status' | 'clientId' | 'dateFrom' | 'dateTo'>;
+
+function draftFromFilters(f: JobFilters): PanelDraft {
+  return {
+    orderType: f.orderType,
+    priority:  f.priority,
+    status:    f.status,
+    clientId:  f.clientId,
+    dateFrom:  f.dateFrom,
+    dateTo:    f.dateTo,
+  };
+}
+
+function draftHasChanges(draft: PanelDraft | null | undefined, committed: JobFilters | null | undefined): boolean {
+  if (!draft || !committed) return false;
+  return (
+    (draft.orderType ?? '') !== (committed.orderType ?? '') ||
+    (draft.priority  ?? '') !== (committed.priority  ?? '') ||
+    (draft.status    ?? '') !== (committed.status    ?? '') ||
+    (draft.clientId  ?? '') !== (committed.clientId  ?? '') ||
+    (draft.dateFrom  ?? '') !== (committed.dateFrom  ?? '') ||
+    (draft.dateTo    ?? '') !== (committed.dateTo    ?? '')
+  );
 }
 
 export function JobFilterBar({
@@ -162,6 +180,33 @@ export function JobFilterBar({
   className = '',
 }: JobFilterBarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState<PanelDraft>(() => draftFromFilters(filters));
+
+  function openPanel() {
+    setDraft(draftFromFilters(filters));
+    setIsOpen(true);
+  }
+
+  function closePanel() {
+    setIsOpen(false);
+  }
+
+  function setField<K extends keyof PanelDraft>(key: K, value: PanelDraft[K]) {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleApply() {
+    onChange({ search: filters.search, ...draft });
+    setIsOpen(false);
+  }
+
+  function handleClearAll() {
+    const empty: PanelDraft = { orderType: '', priority: '', status: '', clientId: '', dateFrom: '', dateTo: '' };
+    setDraft(empty);
+    onChange({ search: '', ...empty });
+    setIsOpen(false);
+  }
+
   const activeFiltersCount = [
     filters.orderType,
     filters.priority,
@@ -171,13 +216,14 @@ export function JobFilterBar({
     filters.dateTo,
   ].filter(Boolean).length;
 
-  const hasActive = !isFiltersEmpty(filters);
+  const hasAnyActive = !isFiltersEmpty(filters);
+  const hasDraftChanges = draftHasChanges(draft, filters);
 
   return (
     <>
       {/* Compact toolbar row: search input + filters toggle button */}
       <div className={`job-filter-bar-row ${className}`}>
-        {/* Search */}
+        {/* Search — fires immediately, debounced by parent */}
         <div className="filter-search-wrap">
           <Search className="filter-search-icon" />
           <input
@@ -185,14 +231,14 @@ export function JobFilterBar({
             className="filter-search"
             placeholder="Search jobs, clients, designs…"
             value={filters.search}
-            onChange={(e) => set(filters, 'search', e.target.value, onChange)}
+            onChange={(e) => onChange({ ...filters, search: e.target.value })}
           />
         </div>
 
         {/* Toggle Filters Button */}
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => (isOpen ? closePanel() : openPanel())}
           className={`filter-toggle-btn${isOpen || activeFiltersCount > 0 ? ' active' : ''}`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -203,15 +249,15 @@ export function JobFilterBar({
         </button>
       </div>
 
-      {/* Expanded filters panel — renders BELOW the toolbar row as a sibling */}
+      {/* Expanded filters panel */}
       {isOpen && (
         <div className="filter-expanded-panel">
           {/* Order Type */}
           <div className="filter-select-wrap">
             <select
-              className={`filter-select${filters.orderType ? ' active' : ''}`}
-              value={filters.orderType}
-              onChange={(e) => set(filters, 'orderType', e.target.value, onChange)}
+              className={`filter-select${draft.orderType ? ' active' : ''}`}
+              value={draft.orderType}
+              onChange={(e) => setField('orderType', e.target.value)}
             >
               <option value="" disabled hidden>Order Type</option>
               <option value="">All</option>
@@ -225,9 +271,9 @@ export function JobFilterBar({
           {/* Priority */}
           <div className="filter-select-wrap">
             <select
-              className={`filter-select${filters.priority ? ' active' : ''}`}
-              value={filters.priority}
-              onChange={(e) => set(filters, 'priority', e.target.value, onChange)}
+              className={`filter-select${draft.priority ? ' active' : ''}`}
+              value={draft.priority}
+              onChange={(e) => setField('priority', e.target.value)}
             >
               <option value="" disabled hidden>Priority</option>
               <option value="">All</option>
@@ -238,13 +284,13 @@ export function JobFilterBar({
             <ChevronDown className="filter-chevron" aria-hidden />
           </div>
 
-          {/* Status */}
+          {/* Status — hidden when statusOptions is empty */}
           {statusOptions.length > 0 && (
             <div className="filter-select-wrap">
               <select
-                className={`filter-select${filters.status ? ' active' : ''}`}
-                value={filters.status}
-                onChange={(e) => set(filters, 'status', e.target.value, onChange)}
+                className={`filter-select${draft.status ? ' active' : ''}`}
+                value={draft.status}
+                onChange={(e) => setField('status', e.target.value)}
               >
                 <option value="" disabled hidden>Status</option>
                 <option value="">All</option>
@@ -260,9 +306,9 @@ export function JobFilterBar({
           {clients.length > 0 && (
             <div className="filter-select-wrap">
               <select
-                className={`filter-select${filters.clientId ? ' active' : ''}`}
-                value={filters.clientId}
-                onChange={(e) => set(filters, 'clientId', e.target.value, onChange)}
+                className={`filter-select${draft.clientId ? ' active' : ''}`}
+                value={draft.clientId}
+                onChange={(e) => setField('clientId', e.target.value)}
               >
                 <option value="" disabled hidden>Client</option>
                 <option value="">All</option>
@@ -276,45 +322,50 @@ export function JobFilterBar({
             </div>
           )}
 
-          {/* Date range — always side-by-side, even on mobile */}
+          {/* Date range */}
           <div className="filter-date-row">
-            {/* Date From */}
             <div className="filter-date-wrap">
               <span className="filter-date-label">From</span>
               <input
                 type="date"
-                className={`filter-date${filters.dateFrom ? ' active' : ''}`}
+                className={`filter-date${draft.dateFrom ? ' active' : ''}`}
                 title="From date"
-                value={filters.dateFrom}
-                onChange={(e) => set(filters, 'dateFrom', e.target.value, onChange)}
+                value={draft.dateFrom}
+                onChange={(e) => setField('dateFrom', e.target.value)}
               />
             </div>
-
-            {/* Date To */}
             <div className="filter-date-wrap">
               <span className="filter-date-label">To</span>
               <input
                 type="date"
-                className={`filter-date${filters.dateTo ? ' active' : ''}`}
+                className={`filter-date${draft.dateTo ? ' active' : ''}`}
                 title="To date"
-                value={filters.dateTo}
-                onChange={(e) => set(filters, 'dateTo', e.target.value, onChange)}
+                value={draft.dateTo}
+                onChange={(e) => setField('dateTo', e.target.value)}
               />
             </div>
           </div>
 
-          {/* Clear */}
-          {hasActive && (
+          {/* Actions row: Clear All + Apply */}
+          <div className="filter-actions-row">
+            {(hasAnyActive || hasDraftChanges) && (
+              <button
+                type="button"
+                className="filter-clear-btn"
+                onClick={handleClearAll}
+              >
+                <X className="w-3 h-3 inline mr-1" />
+                Clear all
+              </button>
+            )}
             <button
               type="button"
-              className="filter-clear-btn"
-              onClick={() => onChange(EMPTY_FILTERS)}
-              style={{ marginLeft: 'auto' }}
+              className={`filter-apply-btn${hasDraftChanges ? ' has-changes' : ''}`}
+              onClick={handleApply}
             >
-              <X className="w-3 h-3 inline mr-1" />
-              Clear all
+              Apply
             </button>
-          )}
+          </div>
         </div>
       )}
     </>
