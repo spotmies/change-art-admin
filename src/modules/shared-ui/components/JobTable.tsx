@@ -221,9 +221,20 @@ function DeliveredView({
         <div key={job.id} className="panel !mb-0 !p-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="jc-id">{job.id}</span>
-                <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
+                {job.project === 'Amend' ? (
+                  <>
+                    <Badge accent="crimson">
+                      Amend{job.modificationCount ? ` R${job.modificationCount}` : ''}
+                    </Badge>
+                    {job.status !== 'Amend' && (
+                      <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
+                    )}
+                  </>
+                ) : (
+                  <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
+                )}
                 <PriorityChip priority={job.priority} />
               </div>
               <div className="text-[15px] font-bold text-text-main">{job.design}</div>

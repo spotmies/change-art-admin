@@ -158,6 +158,7 @@ export interface IJobCard {
   assigned_junior_id: string | null;
   assigned_senior_id: string | null;
   assigned_sewout_id: string | null;
+  modification_count: number;
   version: number;
   is_locked: boolean;
   acknowledgement_sent_at: IsoDateTime | null;

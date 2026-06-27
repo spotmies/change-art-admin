@@ -43,6 +43,7 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
     if (data) {
       badges['new-quotes'] = data['new-quotes'] ?? 0;
       badges['new-jobs'] = data['new-jobs'] ?? 0;
+      if ((data['amendments'] ?? 0) > 0) badges['amendments'] = data['amendments'] ?? 0;
     }
     if (pendingChangeRequests) {
       badges['clients'] = pendingChangeRequests.meta.total;

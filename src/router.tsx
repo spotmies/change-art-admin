@@ -220,6 +220,7 @@ export const router = createBrowserRouter([
       { path: 'users', element: <AdminUsersPage /> },
       { path: 'email-inbox', element: <AdminEmailInboxPage /> },
       { path: 'notifications', element: <AdminNotificationsPage /> },
+      { path: 'amendments', element: <CSAmendmentsPage /> },
       { path: 'create-quote', element: <AdminCreateQuotePage /> },
       { path: 'place-order', element: <AdminPlaceOrderPage /> },
       { path: 'reports', element: <AdminReportsPage /> },

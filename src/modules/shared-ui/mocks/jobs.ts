@@ -106,6 +106,8 @@ export interface Job {
   hasAdminCopy?: boolean;
   /** Client's own PO / reference number entered when placing the order. */
   clientPo?: string | null;
+  /** How many modification requests have been made on this job — drives Amend R1/R2 badge. */
+  modificationCount?: number;
 }
 
 export const JOBS: Job[] = [

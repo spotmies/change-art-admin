@@ -146,7 +146,10 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
             </div>
             {allowedFormats && allowedFormats.length > 0 && (
               <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
-                Expected Format: <span style={{ color: '#059669', fontWeight: 700 }}>{allowedFormats.map(f => f.toUpperCase()).join(', ')}</span>
+                Client requested format:{' '}
+                <span style={{ color: '#059669', fontWeight: 700 }}>
+                  {allowedFormats.map(f => f.toUpperCase()).join(', ')}
+                </span>
               </div>
             )}
             <div
@@ -170,17 +173,22 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               </div>
               <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                 {allowedFormats && allowedFormats.length > 0
-                  ? allowedFormats.map(f => f.toUpperCase()).join(', ')
-                  : 'PDF, PNG, JPG, AI, EPS, CDR'} — up to 500 MB each
+                  ? `${allowedFormats.map(f => f.toUpperCase()).join(', ')} — up to 500 MB each`
+                  : 'Any format — up to 500 MB each'}
               </div>
             </div>
             <input
               ref={fileInputRef}
               type="file"
               multiple
-              accept={allowedFormats && allowedFormats.length > 0
-                ? allowedFormats.map(ext => `.${ext}`).join(',')
-                : ".pdf,.png,.jpg,.jpeg,.svg,.ai,.eps,.cdr,image/*"}
+              accept={(() => {
+                if (!allowedFormats || allowedFormats.length === 0) return undefined;
+                // Only restrict browser accept for formats the OS recognises.
+                // Exotic embroidery formats (dst, pxf, etc.) would block the picker.
+                const browserKnown = ['pdf', 'ai', 'eps', 'cdr', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'tiff', 'tif', 'psd', 'zip'];
+                const knownOnly = allowedFormats.filter(f => browserKnown.includes(f));
+                return knownOnly.length > 0 ? knownOnly.map(ext => `.${ext}`).join(',') : undefined;
+              })()}
               className="hidden"
               disabled={isPending}
               onChange={(e) => addFiles(e.target.files)}

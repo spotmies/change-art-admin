@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
 import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2 } from 'lucide-react';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
@@ -156,6 +157,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [sendMailUploadProgress, setSendMailUploadProgress] = useState(0);
   const [isSendMailDragging, setIsSendMailDragging] = useState(false);
   const [sendMailNote, setSendMailNote] = useState('');
+  const [excludedServerFileIds, setExcludedServerFileIds] = useState<Set<string>>(new Set());
   const sendMailFileInputRef = useRef<HTMLInputElement>(null);
 
   const addSendMailFiles = (incoming: FileList | null) => {
@@ -183,6 +185,15 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     setSendMailFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const openSendMailModal = () => {
+    if (job?.project === 'Amend' && allCompletedFiles.length > 0) {
+      setExcludedServerFileIds(new Set(allCompletedFiles.map((f) => f.id)));
+    } else {
+      setExcludedServerFileIds(new Set());
+    }
+    setShowSendMailModal(true);
+  };
+
   const closeSendMailModal = () => {
     setShowSendMailModal(false);
     setSendMailConfirmText('');
@@ -191,10 +202,14 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     setSendMailUploadProgress(0);
     setIsSendMailDragging(false);
     setSendMailNote('');
+    setExcludedServerFileIds(new Set());
   };
 
   const [showMarkComplete, setShowMarkComplete] = useState(false);
   const [showAckPopover, setShowAckPopover] = useState(false);
+  const [amendBusy, setAmendBusy] = useState<'approve' | 'reject' | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [ackEtaHours, setAckEtaHours] = useState(() =>
     job?.etaHours != null ? String(job.etaHours) : '',
   );
@@ -319,14 +334,37 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   }, [job, handleClose, showConfirm, sendPrice.isPending, showDispatchConfirm, dispatchJob.isPending]);
 
   const allowedFormats = useMemo(() => {
-    const text = (job?.notes || '') + '\n' + (job?.summary || '') + '\n' + (originalJob?.notes || '') + '\n' + (originalJob?.summary || '');
-    const match = text.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
-    if (!match || !match[1]) return null;
-    const formatStr = match[1].trim().toLowerCase().replace(/^others:\s*/i, '');
-    return formatStr
-      .split(/[\s,;/\\|+]+/i)
-      .map(s => s.trim().replace(/^\./, ''))
-      .filter(Boolean);
+    const finalFiles = job?.finalFiles ?? [];
+
+    // Step 1: use the structured final_files for known formats (PDF, AI, EPS, CDR).
+    const knownFormats = finalFiles.filter(
+      (f) => f.toUpperCase() !== 'OTHERS' && f.toUpperCase() !== 'OTHER',
+    );
+    if (knownFormats.length > 0) {
+      return knownFormats.map((f) => f.toLowerCase());
+    }
+
+    // Step 2: client selected OTHERS and typed a custom format (e.g. "DST, PXF").
+    // It's stored as [Expected Output Format: Others: DST, PXF] in the description.
+    // Only accept tokens that look like real file extensions (whitelist).
+    const KNOWN_EXTENSIONS = new Set([
+      'pdf','ai','eps','cdr','png','jpg','jpeg','svg','gif','tif','tiff',
+      'psd','zip','rar','dst','pxf','vip','hus','jef','sew','pes','exp',
+      'dsb','dsz','csd','pcs','vp3','xxx','bmp','webp','raw','dxf','dwg',
+    ]);
+
+    const text = (job?.summary || '') + '\n' + (job?.notes || '') + '\n' + (originalJob?.summary || '') + '\n' + (originalJob?.notes || '');
+    const match = text.match(/\[\s*Expected Output Format\s*:\s*([^\]]+?)\s*\]/i);
+    if (match && match[1]) {
+      const raw = match[1].replace(/^others:\s*/i, '').trim();
+      const parts = raw
+        .split(/[\s,;/\\|+]+/)
+        .map((s) => s.trim().replace(/^\./, '').toLowerCase())
+        .filter((s) => KNOWN_EXTENSIONS.has(s));
+      if (parts.length > 0) return parts;
+    }
+
+    return null;
   }, [job, originalJob]);
 
   if (!job) return null;
@@ -391,6 +429,38 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     }
     return jobUuid;
   };
+
+  async function handleApproveAmendment() {
+    const id = requireUuid('approve amendment');
+    if (!id || !job.version) return;
+    setAmendBusy('approve');
+    try {
+      await adminService.transitionJob(id, 'cs_amend_reroute', job.version);
+      toast.success('Amendment approved — job routed back to production.');
+      handleClose();
+    } catch {
+      toast.error('Failed to approve amendment. Please try again.');
+    } finally {
+      setAmendBusy(null);
+    }
+  }
+
+  async function handleRejectAmendment() {
+    const id = requireUuid('reject amendment');
+    if (!id || !job.version) return;
+    setAmendBusy('reject');
+    try {
+      await adminService.transitionJob(id, 'reject_modification', job.version, rejectReason.trim() || undefined);
+      toast.success('Amendment request rejected. Client has been notified.');
+      setShowRejectDialog(false);
+      setRejectReason('');
+      handleClose();
+    } catch {
+      toast.error('Failed to reject amendment. Please try again.');
+    } finally {
+      setAmendBusy(null);
+    }
+  }
 
   // Reasonable ceilings so the rep can't push obviously-bogus numbers
   // through (which also kept the confirm card from overflowing).
@@ -485,7 +555,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     const id = requireUuid('send mail');
     if (!id) return;
 
-    if (allCompletedFiles.length + sendMailFiles.length === 0) {
+    const selectedServerFiles = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id));
+    if (selectedServerFiles.length + sendMailFiles.length === 0) {
       toast.error('Upload at least one completed file before sending the email.');
       return;
     }
@@ -506,7 +577,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     }
 
     setSendMailPhase('sending');
-    const existingFileIds = allCompletedFiles.map((f) => f.id);
+    const existingFileIds = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).map((f) => f.id);
     const combinedFileIds = [...existingFileIds, ...uploadedIds];
 
     notifyOrderReady.mutate(
@@ -524,12 +595,14 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   };
 
   const handleDownloadAllFiles = async () => {
+    // Only download COMPLETED (deliverable) files — not ORIGINAL reference files.
+    // Deduplicate by ID in case adminJobFiles and clientJobFiles overlap.
     const filesToDownload = [
       ...(adminJobFiles ?? []),
-      ...(clientJobFiles ?? [])
-    ];
+      ...(clientJobFiles ?? []),
+    ].filter((f) => f.file_category === FileCategory.COMPLETED);
     const uniqueFiles = filesToDownload.filter(
-      (f, index, self) => self.findIndex((u) => u.id === f.id) === index
+      (f, index, self) => self.findIndex((u) => u.id === f.id) === index,
     );
 
     if (uniqueFiles.length === 0) {
@@ -612,8 +685,23 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className={cn('badge', orderAccent(job.order))}>{job.order}</span>
-                <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
-                <span className="badge gray">{job.project}</span>
+                {job.project === 'Amend' ? (
+                  <>
+                    {/* Collapse status + project into one Amend R{n} badge */}
+                    <span className={cn('badge', 'crimson')}>
+                      Amend{job.modificationCount ? ` R${job.modificationCount}` : ''}
+                    </span>
+                    {/* Show the workflow status separately only when it's not redundant */}
+                    {job.status !== 'Amend' && (
+                      <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
+                    <span className="badge gray">{job.project}</span>
+                  </>
+                )}
                 <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
             </div>
@@ -743,11 +831,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     </span>
                   </div>
                 </div>
-              ) : !isDelivered && isAcknowledged && (!etaCountdown || etaCountdown.expired) ? (
-                /* ETA expired (or no ETA set) — replace chip with Deliver Project button */
+              ) : !isDelivered && isAcknowledged && (!etaCountdown || etaCountdown.expired) && job?.project !== 'Amend' ? (
+                /* ETA expired (or no ETA set) — show Deliver Project button for non-amend jobs */
                 <button
                   type="button"
-                  onClick={() => setShowSendMailModal(true)}
+                  onClick={() => openSendMailModal()}
                   style={{
                     background: 'linear-gradient(135deg,#B22234,#8B1A28)',
                     border: '1.5px solid rgba(255,255,255,0.18)',
@@ -764,18 +852,6 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     whiteSpace: 'nowrap',
                     boxShadow: '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)',
                     transition: 'all 0.18s ease',
-                  }}
-                  onMouseOver={(e) => {
-                    const btn = e.currentTarget as HTMLButtonElement;
-                    btn.style.background = 'linear-gradient(135deg,#991B2A,#7F1521)';
-                    btn.style.boxShadow = '0 6px 22px rgba(178,34,52,0.55), inset 0 1px 0 rgba(255,255,255,0.14)';
-                    btn.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseOut={(e) => {
-                    const btn = e.currentTarget as HTMLButtonElement;
-                    btn.style.background = 'linear-gradient(135deg,#B22234,#8B1A28)';
-                    btn.style.boxShadow = '0 4px 16px rgba(178,34,52,0.40), inset 0 1px 0 rgba(255,255,255,0.14)';
-                    btn.style.transform = 'translateY(0)';
                   }}
                   aria-label="Open deliver project panel"
                 >
@@ -1754,16 +1830,39 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
           </button>
-          {!isQuote && isAcknowledged && !isDelivered ? (
+          {!isQuote && isAcknowledged && !isDelivered && job?.project !== 'Amend' ? (
             <button
               type="button"
               className="btn btn-crimson"
               style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
-              onClick={() => setShowSendMailModal(true)}
+              onClick={() => openSendMailModal()}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
               Deliver Project
             </button>
+          ) : null}
+          {normalizedStatus(job) === 'MODIFICATION_REQUESTED' ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6, borderColor: '#e11d48', color: '#e11d48' }}
+                disabled={amendBusy !== null}
+                onClick={() => { setRejectReason(''); setShowRejectDialog(true); }}
+              >
+                Reject Amendment
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+                disabled={amendBusy !== null}
+                onClick={handleApproveAmendment}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+                {amendBusy === 'approve' ? 'Approving…' : 'Approve & Route to Production'}
+              </button>
+            </>
           ) : null}
           {!isQuote && isCsApproved ? (
             <button
@@ -1802,6 +1901,58 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           onSuccess={() => { setShowMarkComplete(false); handleClose(); }}
         />
       ) : null}
+
+      {/* ── REJECT AMENDMENT DIALOG ── */}
+      {showRejectDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && amendBusy === null) setShowRejectDialog(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reject Amendment"
+            className="glass-heavy rounded-2xl w-full max-w-[420px] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Reject Amendment Request?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              The client will receive an email saying their request was not accepted. Optionally add a reason.
+            </p>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-1.5">
+              Reason <span className="font-normal normal-case text-text-faint">(optional)</span>
+            </label>
+            <textarea
+              className="w-full rounded-xl border border-[var(--glass-border)] bg-transparent text-[13px] text-text-main p-3 outline-none focus:border-[#e11d48] transition resize-none mb-4 placeholder:text-text-faint"
+              rows={3}
+              placeholder="e.g. The requested change is outside the original scope."
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              disabled={amendBusy !== null}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowRejectDialog(false)}
+                disabled={amendBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={handleRejectAmendment}
+                disabled={amendBusy !== null}
+              >
+                {amendBusy === 'reject' ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* ── 2-STEP CONFIRMATION MODAL ── */}
       {showConfirm ? (
@@ -2197,94 +2348,156 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
               {/* Files to be sent */}
               <div className="flex flex-col gap-2">
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                  Files to be sent ({allCompletedFiles.length + sendMailFiles.length})
-                </div>
+                {(() => {
+                  const selectedServerFiles = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id));
+                  const excludedServerFiles = allCompletedFiles.filter((f) => excludedServerFileIds.has(f.id));
+                  const totalToSend = selectedServerFiles.length + sendMailFiles.length;
 
-                {allCompletedFiles.length === 0 && sendMailFiles.length === 0 ? (
-                  <div
-                    className="flex items-start gap-2.5"
-                    style={{
-                      background: 'rgba(234,179,8,0.07)',
-                      border: '1px solid rgba(234,179,8,0.35)',
-                      borderRadius: 10, padding: '12px 14px',
-                    }}
-                  >
-                    <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#B45309', marginTop: 1 }} aria-hidden />
-                    <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.55, fontWeight: 600 }}>
-                      No completed files found. Upload files to the job before sending the mail.
+                  return (
+                    <>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        Files to be sent ({totalToSend})
+                      </div>
+
+
+                      {totalToSend === 0 && excludedServerFiles.length === 0 ? (
+                        <div
+                          className="flex items-start gap-2.5"
+                          style={{
+                            background: 'rgba(234,179,8,0.07)',
+                            border: '1px solid rgba(234,179,8,0.35)',
+                            borderRadius: 10, padding: '12px 14px',
+                          }}
+                        >
+                          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: '#B45309', marginTop: 1 }} aria-hidden />
+                          <div style={{ fontSize: 12, color: '#92400E', lineHeight: 1.55, fontWeight: 600 }}>
+                            No completed files found. Upload files to the job before sending the mail.
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {/* Already Uploaded Server Files (included) */}
+                          {selectedServerFiles.length > 0 && (
+                            <div className="flex flex-col gap-1.5">
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Completed Deliverables on Server ({selectedServerFiles.length})
+                              </div>
+                              {selectedServerFiles.map((f) => (
+                                <div
+                                  key={f.id}
+                                  className="flex items-center gap-2.5"
+                                  style={{
+                                    background: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: 8, padding: '9px 12px',
+                                  }}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: '#22C55E' }} aria-hidden />
+                                  <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                    {f.file_name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExcludedServerFileIds((prev) => new Set([...prev, f.id]))}
+                                    disabled={sendMailPhase !== 'idle'}
+                                    style={{
+                                      background: 'none', border: 'none', cursor: 'pointer',
+                                      color: '#94A3B8', padding: '2px 4px', borderRadius: 4,
+                                      fontSize: 11, fontWeight: 600, flexShrink: 0,
+                                      display: 'flex', alignItems: 'center', gap: 3,
+                                    }}
+                                    title="Remove from this delivery"
+                                    aria-label={`Remove ${f.file_name} from delivery`}
+                                  >
+                                    <X className="w-3 h-3" aria-hidden /> Remove
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Excluded server files — shown as removed, with undo */}
+                          {excludedServerFiles.length > 0 && (
+                            <div className="flex flex-col gap-1.5">
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Removed from this delivery ({excludedServerFiles.length})
+                              </div>
+                              {excludedServerFiles.map((f) => (
+                                <div
+                                  key={f.id}
+                                  className="flex items-center gap-2.5"
+                                  style={{
+                                    background: '#FFF1F2',
+                                    border: '1px solid #FECDD3',
+                                    borderRadius: 8, padding: '9px 12px',
+                                    opacity: 0.75,
+                                  }}
+                                >
+                                  <X className="w-3.5 h-3.5 shrink-0" style={{ color: '#F43F5E' }} aria-hidden />
+                                  <span style={{ fontSize: 12, color: '#9F1239', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, textDecoration: 'line-through' }}>
+                                    {f.file_name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExcludedServerFileIds((prev) => { const next = new Set(prev); next.delete(f.id); return next; })}
+                                    disabled={sendMailPhase !== 'idle'}
+                                    style={{
+                                      background: 'none', border: 'none', cursor: 'pointer',
+                                      color: '#059669', padding: '2px 4px', borderRadius: 4,
+                                      fontSize: 11, fontWeight: 600, flexShrink: 0,
+                                    }}
+                                    aria-label={`Re-include ${f.file_name}`}
+                                  >
+                                    Undo
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
+                {/* New Files to Upload */}
+                {sendMailFiles.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      New Files to Upload ({sendMailFiles.length})
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {/* Already Uploaded Files */}
-                    {allCompletedFiles.length > 0 && (
-                      <div className="flex flex-col gap-1.5">
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Completed Deliverables on Server ({allCompletedFiles.length})
-                        </div>
-                        {allCompletedFiles.map((f) => (
-                          <div
-                            key={f.id}
-                            className="flex items-center gap-2.5"
+                    {sendMailFiles.map((f, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2.5"
+                        style={{
+                          background: '#FFFBEB',
+                          border: '1px solid #FDE68A',
+                          borderRadius: 8, padding: '9px 12px',
+                        }}
+                      >
+                        <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: '#D97706' }} aria-hidden />
+                        <span style={{ fontSize: 12, color: '#78350F', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {f.name}
+                        </span>
+                        <span style={{ fontSize: 11, color: '#92400E', marginRight: 4 }}>
+                          {(f.size / 1024 / 1024).toFixed(1)} MB
+                        </span>
+                        {sendMailPhase === 'idle' && (
+                          <button
+                            type="button"
+                            onClick={() => removeSendMailFile(i)}
                             style={{
-                              background: '#F8FAFC',
-                              border: '1px solid #E2E8F0',
-                              borderRadius: 8, padding: '9px 12px',
+                              background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+                              color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center'
                             }}
+                            aria-label={`Remove ${f.name}`}
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" style={{ color: '#22C55E' }} aria-hidden />
-                            <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                              {f.file_name}
-                            </span>
-                            <span style={{ fontSize: 10.5, color: '#64748B' }}>
-                              Ready
-                            </span>
-                          </div>
-                        ))}
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
-                    )}
-
-                    {/* New Files to Upload */}
-                    {sendMailFiles.length > 0 && (
-                      <div className="flex flex-col gap-1.5">
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          New Files to Upload ({sendMailFiles.length})
-                        </div>
-                        {sendMailFiles.map((f, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-2.5"
-                            style={{
-                              background: '#FFFBEB',
-                              border: '1px solid #FDE68A',
-                              borderRadius: 8, padding: '9px 12px',
-                            }}
-                          >
-                            <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: '#D97706' }} aria-hidden />
-                            <span style={{ fontSize: 12, color: '#78350F', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                              {f.name}
-                            </span>
-                            <span style={{ fontSize: 11, color: '#92400E', marginRight: 4 }}>
-                              {(f.size / 1024 / 1024).toFixed(1)} MB
-                            </span>
-                            {sendMailPhase === 'idle' && (
-                              <button
-                                type="button"
-                                onClick={() => removeSendMailFile(i)}
-                                style={{
-                                  background: 'none', border: 'none', padding: 2, cursor: 'pointer',
-                                  color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                }}
-                                aria-label={`Remove ${f.name}`}
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
@@ -2385,7 +2598,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 ✕ Cancel
               </button>
               {(() => {
-                const totalFilesCount = allCompletedFiles.length + sendMailFiles.length;
+                const totalFilesCount = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).length + sendMailFiles.length;
                 const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0;
                 const disabled = !ready || sendMailPhase !== 'idle';
                 return (

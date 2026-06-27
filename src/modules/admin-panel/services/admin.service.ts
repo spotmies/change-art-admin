@@ -182,6 +182,13 @@ export const adminService = {
     return apiClient.get<Record<string, number>>('/api/v1/job-cards/badges');
   },
 
+  transitionJob(jobId: string, action: string, version: number, notes?: string): Promise<IJobCard> {
+    return apiClient.post<IJobCard, { action: string; version: number; data?: { notes: string } }>(
+      `/api/v1/workflow/${jobId}/transition`,
+      { action, version, ...(notes ? { data: { notes } } : {}) },
+    );
+  },
+
   getJobCard(id: string): Promise<IJobCard> {
     return apiClient.get<IJobCard>(`/api/v1/job-cards/${id}`);
   },
