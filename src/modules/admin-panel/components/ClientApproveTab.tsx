@@ -96,10 +96,22 @@ function ClientApproveDetailModal({ client, subTab, onClose, onApprove, onReject
               <div className="f-val">{client.company_name}</div>
             </div>
           ) : null}
-          {(client.country || client.location) ? (
+          {(client.location) ? (
             <div className="f-row">
               <div className="f-key">Location</div>
-              <div className="f-val">{client.country || client.location}</div>
+              <div className="f-val">{client.location}</div>
+            </div>
+          ) : null}
+          {(client.country) ? (
+            <div className="f-row">
+              <div className="f-key">Country</div>
+              <div className="f-val">{client.country}</div>
+            </div>
+          ) : null}
+          {(client.currency) ? (
+            <div className="f-row">
+              <div className="f-key">Currency</div>
+              <div className="f-val">{client.currency}</div>
             </div>
           ) : null}
           <div className="f-row">
@@ -213,8 +225,11 @@ function ClientTable({
             <th>Generated ID</th>
             <th>Name</th>
             <th>Company</th>
-            <th>Email / Phone</th>
+            <th>Email</th>
+            <th>Phone</th>
             <th>Location</th>
+            <th>Country</th>
+            <th>Currency</th>
             <th>Signup Date</th>
             {showRejectionNote && <th>Rejected Reason</th>}
             {showActions && <th>Actions</th>}
@@ -230,13 +245,13 @@ function ClientTable({
               <td>
                 <span className="ref-code">{c.client_id}</span>
               </td>
-              <td className="font-semibold">{c.contact_name}</td>
+              <td className="font-semibold whitespace-nowrap">{c.contact_name}</td>
               <td className="text-text-muted">{c.company_name || '—'}</td>
-              <td>
-                <div className="text-[12px]">{c.email}</div>
-                <div className="font-mono text-[11px] text-text-muted">{c.contact_number}</div>
-              </td>
-              <td className="text-text-muted">{c.country || c.location || '—'}</td>
+              <td className="text-[12px]">{c.email}</td>
+              <td className="font-mono text-[11px] text-text-muted">{c.contact_number}</td>
+              <td className="text-text-muted">{c.location || '—'}</td>
+              <td className="text-text-muted">{c.country || '—'}</td>
+              <td className="text-text-muted font-mono">{c.currency || '—'}</td>
               <td className="text-text-muted text-[12px]">
                 {new Date(c.created_at).toLocaleDateString()}
               </td>
