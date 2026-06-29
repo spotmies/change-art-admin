@@ -348,9 +348,9 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     // It's stored as [Expected Output Format: Others: DST, PXF] in the description.
     // Only accept tokens that look like real file extensions (whitelist).
     const KNOWN_EXTENSIONS = new Set([
-      'pdf','ai','eps','cdr','png','jpg','jpeg','svg','gif','tif','tiff',
-      'psd','zip','rar','dst','pxf','vip','hus','jef','sew','pes','exp',
-      'dsb','dsz','csd','pcs','vp3','xxx','bmp','webp','raw','dxf','dwg',
+      'pdf', 'ai', 'eps', 'cdr', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'tif', 'tiff',
+      'psd', 'zip', 'rar', 'dst', 'pxf', 'vip', 'hus', 'jef', 'sew', 'pes', 'exp',
+      'dsb', 'dsz', 'csd', 'pcs', 'vp3', 'xxx', 'bmp', 'webp', 'raw', 'dxf', 'dwg',
     ]);
 
     const text = (job?.summary || '') + '\n' + (job?.notes || '') + '\n' + (originalJob?.summary || '') + '\n' + (originalJob?.notes || '');
@@ -432,7 +432,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   async function handleApproveAmendment() {
     const id = requireUuid('approve amendment');
-    if (!id || !job || !job.version) return;
+    if (!id || !job || job.version === undefined) return;
     setAmendBusy('approve');
     try {
       await adminService.transitionJob(id, 'cs_amend_reroute', job.version);
@@ -447,7 +447,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   async function handleRejectAmendment() {
     const id = requireUuid('reject amendment');
-    if (!id || !job || !job.version) return;
+    if (!id || !job || job.version === undefined) return;
     setAmendBusy('reject');
     try {
       await adminService.transitionJob(id, 'reject_modification', job.version, rejectReason.trim() || undefined);
