@@ -171,6 +171,8 @@ export interface IJobCard {
   updated_at: IsoDateTime;
   /** Embedded client snapshot — populated by list/findById queries via LEFT JOIN. */
   client_info?: { client_id: string; client_name: string; company_name: string | null } | null;
+  /** Notes from the latest client modification request — populated when status is MODIFICATION_REQUESTED. */
+  modification_notes?: string | null;
 }
 
 export interface IFileVersion {

@@ -1,29 +1,32 @@
 import { useRef, useState } from 'react';
-import { X, Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { uploadCompletedFile } from '../services/cs-quote.service';
-import { useMarkComplete } from '../hooks/use-cs-quote';
+import { useMarkComplete, useNotifyOrderReady } from '../hooks/use-cs-quote';
 import { toastApiError } from '@lib/toast-error';
 
 interface Props {
   jobId: string;
   jobDesign: string;
-  /** e.g. 'Digitizing' or 'Digitizing + Sewout' — controls stitch count field visibility */
   orderType: string;
   allowedFormats?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
+type Phase = 'idle' | 'uploading' | 'completing' | 'sending';
+
 export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats, onClose, onSuccess }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [stitchCount, setStitchCount] = useState('');
   const [note, setNote] = useState('');
-  const [phase, setPhase] = useState<'idle' | 'uploading' | 'saving'>('idle');
+  const [confirmText, setConfirmText] = useState('');
+  const [phase, setPhase] = useState<Phase>('idle');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const markComplete = useMarkComplete();
+  const notifyReady = useNotifyOrderReady();
 
   const showStitchCount = orderType === 'Digitizing' || orderType === 'Digitizing + Sewout';
   const isPending = phase !== 'idle';
@@ -32,20 +35,19 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
     if (!incoming) return;
     const incomingFiles = Array.from(incoming);
     if (allowedFormats && allowedFormats.length > 0) {
-      const invalidFiles = incomingFiles.filter(f => {
+      const invalid = incomingFiles.filter((f) => {
         const dotIdx = f.name.lastIndexOf('.');
         const ext = dotIdx !== -1 ? f.name.slice(dotIdx + 1).toLowerCase() : '';
         return !allowedFormats.includes(ext);
       });
-      if (invalidFiles.length > 0) {
-        toast.error(`Only ${allowedFormats.map(e => e.toUpperCase()).join(', ')} formats can be uploaded for this job.`);
+      if (invalid.length > 0) {
+        toast.error(`Only ${allowedFormats.map((e) => e.toUpperCase()).join(', ')} formats allowed for this job.`);
         return;
       }
     }
     setFiles((prev) => {
       const existing = new Set(prev.map((f) => f.name + f.size));
-      const next = incomingFiles.filter((f) => !existing.has(f.name + f.size));
-      return [...prev, ...next];
+      return [...prev, ...incomingFiles.filter((f) => !existing.has(f.name + f.size))];
     });
   }
 
@@ -55,7 +57,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
 
   async function handleSubmit() {
     if (files.length === 0) {
-      toast.error('Upload at least one completed file before marking complete.');
+      toast.error('Upload at least one completed file before submitting.');
       return;
     }
     const parsedStitch = stitchCount ? parseInt(stitchCount, 10) : undefined;
@@ -64,10 +66,13 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
       return;
     }
 
+    // Step 1 — upload files, collect IDs
     setPhase('uploading');
+    const uploadedIds: string[] = [];
     try {
       for (let i = 0; i < files.length; i++) {
-        await uploadCompletedFile(jobId, files[i]);
+        const id = await uploadCompletedFile(jobId, files[i]);
+        uploadedIds.push(id);
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       }
     } catch (err) {
@@ -76,26 +81,44 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
       return;
     }
 
-    setPhase('saving');
-    markComplete.mutate(
-      {
-        jobId,
-        body: {
-          stitch_count: parsedStitch,
-          note: note.trim() || undefined,
+    // Step 2 — mark complete (READY_TO_DELIVER)
+    setPhase('completing');
+    await new Promise<void>((resolve, reject) => {
+      markComplete.mutate(
+        { jobId, body: { stitch_count: parsedStitch, note: note.trim() || undefined } },
+        {
+          onSuccess: () => resolve(),
+          onError: (err) => reject(err),
         },
-      },
+      );
+    }).catch((err) => {
+      setPhase('idle');
+      toastApiError(err);
+      return Promise.reject(err);
+    });
+
+    // Step 3 — notify client & move to DELIVERED
+    setPhase('sending');
+    notifyReady.mutate(
+      { jobId, fileIds: uploadedIds, note: note.trim() || undefined },
       {
         onSuccess: () => {
           setPhase('idle');
           onSuccess();
         },
-        onError: () => {
+        onError: (err) => {
           setPhase('idle');
+          toastApiError(err);
         },
       },
     );
   }
+
+  const phaseLabel =
+    phase === 'uploading' ? `Uploading… ${uploadProgress}%` :
+    phase === 'completing' ? 'Marking complete…' :
+    phase === 'sending' ? 'Sending to client…' :
+    null;
 
   return (
     <div
@@ -107,7 +130,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Mark complete and ready to deliver"
+        aria-label="Mark complete and send to client"
         className="relative w-full max-w-[500px] rounded-2xl flex flex-col overflow-hidden"
         style={{ background: '#fff', boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)' }}
         onClick={(e) => e.stopPropagation()}
@@ -119,7 +142,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
         >
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '0.01em' }}>
-              Mark Complete &amp; Ready to Deliver
+              Mark Complete &amp; Send to Client
             </div>
             <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
               {jobDesign}
@@ -148,16 +171,17 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
                 Client requested format:{' '}
                 <span style={{ color: '#059669', fontWeight: 700 }}>
-                  {allowedFormats.map(f => f.toUpperCase()).join(', ')}
+                  {allowedFormats.map((f) => f.toUpperCase()).join(', ')}
                 </span>
               </div>
             )}
-            <div
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            <label
+              htmlFor="mc-file-input"
+              onDragOver={(e) => { e.preventDefault(); if (!isPending) setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
-              onDrop={(e) => { e.preventDefault(); setIsDragging(false); addFiles(e.dataTransfer.files); }}
-              onClick={() => !isPending && fileInputRef.current?.click()}
+              onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (!isPending) addFiles(e.dataTransfer.files); }}
               style={{
+                display: 'block',
                 border: `2px dashed ${isDragging ? '#059669' : '#CBD5E1'}`,
                 borderRadius: 10,
                 padding: '20px 16px',
@@ -173,21 +197,20 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               </div>
               <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 4 }}>
                 {allowedFormats && allowedFormats.length > 0
-                  ? `${allowedFormats.map(f => f.toUpperCase()).join(', ')} — up to 500 MB each`
+                  ? `${allowedFormats.map((f) => f.toUpperCase()).join(', ')} — up to 500 MB each`
                   : 'Any format — up to 500 MB each'}
               </div>
-            </div>
+            </label>
             <input
+              id="mc-file-input"
               ref={fileInputRef}
               type="file"
               multiple
               accept={(() => {
                 if (!allowedFormats || allowedFormats.length === 0) return undefined;
-                // Only restrict browser accept for formats the OS recognises.
-                // Exotic embroidery formats (dst, pxf, etc.) would block the picker.
                 const browserKnown = ['pdf', 'ai', 'eps', 'cdr', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'tiff', 'tif', 'psd', 'zip'];
-                const knownOnly = allowedFormats.filter(f => browserKnown.includes(f));
-                return knownOnly.length > 0 ? knownOnly.map(ext => `.${ext}`).join(',') : undefined;
+                const knownOnly = allowedFormats.filter((f) => browserKnown.includes(f));
+                return knownOnly.length > 0 ? knownOnly.map((ext) => `.${ext}`).join(',') : undefined;
               })()}
               className="hidden"
               disabled={isPending}
@@ -222,15 +245,17 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
             )}
           </div>
 
-          {/* Stitch count — Digitizing orders only */}
+          {/* Stitch count — Digitizing only */}
           {showStitchCount && (
             <div>
               <label
+                htmlFor="mc-stitch"
                 style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}
               >
                 Stitch Count (optional)
               </label>
               <input
+                id="mc-stitch"
                 type="text"
                 inputMode="numeric"
                 value={stitchCount}
@@ -260,11 +285,13 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
           {/* Note */}
           <div>
             <label
+              htmlFor="mc-note"
               style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: '#475569', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}
             >
-              Note (optional)
+              Note to Client (optional)
             </label>
             <textarea
+              id="mc-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               disabled={isPending}
@@ -289,38 +316,85 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
             />
           </div>
 
-          {/* Upload progress */}
-          {phase === 'uploading' && (
+          {/* Confirm field */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 10,
+              padding: '16px 20px',
+              borderRadius: 12,
+              background: confirmText.toLowerCase() === 'confirm'
+                ? 'rgba(5,150,105,0.06)'
+                : '#F8FAFC',
+              border: `1.5px solid ${confirmText.toLowerCase() === 'confirm' ? 'rgba(5,150,105,0.35)' : '#E2E8F0'}`,
+              transition: 'all 0.2s',
+            }}
+          >
+            <label
+              htmlFor="mc-confirm"
+              style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'center' }}
+            >
+              Type{' '}
+              <span style={{ fontFamily: 'IBM Plex Mono, monospace', background: '#E8F5F0', padding: '2px 7px', borderRadius: 5, color: '#059669', letterSpacing: '0.06em' }}>
+                CONFIRM
+              </span>{' '}
+              to send files to client
+            </label>
+            <input
+              id="mc-confirm"
+              type="text"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="CONFIRM"
+              disabled={isPending}
+              autoComplete="off"
+              style={{
+                width: 160,
+                border: `2px solid ${confirmText.toLowerCase() === 'confirm' ? '#059669' : '#CBD5E1'}`,
+                borderRadius: 8,
+                padding: '9px 14px',
+                fontSize: 14,
+                fontFamily: 'IBM Plex Mono, monospace',
+                fontWeight: 700,
+                color: confirmText.toLowerCase() === 'confirm' ? '#059669' : '#0F172A',
+                background: '#fff',
+                outline: 'none',
+                textAlign: 'center',
+                letterSpacing: '0.1em',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+            />
+            {confirmText.toLowerCase() === 'confirm' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#059669', fontWeight: 600 }}>
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+                Ready to send
+              </div>
+            )}
+          </div>
+
+          {/* Progress bar while working */}
+          {isPending && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B', marginBottom: 4 }}>
-                <span>Uploading files…</span>
-                <span>{uploadProgress}%</span>
+                <span>{phaseLabel}</span>
+                {phase === 'uploading' && <span>{uploadProgress}%</span>}
               </div>
               <div style={{ height: 4, borderRadius: 2, background: '#E2E8F0', overflow: 'hidden' }}>
                 <div
                   style={{
                     height: '100%',
-                    width: `${uploadProgress}%`,
+                    width: phase === 'uploading' ? `${uploadProgress}%` : '100%',
                     background: 'linear-gradient(90deg,#059669,#047857)',
                     borderRadius: 2,
-                    transition: 'width 0.2s',
+                    transition: phase === 'uploading' ? 'width 0.2s' : 'none',
+                    animation: phase !== 'uploading' ? 'pulse 1.2s ease-in-out infinite' : 'none',
                   }}
                 />
               </div>
             </div>
           )}
-
-          {/* Info callout */}
-          <div
-            className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[11.5px]"
-            style={{ background: 'rgba(5,150,105,0.05)', border: '1px solid rgba(5,150,105,0.18)', color: '#047857' }}
-          >
-            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <span>
-              Files must pass the virus scan before they can be delivered. The job will appear on
-              the <strong>Ready to Deliver</strong> page once complete.
-            </span>
-          </div>
         </div>
 
         {/* Footer */}
@@ -350,7 +424,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isPending || files.length === 0}
+            disabled={isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm'}
             style={{
               flex: 2,
               padding: '9px 0',
@@ -358,26 +432,24 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               fontWeight: 700,
               borderRadius: 9,
               border: 'none',
-              background: isPending || files.length === 0
+              background: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm'
                 ? 'linear-gradient(135deg,#9CA3AF,#6B7280)'
                 : 'linear-gradient(135deg,#059669,#047857)',
               color: '#fff',
-              cursor: isPending || files.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: isPending || files.length === 0 ? 0.7 : 1,
+              cursor: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 'not-allowed' : 'pointer',
+              opacity: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 0.7 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 7,
-              boxShadow: isPending || files.length === 0 ? 'none' : '0 3px 12px rgba(5,150,105,0.35)',
+              boxShadow: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 'none' : '0 3px 12px rgba(5,150,105,0.35)',
               transition: 'all 0.15s',
             }}
           >
-            {phase === 'uploading' ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> Uploading…</>
-            ) : phase === 'saving' ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> Saving…</>
+            {isPending ? (
+              <><Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden /> {phaseLabel}</>
             ) : (
-              <><CheckCircle2 className="w-3.5 h-3.5" aria-hidden /> Mark Complete &amp; Ready to Deliver</>
+              <><CheckCircle2 className="w-3.5 h-3.5" aria-hidden /> Mark Complete &amp; Send to Client</>
             )}
           </button>
         </div>

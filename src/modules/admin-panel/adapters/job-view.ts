@@ -187,5 +187,6 @@ export function adaptJobCard(
     hasAdminCopy: card.has_admin_copy ?? false,
     clientPo: card.client_po ?? null,
     modificationCount: card.modification_count ?? 0,
+    modificationNotes: card.modification_notes ?? null,
   };
 }

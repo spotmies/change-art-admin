@@ -3,6 +3,7 @@ import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
 import { AssignJobModal } from './AssignJobModal';
 import { Inbox, Clock, CheckCircle2, Download, Search } from 'lucide-react';
+import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -67,13 +68,17 @@ export function JobTable({
 }: JobTableProps) {
   const [view, setView] = useState<JobView>(defaultView);
   const [query, setQuery] = useState('');
-  // Store only the identifier, not a frozen copy — viewJob is derived from the live
-  // `jobs` prop so it auto-updates when the parent re-fetches (e.g. after ack sent).
+  // Store only the identifier. The modal uses a live detail fetch (useAdminJobById)
+  // so it always gets fresh data including modification_notes and any field that
+  // the list endpoint doesn't return. Falls back to the list-derived copy while
+  // the detail fetch is in-flight so the modal opens instantly.
   const [viewJobId, setViewJobId] = useState<string | null>(null);
-  const viewJob = useMemo(
+  const listJob = useMemo(
     () => (viewJobId ? (jobs.find((j) => (j.uuid ?? j.id) === viewJobId) ?? null) : null),
     [viewJobId, jobs],
   );
+  const { data: detailJob } = useAdminJobById(viewJobId ?? '');
+  const viewJob = detailJob ?? listJob;
   const [editJob, setEditJob] = useState<Job | null>(null);
   const [assignJob, setAssignJob] = useState<Job | null>(null);
 

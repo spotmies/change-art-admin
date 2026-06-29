@@ -1785,6 +1785,80 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
           </>)}
 
+          {/* ── MODIFICATION REQUEST ── client's description + attached files ── */}
+          {normalizedStatus(job) === 'MODIFICATION_REQUESTED' && (() => {
+            const amendFiles = (adminJobFiles ?? []).filter(
+              (f) => f.file_category === FileCategory.ORIGINAL,
+            );
+            return (
+              <div
+                className="mx-6 mb-4 rounded-xl overflow-hidden"
+                style={{ border: '1.5px solid rgba(225,29,72,0.35)', background: 'rgba(225,29,72,0.05)' }}
+              >
+                {/* Header */}
+                <div
+                  className="px-4 py-2.5 flex items-center gap-2"
+                  style={{ borderBottom: '1px solid rgba(225,29,72,0.2)', background: 'rgba(225,29,72,0.08)' }}
+                >
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#e11d48' }} aria-hidden />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: '#e11d48' }}>
+                    Client's Modification Request{job.modificationCount ? ` — Amend R${job.modificationCount}` : ''}
+                  </span>
+                </div>
+
+                {/* Description */}
+                <div className="px-4 pt-3 pb-2">
+                  {job.modificationNotes ? (
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-main)' }}>
+                      {job.modificationNotes}
+                    </p>
+                  ) : (
+                    <p className="text-[12.5px] italic" style={{ color: 'var(--text-faint)' }}>No description provided.</p>
+                  )}
+                </div>
+
+                {/* Attached files */}
+                {amendFiles.length > 0 && (
+                  <div className="px-4 pb-3">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.07em] mb-2 mt-1" style={{ color: 'var(--text-faint)' }}>
+                      Attached Files ({amendFiles.length})
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                      {amendFiles.map((f) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-2.5 rounded-lg px-3 py-2"
+                          style={{ background: 'rgba(225,29,72,0.07)', border: '1px solid rgba(225,29,72,0.18)' }}
+                        >
+                          <FileText className="w-3.5 h-3.5 shrink-0" style={{ color: '#e11d48' }} aria-hidden />
+                          <span className="text-[12px] font-medium truncate flex-1" style={{ color: 'var(--text-main)' }}>
+                            {f.file_name}
+                          </span>
+                          <span className="text-[11px] whitespace-nowrap" style={{ color: 'var(--text-faint)' }}>
+                            {f.file_size_bytes < 1024 * 1024
+                              ? `${(f.file_size_bytes / 1024).toFixed(0)} KB`
+                              : `${(f.file_size_bytes / 1024 / 1024).toFixed(1)} MB`}
+                          </span>
+                          {f.storage_url && (
+                            <a
+                              href={f.storage_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 text-[11px] font-semibold"
+                              style={{ color: '#e11d48' }}
+                            >
+                              <Download className="w-3.5 h-3.5" aria-hidden />
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* ── QUERIES ── always use the canonical (non-admin-copy) job ID so
               the thread is shared with the client viewing the original job. */}
           {!showCompare && (

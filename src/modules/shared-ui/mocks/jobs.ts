@@ -108,6 +108,8 @@ export interface Job {
   clientPo?: string | null;
   /** How many modification requests have been made on this job — drives Amend R1/R2 badge. */
   modificationCount?: number;
+  /** The client's description from their latest modification request. */
+  modificationNotes?: string | null;
 }
 
 export const JOBS: Job[] = [
