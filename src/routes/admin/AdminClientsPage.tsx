@@ -104,6 +104,7 @@ export function AdminClientsPage() {
 
   const { data: pendingApprovals } = usePendingClients();
   const pendingApprovalsCount = pendingApprovals?.length ?? 0;
+  const autoOpenUserId = searchParams.get('open_user') ?? undefined;
 
   const clientsFilters = useMemo(
     () => ({
@@ -126,6 +127,15 @@ export function AdminClientsPage() {
     setSearch('');
     setPage(1);
   }, [tab]);
+
+  // Strip open_user from the URL after passing it down, so a page refresh
+  // doesn't re-open the modal.
+  useEffect(() => {
+    if (!autoOpenUserId) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('open_user');
+    navigate({ search: next.toString() }, { replace: true });
+  }, [autoOpenUserId, navigate, searchParams]);
 
   const clients = data?.items ?? [];
   const total = data?.meta.total ?? 0;
@@ -247,7 +257,7 @@ export function AdminClientsPage() {
         </div>
 
         {tab === 'approve' ? (
-          <ClientApproveTab />
+          <ClientApproveTab autoOpenUserId={autoOpenUserId} />
         ) : tab === 'requests' ? (
           <ProfileChangeRequestsTab search={debouncedSearch} />
         ) : isLoading ? (

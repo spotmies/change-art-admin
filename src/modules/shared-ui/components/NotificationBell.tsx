@@ -36,6 +36,13 @@ function getNotificationPath(role: UserRole, data: Record<string, unknown> | nul
     return '/admin/clients?tab=requests';
   }
 
+  if (kind === 'client_pending_approval') {
+    const clientUserId = data?.client_user_id as string | undefined;
+    return clientUserId
+      ? `/admin/clients?tab=approve&open_user=${clientUserId}`
+      : '/admin/clients?tab=approve';
+  }
+
   if (!jobId) return null;
   switch (role) {
     case UserRole.CLIENT:     return `/client/jobs?open=${jobId}`;
@@ -208,7 +215,7 @@ interface RowProps {
 
 function NotificationRow({ notification: n, onMarkRead, busy, onClick }: RowProps) {
   const data = n.data as Record<string, unknown> | null;
-  const isClickable = !!data?.jobId || data?.kind === 'profile_change_submitted';
+  const isClickable = !!data?.jobId || data?.kind === 'profile_change_submitted' || data?.kind === 'client_pending_approval';
 
   function handleRowClick() {
     onClick(n);
@@ -247,6 +254,10 @@ function NotificationRow({ notification: n, onMarkRead, busy, onClick }: RowProp
           ) : data?.kind === 'profile_change_submitted' ? (
             <div className="text-[10.5px] mt-0.5 font-semibold" style={{ color: 'var(--color-crimson)' }}>
               Tap to review request →
+            </div>
+          ) : data?.kind === 'client_pending_approval' ? (
+            <div className="text-[10.5px] mt-0.5 font-semibold" style={{ color: 'var(--color-crimson)' }}>
+              Tap to view request →
             </div>
           ) : null}
         </div>

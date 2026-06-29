@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, X } from 'lucide-react';
 import type { IClient } from '@contracts';
@@ -292,15 +292,27 @@ function ClientTable({
 
 // ─── Main tab ─────────────────────────────────────────────────────────────────
 
-export function ClientApproveTab() {
+export function ClientApproveTab({ autoOpenUserId }: { autoOpenUserId?: string }) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('pending');
   const [approvingClient, setApprovingClient] = useState<IClient | null>(null);
   const [rejectingClient, setRejectingClient] = useState<IClient | null>(null);
   const [selectedClient, setSelectedClient] = useState<IClient | null>(null);
+  const autoOpened = useRef(false);
 
   const pending = usePendingClients();
   const approved = useApprovedClients();
   const rejected = useRejectedClients();
+
+  // Auto-open the client detail modal when navigated from a notification.
+  useEffect(() => {
+    if (!autoOpenUserId || autoOpened.current || !pending.data) return;
+    const match = pending.data.find((c) => c.user_id === autoOpenUserId);
+    if (match) {
+      autoOpened.current = true;
+      setActiveSubTab('pending');
+      setSelectedClient(match);
+    }
+  }, [autoOpenUserId, pending.data]);
 
   const subTabs: { key: SubTab; label: string; count?: number }[] = [
     { key: 'pending', label: 'Pending', count: pending.data?.length },
