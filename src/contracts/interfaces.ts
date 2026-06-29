@@ -86,6 +86,8 @@ export interface IClient {
   card_on_file: ICardOnFile | null;
   user_id: string | null;
   approval_status: ClientApprovalStatus | null;
+  /** Admin's stated reason when approval_status = REJECTED. Null otherwise. */
+  rejection_note: string | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

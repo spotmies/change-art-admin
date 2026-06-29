@@ -1,11 +1,164 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, X } from 'lucide-react';
 import type { IClient } from '@contracts';
 import { useApprovedClients, usePendingClients, useRejectedClients } from '../hooks/use-admin-clients';
 import { ApproveClientModal } from './ApproveClientModal';
 import { RejectClientModal } from './RejectClientModal';
+import { useState } from 'react';
 
 type SubTab = 'pending' | 'approved' | 'rejected';
+
+function formatDate(d: string | Date) {
+  return new Date(d).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+// ─── Client detail modal ──────────────────────────────────────────────────────
+
+interface DetailModalProps {
+  client: IClient | null;
+  subTab: SubTab;
+  onClose: () => void;
+  onApprove: (c: IClient) => void;
+  onReject: (c: IClient) => void;
+}
+
+function ClientApproveDetailModal({ client, subTab, onClose, onApprove, onReject }: DetailModalProps) {
+  useEffect(() => {
+    if (!client) return undefined;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [client, onClose]);
+
+  if (!client) return null;
+
+  const statusBadge: Record<SubTab, string> = {
+    pending: 'badge yellow',
+    approved: 'badge green',
+    rejected: 'badge red',
+  };
+
+  const statusLabel: Record<SubTab, string> = {
+    pending: 'Pending',
+    approved: 'Approved',
+    rejected: 'Rejected',
+  };
+
+  const modal = (
+    <div
+      className="modal-overlay open"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal
+      aria-label="Client details"
+    >
+      <div className="modal" style={{ maxWidth: 520 }}>
+        <div className="modal-top">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="modal-job-id">{client.client_id}</div>
+            <div className="modal-title">{client.client_name}</div>
+            <div className="modal-tags">
+              <span className={statusBadge[subTab]}>{statusLabel[subTab]}</span>
+              {client.company_name ? (
+                <span className="badge blue">{client.company_name}</span>
+              ) : null}
+            </div>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+            <X className="w-3.5 h-3.5" aria-hidden />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div className="m-sec-title">Client Details</div>
+          <div className="f-row">
+            <div className="f-key">Name</div>
+            <div className="f-val">{client.contact_name}</div>
+          </div>
+          <div className="f-row">
+            <div className="f-key">Email</div>
+            <div className="f-val">{client.email}</div>
+          </div>
+          <div className="f-row">
+            <div className="f-key">Phone</div>
+            <div className="f-val">{client.contact_number || '—'}</div>
+          </div>
+          {client.company_name ? (
+            <div className="f-row">
+              <div className="f-key">Company</div>
+              <div className="f-val">{client.company_name}</div>
+            </div>
+          ) : null}
+          {(client.country || client.location) ? (
+            <div className="f-row">
+              <div className="f-key">Location</div>
+              <div className="f-val">{client.country || client.location}</div>
+            </div>
+          ) : null}
+          <div className="f-row">
+            <div className="f-key">Signed up</div>
+            <div className="f-val">{formatDate(client.created_at)}</div>
+          </div>
+
+          {subTab === 'rejected' ? (
+            <>
+              <div className="m-sec-title" style={{ marginTop: 14 }}>Rejection</div>
+              {client.rejection_note ? (
+                <div className="f-row" style={{ alignItems: 'flex-start' }}>
+                  <div className="f-key">Reason</div>
+                  <div className="f-val italic">&ldquo;{client.rejection_note}&rdquo;</div>
+                </div>
+              ) : (
+                <div className="text-text-faint text-[12px]">No reason was recorded.</div>
+              )}
+            </>
+          ) : null}
+        </div>
+
+        <div className="modal-actions">
+          {subTab === 'pending' ? (
+            <>
+              <button type="button" className="btn btn-outline" onClick={onClose}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-red"
+                onClick={() => { onClose(); onReject(client); }}
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+                Reject
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={() => { onClose(); onApprove(client); }}
+              >
+                <Check className="w-3.5 h-3.5" aria-hidden />
+                Approve
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-outline" onClick={onClose}>
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modal, document.body);
+}
+
+// ─── Shared table ─────────────────────────────────────────────────────────────
 
 function ClientTable({
   clients,
@@ -13,6 +166,8 @@ function ClientTable({
   isError,
   emptyMessage,
   showActions,
+  showRejectionNote,
+  onRowClick,
   onApprove,
   onReject,
 }: {
@@ -21,6 +176,8 @@ function ClientTable({
   isError: boolean;
   emptyMessage: string;
   showActions?: boolean;
+  showRejectionNote?: boolean;
+  onRowClick?: (c: IClient) => void;
   onApprove?: (c: IClient) => void;
   onReject?: (c: IClient) => void;
 }) {
@@ -59,12 +216,17 @@ function ClientTable({
             <th>Email / Phone</th>
             <th>Location</th>
             <th>Signup Date</th>
+            {showRejectionNote && <th>Rejected Reason</th>}
             {showActions && <th>Actions</th>}
           </tr>
         </thead>
         <tbody>
           {clients.map((c) => (
-            <tr key={c.id}>
+            <tr
+              key={c.id}
+              onClick={() => onRowClick?.(c)}
+              style={{ cursor: onRowClick ? 'pointer' : undefined }}
+            >
               <td>
                 <span className="ref-code">{c.client_id}</span>
               </td>
@@ -78,8 +240,13 @@ function ClientTable({
               <td className="text-text-muted text-[12px]">
                 {new Date(c.created_at).toLocaleDateString()}
               </td>
+              {showRejectionNote && (
+                <td className="text-text-muted text-[12px] italic">
+                  {c.rejection_note || '—'}
+                </td>
+              )}
               {showActions && (
-                <td>
+                <td onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -108,10 +275,13 @@ function ClientTable({
   );
 }
 
+// ─── Main tab ─────────────────────────────────────────────────────────────────
+
 export function ClientApproveTab() {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('pending');
   const [approvingClient, setApprovingClient] = useState<IClient | null>(null);
   const [rejectingClient, setRejectingClient] = useState<IClient | null>(null);
+  const [selectedClient, setSelectedClient] = useState<IClient | null>(null);
 
   const pending = usePendingClients();
   const approved = useApprovedClients();
@@ -171,6 +341,7 @@ export function ClientApproveTab() {
           isError={pending.isError}
           emptyMessage="No pending clients awaiting approval."
           showActions
+          onRowClick={(c) => setSelectedClient(c)}
           onApprove={setApprovingClient}
           onReject={setRejectingClient}
         />
@@ -182,6 +353,7 @@ export function ClientApproveTab() {
           isLoading={approved.isLoading}
           isError={approved.isError}
           emptyMessage="No approved self-registered clients yet."
+          onRowClick={(c) => setSelectedClient(c)}
         />
       )}
 
@@ -191,8 +363,18 @@ export function ClientApproveTab() {
           isLoading={rejected.isLoading}
           isError={rejected.isError}
           emptyMessage="No rejected client registrations."
+          showRejectionNote
+          onRowClick={(c) => setSelectedClient(c)}
         />
       )}
+
+      <ClientApproveDetailModal
+        client={selectedClient}
+        subTab={activeSubTab}
+        onClose={() => setSelectedClient(null)}
+        onApprove={setApprovingClient}
+        onReject={setRejectingClient}
+      />
 
       <ApproveClientModal
         client={approvingClient}

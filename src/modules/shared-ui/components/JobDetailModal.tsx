@@ -432,7 +432,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   async function handleApproveAmendment() {
     const id = requireUuid('approve amendment');
-    if (!id || !job.version) return;
+    if (!id || !job || !job.version) return;
     setAmendBusy('approve');
     try {
       await adminService.transitionJob(id, 'cs_amend_reroute', job.version);
@@ -447,7 +447,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   async function handleRejectAmendment() {
     const id = requireUuid('reject amendment');
-    if (!id || !job.version) return;
+    if (!id || !job || !job.version) return;
     setAmendBusy('reject');
     try {
       await adminService.transitionJob(id, 'reject_modification', job.version, rejectReason.trim() || undefined);
