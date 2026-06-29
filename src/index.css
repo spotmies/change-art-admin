@@ -1046,64 +1046,67 @@ html[data-theme='light'] .mb-track {
 
   /* Row 1: search/filter-bar + view-toggle always on same horizontal line */
   .tbl-top-row {
-    display: flex;
-    align-items: flex-start;  /* anchor everything to the top */
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
     gap: 10px;
     padding: 8px 12px;
   }
 
-  /* Toolbar slot: wrapping flex — bar-row on line 1, panel on line 2 (wrapped) */
+  /* Toolbar slot: display contents so that its child (fjb-root) is laid out in the parent grid */
   .tbl-toolbar-slot {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-wrap: wrap;          /* lets panel break onto a new line inside the slot */
-    align-content: flex-start;
+    display: contents;
   }
 
-  /* The compact search + Filters button row — takes 100% of line 1 */
-  .job-filter-bar-row {
-    flex: 0 0 100%;           /* 100% basis → claims full line 1, panel wraps to line 2 */
-    min-width: 0;
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  .tbl-toolbar-slot .fjb-root {
+    display: contents;
   }
 
-  /* Panel: 100% width forces it onto a new wrapped line inside the slot */
-  /* (view toggle is NOT inside tbl-toolbar-slot, so it stays on row 1) */
+  .fjb-top-row {
+    grid-column: 1;
+    order: 1;
+  }
+
+  .tbl-search-wrap {
+    grid-column: 1;
+    order: 1;
+  }
 
   /* View toggle — top-aligned; 1px nudge optically centers the 34px toggle with the 36px search bar */
   .tbl-toggle-right {
+    grid-column: 2;
+    order: 2;
     flex-shrink: 0;
     padding-top: 1px;
   }
 
+  .fjb-panel {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
   @media (max-width: 640px) {
     .tbl-top-row {
-      flex-wrap: wrap;
+      grid-template-columns: 1fr;
       align-items: stretch;
       gap: 8px;
       padding: 8px;
     }
-    .tbl-toolbar-slot {
-      width: 100%;
-      flex: 0 0 100%;
+    .fjb-top-row {
+      grid-column: 1;
+      order: 1;
     }
-    .job-filter-bar-row {
-      min-height: 40px;
-      height: auto;
+    .tbl-search-wrap {
+      grid-column: 1;
+      order: 1;
     }
-    .filter-search-wrap { flex: 1; min-width: 0; }
-    .filter-toggle-btn {
-      flex-shrink: 0;
-      height: 40px;
-      padding: 0 14px;
-      font-size: 13px;
+    .fjb-panel {
+      grid-column: 1;
+      order: 2;
     }
     .tbl-toggle-right {
+      grid-column: 1;
+      order: 3;
       width: 100%;
       margin-top: 0;
       align-self: auto;
@@ -2352,35 +2355,35 @@ html[data-theme='light'] .mb-track {
     margin-top: 8px;
     border: 1.5px solid var(--glass-border);
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 12px 16px;
     background: var(--glass-bg);
     animation: fjbSlideIn 0.18s cubic-bezier(0.16,1,0.3,1);
   }
 
-  /* ── True single-line row ── */
+  /* ── Filter row — wraps on small screens, single line on md+ ── */
   .fjb-single-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;          /* mobile: items wrap to next line */
     width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;       /* Firefox */
-    -ms-overflow-style: none;    /* IE/Edge */
   }
 
-  .fjb-single-row::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+  .fjb-single-row::-webkit-scrollbar { display: none; }
 
-  /* Each select wrapper inside the single row — fixed width, never squish */
+  /* Mobile: selects grow/shrink, min 140px so 2 fit per row */
   .fjb-single-row .fjb-select-inner {
-    flex-shrink: 0;
-    width: 140px;
+    flex: 1 1 140px;
+    min-width: 130px;
+    width: auto;
   }
 
   .fjb-single-row .fjb-select-inner .fjb-select {
-    width: 140px;
-    min-width: 140px;
+    width: 100%;
+    min-width: 0;
   }
+
+  /* desktop single-line layout handled in the consolidated @media (min-width: 1024px) block below */
 
   html[data-theme='light'] .fjb-panel {
     background: #f8fafc;
@@ -2497,15 +2500,17 @@ html[data-theme='light'] .mb-track {
 
   .fjb-select-clear:hover { background: rgba(196,30,58,0.24); }
 
-  /* Date group */
+  /* Date range group — From → To as one horizontal unit */
   .fjb-date-group {
     display: flex;
-    flex-direction: column;
-    gap: 5px;
-    flex: 2;
-    min-width: 280px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 280px;
+    min-width: 260px;
   }
 
+  /* legacy row helper (used by pill-style bar) */
   .fjb-date-row {
     display: flex;
     align-items: center;
@@ -2517,22 +2522,66 @@ html[data-theme='light'] .mb-track {
     color: var(--text-faint);
     flex-shrink: 0;
     user-select: none;
+    padding: 0 2px;
   }
 
-  /* Inline actions container */
+  /* Mobile: actions own full-width row, right-aligned so Apply is never hidden */
   .fjb-inline-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex-shrink: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .fjb-date-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    flex-shrink: 0;
-    width: 142px;
+    flex: 1 1 120px;
+    min-width: 110px;
+    width: auto;
+  }
+
+  /* ── md+ (≥ 1024px accounts for the ~240px sidebar) — single horizontal line ── */
+  @media (min-width: 1024px) {
+    .fjb-single-row {
+      flex-wrap: nowrap;
+      gap: 10px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .fjb-single-row .fjb-select-inner {
+      flex: 0 0 152px;
+      width: 152px;
+      min-width: 152px;
+    }
+
+    .fjb-single-row .fjb-select-inner .fjb-select {
+      width: 152px;
+      min-width: 152px;
+    }
+
+    .fjb-date-group {
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+
+    .fjb-date-wrap {
+      flex: 0 0 152px;
+      width: 152px;
+    }
+
+    .fjb-inline-actions {
+      width: auto;
+      justify-content: flex-start;
+      margin-left: auto;
+      padding-left: 4px;
+    }
   }
 
   .fjb-date-icon {

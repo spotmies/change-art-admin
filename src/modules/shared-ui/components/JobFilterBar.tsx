@@ -204,16 +204,17 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
               </div>
             )}
 
-            {/* Date From */}
-            <div className={`fjb-date-wrap${draft.dateFrom ? ' active' : ''}`}>
-              <CalendarDays className="fjb-date-icon" aria-hidden />
-              <input type="date" className="fjb-date-input" placeholder="From" title="From date" value={draft.dateFrom} onChange={(e) => setField('dateFrom', e.target.value)} />
-            </div>
-            <span className="fjb-date-arrow">→</span>
-            {/* Date To */}
-            <div className={`fjb-date-wrap${draft.dateTo ? ' active' : ''}`}>
-              <CalendarDays className="fjb-date-icon" aria-hidden />
-              <input type="date" className="fjb-date-input" placeholder="To" title="To date" value={draft.dateTo} onChange={(e) => setField('dateTo', e.target.value)} />
+            {/* Date range — kept together so the pair never splits across lines */}
+            <div className="fjb-date-group">
+              <div className={`fjb-date-wrap${draft.dateFrom ? ' active' : ''}`}>
+                <CalendarDays className="fjb-date-icon" aria-hidden />
+                <input type="date" className="fjb-date-input" placeholder="From" title="From date" value={draft.dateFrom} onChange={(e) => setField('dateFrom', e.target.value)} />
+              </div>
+              <span className="fjb-date-arrow">→</span>
+              <div className={`fjb-date-wrap${draft.dateTo ? ' active' : ''}`}>
+                <CalendarDays className="fjb-date-icon" aria-hidden />
+                <input type="date" className="fjb-date-input" placeholder="To" title="To date" value={draft.dateTo} onChange={(e) => setField('dateTo', e.target.value)} />
+              </div>
             </div>
 
             {/* Actions — pushed to the right */}
