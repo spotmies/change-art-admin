@@ -48,7 +48,7 @@ export function ApproveClientModal({ client, onClose }: ApproveClientModalProps)
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label="Approve Client"

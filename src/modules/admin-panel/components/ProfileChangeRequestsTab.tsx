@@ -319,9 +319,7 @@ function RequestDetailsModal({ request, onClose, onApprove, onReject, busy }: De
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label="Profile change request"
@@ -483,9 +481,7 @@ function ReviewModal({ reviewing, onClose, onSubmit, busy }: ReviewModalProps) {
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
-      }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label={title}

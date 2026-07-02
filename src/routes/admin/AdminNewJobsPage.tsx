@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GreetingHero,
   JobFilterBar,
@@ -60,8 +60,11 @@ export function AdminNewJobsPage() {
   }), [page, debouncedSearch, filters.orderType, filters.priority, clientUuid, filters.dateFrom, filters.dateTo]);
 
   const { jobs, total, isLoading, isError } = useAdminJobViews(queryFilters);
-
   const totalPages = Math.ceil(total / PER_PAGE);
+
+  const hasLoadedOnce = useRef(false);
+  useEffect(() => { if (!isLoading) hasLoadedOnce.current = true; }, [isLoading]);
+  const isFirstLoad = isLoading && !hasLoadedOnce.current;
 
   function handleFiltersChange(next: JobFilters) {
     setFilters(next);
@@ -94,7 +97,7 @@ export function AdminNewJobsPage() {
         ]}
       />
 
-      {isLoading ? (
+      {isFirstLoad ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
           Loading jobs…
         </div>

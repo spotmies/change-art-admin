@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
@@ -100,12 +100,23 @@ export function AdminUsersPage() {
           />
           <input
             className="fi"
-            style={{ paddingLeft: 36 }}
+            style={{ paddingLeft: 36, paddingRight: search ? 32 : undefined }}
             placeholder="Search by name or email…"
             value={search}
+            maxLength={500}
             onChange={(e) => resetToFirstPage(setSearch)(e.target.value)}
             aria-label="Search users"
           />
+          {search && (
+            <button
+              type="button"
+              className="fjb-search-x"
+              onClick={() => resetToFirstPage(setSearch)('')}
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden />
+            </button>
+          )}
         </div>
         <select
           className="fi"

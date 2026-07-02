@@ -1022,12 +1022,13 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         }}
                       >
                         {/* Search input */}
-                        <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border, #e2e8f0)' }}>
+                        <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--color-border, #e2e8f0)', position: 'relative', display: 'flex', alignItems: 'center' }}>
                           <input
                             autoFocus
                             type="text"
                             placeholder="Search by name or company…"
                             value={clientSearch}
+                            maxLength={500}
                             onChange={(e) => setClientSearch(e.target.value)}
                             style={{
                               width: '100%',
@@ -1036,8 +1037,19 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                               background: 'transparent',
                               fontSize: 13,
                               color: 'inherit',
+                              paddingRight: clientSearch ? 24 : 0,
                             }}
                           />
+                          {clientSearch && (
+                            <button
+                              type="button"
+                              className="fjb-search-x"
+                              onClick={() => setClientSearch('')}
+                              aria-label="Clear search"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
 
                         {/* Scrollable list — 5 rows visible */}

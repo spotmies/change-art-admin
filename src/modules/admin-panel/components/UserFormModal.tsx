@@ -170,9 +170,7 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !confirmingDeactivate) onClose();
-      }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label={isCreate ? 'Create user' : `User: ${user?.name}`}

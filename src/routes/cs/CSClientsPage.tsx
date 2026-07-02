@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
@@ -93,14 +93,25 @@ export function CSClientsPage() {
             aria-hidden
           />
           <input
-            type="search"
+            type="text"
             className="fi"
-            style={{ paddingLeft: 28 }}
+            style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
             placeholder="Search by name, company, email, or client ID…"
             value={search}
+            maxLength={500}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search clients"
           />
+          {search && (
+            <button
+              type="button"
+              className="fjb-search-x"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden />
+            </button>
+          )}
         </div>
 
         {isLoading ? (

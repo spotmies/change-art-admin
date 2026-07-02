@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, CheckCheck, Search } from 'lucide-react';
+import { Check, CheckCheck, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { NotificationType, type INotification } from '@contracts';
@@ -189,17 +189,31 @@ export function AdminNotificationsPage() {
               aria-hidden
             />
             <input
-              type="search"
+              type="text"
               className="fi"
-              style={{ paddingLeft: 28 }}
+              style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
               placeholder="Search title or body…"
               value={search}
+              maxLength={500}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
               aria-label="Search notifications"
             />
+            {search && (
+              <button
+                type="button"
+                className="fjb-search-x"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
           </div>
         </div>
 

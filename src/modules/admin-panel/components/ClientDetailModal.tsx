@@ -54,6 +54,15 @@ interface FormState {
   payment_mode: PaymentMode | '';
 }
 
+interface FieldErrors {
+  client_name?: string;
+  company_name?: string;
+  contact_name?: string;
+  contact_number?: string;
+  email?: string;
+  location?: string;
+}
+
 function initialState(client: IClient | null): FormState {
   return {
     client_name: client?.client_name ?? '',
@@ -66,10 +75,13 @@ function initialState(client: IClient | null): FormState {
   };
 }
 
+const ERR_STYLE = { color: '#f87171' };
+
 export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDetailModalProps) {
   const [editing, setEditing] = useState(mode === 'edit');
   const [form, setForm] = useState<FormState>(() => initialState(client));
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const update = useUpdateClient();
@@ -80,6 +92,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
     setForm(initialState(client));
     setEditing(mode === 'edit');
     setError(null);
+    setFieldErrors({});
   }, [client, mode]);
 
   useEffect(() => {
@@ -95,6 +108,51 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const setFE = (key: keyof FieldErrors, msg: string | undefined) =>
+    setFieldErrors((fe) => ({ ...fe, [key]: msg }));
+
+  function handleNameChange(raw: string) {
+    setFE('client_name', raw.length > 80 ? 'Maximum 80 characters allowed.' : undefined);
+    set('client_name', raw.slice(0, 80));
+  }
+
+  function handleCompanyChange(raw: string) {
+    setFE('company_name', raw.length > 80 ? 'Maximum 80 characters allowed.' : undefined);
+    set('company_name', raw.slice(0, 80));
+  }
+
+  function handleContactNameChange(raw: string) {
+    setFE('contact_name', raw.length > 80 ? 'Maximum 80 characters allowed.' : undefined);
+    set('contact_name', raw.slice(0, 80));
+  }
+
+  function handlePhoneChange(raw: string) {
+    if (/\D/.test(raw)) {
+      setFE('contact_number', 'Only numbers are allowed.');
+    } else if (raw.length > 13) {
+      setFE('contact_number', 'Maximum 13 digits allowed.');
+    } else {
+      setFE('contact_number', undefined);
+    }
+    set('contact_number', raw.replace(/\D/g, '').slice(0, 13));
+  }
+
+  function handleEmailChange(raw: string) {
+    if (/[^a-zA-Z0-9@._-]/.test(raw)) {
+      setFE('email', 'Only letters, numbers, @, ., _, - are allowed.');
+    } else if (raw.length > 80) {
+      setFE('email', 'Maximum 80 characters allowed.');
+    } else {
+      setFE('email', undefined);
+    }
+    set('email', raw.replace(/[^a-zA-Z0-9@._-]/g, '').slice(0, 80));
+  }
+
+  function handleLocationChange(raw: string) {
+    setFE('location', raw.length > 200 ? 'Maximum 200 characters allowed.' : undefined);
+    set('location', raw.slice(0, 200));
+  }
 
   const viewRows: [string, string][] = [
     ['Client ID', client.client_id],
@@ -116,8 +174,10 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
     if (!form.client_name.trim()) return setError('Full name is required.');
     if (!form.contact_name.trim()) return setError('Contact person is required.');
     if (!form.contact_number.trim()) return setError('Phone number is required.');
+    if (form.contact_number.trim().length > 13) return setError('Phone number must be at most 13 digits.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       return setError('A valid email is required.');
+
 
     // Only send non-empty optional fields — the backend's partial update treats
     // omitted keys as "leave unchanged", and payment_mode/company/location are
@@ -148,9 +208,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !confirmingDelete) onClose();
-      }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label={`Client: ${client.client_name}`}
@@ -180,27 +238,76 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
               <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 pb-1">
                 <div>
                   <label className="fl">Full Name</label>
-                  <input className="fi" value={form.client_name} onChange={(e) => set('client_name', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    value={form.client_name}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                  />
+                  {fieldErrors.client_name && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.client_name}</div>
+                  )}
                 </div>
                 <div>
                   <label className="fl">Company</label>
-                  <input className="fi" value={form.company_name} onChange={(e) => set('company_name', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    value={form.company_name}
+                    onChange={(e) => handleCompanyChange(e.target.value)}
+                  />
+                  {fieldErrors.company_name && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.company_name}</div>
+                  )}
                 </div>
                 <div>
                   <label className="fl">Contact Person</label>
-                  <input className="fi" value={form.contact_name} onChange={(e) => set('contact_name', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    value={form.contact_name}
+                    onChange={(e) => handleContactNameChange(e.target.value)}
+                  />
+                  {fieldErrors.contact_name && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.contact_name}</div>
+                  )}
                 </div>
                 <div>
                   <label className="fl">Phone</label>
-                  <input className="fi" value={form.contact_number} onChange={(e) => set('contact_number', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    value={form.contact_number}
+                    onChange={(e) => handlePhoneChange(e.target.value)}
+                  />
+                  {fieldErrors.contact_number && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.contact_number}</div>
+                  )}
                 </div>
                 <div>
                   <label className="fl">Email</label>
-                  <input className="fi" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    value={form.email}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                  />
+                  {fieldErrors.email && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.email}</div>
+                  )}
                 </div>
                 <div>
                   <label className="fl">Location</label>
-                  <input className="fi" value={form.location} onChange={(e) => set('location', e.target.value)} />
+                  <input
+                    className="fi"
+                    autoComplete="off"
+                    value={form.location}
+                    onChange={(e) => handleLocationChange(e.target.value)}
+                  />
+                  {fieldErrors.location && (
+                    <div className="text-[11px] mt-0.5" style={ERR_STYLE}>{fieldErrors.location}</div>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className="fl">Payment Mode</label>

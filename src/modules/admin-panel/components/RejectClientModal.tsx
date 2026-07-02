@@ -37,7 +37,7 @@ export function RejectClientModal({ client, onClose }: RejectClientModalProps) {
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label="Reject Client"

@@ -322,7 +322,7 @@ export function AddClientModal({ open, onClose }: AddClientModalProps) {
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={(e) => { if (e.target === e.currentTarget && !createdClient) onClose(); }}
+      onClick={undefined}
       role="dialog"
       aria-modal
       aria-label={createdClient ? 'Client Created' : 'Add Client'}

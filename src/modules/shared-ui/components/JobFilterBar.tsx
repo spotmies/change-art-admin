@@ -135,6 +135,7 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
             className="fjb-search"
             placeholder="Search jobs, clients, designs…"
             value={filters.search}
+            maxLength={500}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
           />
           {filters.search && (

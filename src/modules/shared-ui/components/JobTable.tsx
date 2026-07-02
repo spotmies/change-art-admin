@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, type ReactNode } from 'react';
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
 import { AssignJobModal } from './AssignJobModal';
-import { Inbox, Clock, CheckCircle2, Download, Search } from 'lucide-react';
+import { Inbox, Clock, CheckCircle2, Download, Search, X } from 'lucide-react';
 import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 function formatDate(dateStr: string): string {
@@ -127,11 +127,23 @@ export function JobTable({
                 <input
                   type="text"
                   className="tbl-search"
+                  style={{ paddingRight: query ? 28 : undefined }}
                   placeholder="Search jobs, clients, designs..."
                   value={query}
+                  maxLength={500}
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search jobs"
                 />
+                {query && (
+                  <button
+                    type="button"
+                    className="fjb-search-x"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" aria-hidden />
+                  </button>
+                )}
               </div>
             ) : null}
             {/* Right: view toggle */}
