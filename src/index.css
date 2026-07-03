@@ -694,6 +694,7 @@ html[data-theme='light'] .mb-track {
     padding: 12px 14px;
     margin-bottom: 10px;
     transition: var(--transition);
+    overflow: hidden; /* prevent long strings (email, UUID) from breaking out on mobile */
   }
 
   .panel:hover {
@@ -1019,6 +1020,88 @@ html[data-theme='light'] .mb-track {
     vertical-align: middle;
   }
 
+  /* ─ Compact dashboard table ─ */
+  .compact-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 14, 30, 0.88);
+    margin-bottom: 4px;
+  }
+
+  .compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 460px;
+    table-layout: fixed;
+  }
+
+  .compact-table thead tr {
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .compact-table thead th {
+    padding: 9px 12px;
+    text-align: left;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .compact-table thead th:nth-child(1) { width: 110px; }
+  .compact-table thead th:nth-child(2) { width: auto; }
+  .compact-table thead th:nth-child(3) { width: 100px; }
+  .compact-table thead th:nth-child(4) { width: 80px; }
+  .compact-table thead th:nth-child(5) { width: 110px; }
+  .compact-table thead th:nth-child(6) { width: 58px; }
+
+  .compact-table tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    transition: background 0.13s ease;
+  }
+
+  .compact-table tbody tr:last-child { border-bottom: none; }
+
+  .compact-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.045);
+  }
+
+  .compact-table tbody td {
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--text-main);
+    vertical-align: middle;
+  }
+
+  .compact-ref {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-crimson);
+    letter-spacing: 0.02em;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .compact-design {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-main);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* ─ Jobs root: shared table/grid/list shell ─ */
   .jobs-root {
     /* Original container styles commented out for reference:
@@ -1255,17 +1338,8 @@ html[data-theme='light'] .mb-track {
   }
 
   .jc-img {
-    position: relative;
     overflow: hidden;
     border-bottom: 1px solid var(--glass-border);
-  }
-
-  .jc-img::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 35%, rgba(10, 22, 40, 0.1));
-    pointer-events: none;
   }
 
   .jc-img img {
@@ -1274,17 +1348,6 @@ html[data-theme='light'] .mb-track {
     object-fit: contain;
     display: block;
     background: rgba(0, 0, 0, 0.06);
-  }
-
-  /* Status badge overlaying the top-right of the card image. */
-  .jc-status-overlay {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   }
 
   /* Crimson J-ID pill — small, monospace, low chroma. */
@@ -3363,6 +3426,29 @@ html[data-theme='light'] .mb-track {
     color: var(--color-crimson);
   }
 
+  html[data-theme='light'] .compact-table-wrap {
+    background: #FFFFFF;
+    border-color: #E2E8F0;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.06);
+  }
+
+  html[data-theme='light'] .compact-table thead tr {
+    background: #F8FAFC;
+    border-bottom-color: #E2E8F0;
+  }
+
+  html[data-theme='light'] .compact-table thead th { color: #64748B; }
+
+  html[data-theme='light'] .compact-table tbody tr { border-bottom-color: #F1F5F9; }
+
+  html[data-theme='light'] .compact-table tbody tr:hover { background: #F8FAFC; }
+
+  html[data-theme='light'] .compact-table tbody td { color: #0F172A; }
+
+  html[data-theme='light'] .compact-ref { color: #B22234; }
+
+  html[data-theme='light'] .compact-design { color: #0F172A; }
+
   /* ── Jobs root wrapper ── */
   html[data-theme='light'] .jobs-root {
     /* Original light wrapper commented out for reference:
@@ -3601,16 +3687,6 @@ html[data-theme='light'] .mb-track {
     background: rgba(15, 23, 42, 0.04);
     border-color: rgba(15, 23, 42, 0.1);
     color: var(--text-muted);
-  }
-
-  html[data-theme='light'] .jc-img::after {
-    display: none;
-  }
-
-  /* ── Status overlay badge on card image ─ keep frosted white bg ── */
-  html[data-theme='light'] .jc-status-overlay {
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
   }
 
   /* ── Pills — active = dark navy fill, hover = subtle ── */

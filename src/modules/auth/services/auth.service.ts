@@ -135,7 +135,14 @@ export const authService = {
   },
 
   async requestPasswordReset(email: string): Promise<void> {
-    await apiClient.raw.post<void>('/api/auth/forget-password', { email });
+    await apiClient.raw.post<void>('/api/auth/request-password-reset', {
+      email,
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+  },
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    await apiClient.raw.post<void>('/api/auth/reset-password', { token, newPassword });
   },
 
   signInWithGoogleUrl(): string {

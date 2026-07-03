@@ -24,7 +24,7 @@ export type JobStatus =
   | 'Senior Review'
   | 'Sewout'
   | 'Ready to Deliver'
-  | 'Delivered'
+  | 'Dispatched'
   | 'Quote Submitted'
   | 'Quote Approved'
   | 'Pending Client Confirm'
@@ -226,7 +226,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 5,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -277,7 +277,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 10,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Meena Das',
     subType: 'Senior',
@@ -482,7 +482,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 7,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -510,7 +510,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 11,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -842,7 +842,7 @@ export const JOBS: Job[] = [
     process: 'Offset Printing',
     priority: 'Normal',
     etaHours: 7,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -865,7 +865,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 13,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -893,7 +893,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 9,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -921,7 +921,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 3,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Rahul Nair',
     subType: 'Junior',

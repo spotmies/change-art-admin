@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, type ReactNode } from 'react';
+import { useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
 import { AssignJobModal } from './AssignJobModal';
@@ -16,7 +16,7 @@ import { cn, briefText } from '@lib/utils';
 import { jobImage, type Job } from '../mocks/jobs';
 
 function statusDisplay(status: string): string {
-  if (status === 'Pending Client Confirm' || status === 'Quote Approved') return 'Action Required';
+  if (status === 'Pending Client Confirm' || status === 'Quote Approved') return 'Awaiting Client';
   return status;
 }
 
@@ -46,6 +46,12 @@ interface JobTableProps {
   toolbarSlot?: ReactNode;
   /** Open the quote popup (Review & Set Price) from this table's View button. */
   quoteView?: boolean;
+  /** Job UUID/id to auto-open on mount (e.g. deep-linked from a notification). */
+  initialOpenJobId?: string | null;
+  /** Called once the initialOpenJobId has been consumed (e.g. to clear a URL param). */
+  onInitialOpenHandled?: () => void;
+  /** Compact 5-column table for dashboard widgets — no preview, timer, or date. */
+  compact?: boolean;
 }
 
 /**
@@ -65,6 +71,9 @@ export function JobTable({
   controlsExtra,
   toolbarSlot,
   quoteView = false,
+  initialOpenJobId,
+  onInitialOpenHandled,
+  compact = false,
 }: JobTableProps) {
   const [view, setView] = useState<JobView>(defaultView);
   const [query, setQuery] = useState('');
@@ -73,6 +82,14 @@ export function JobTable({
   // the list endpoint doesn't return. Falls back to the list-derived copy while
   // the detail fetch is in-flight so the modal opens instantly.
   const [viewJobId, setViewJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialOpenJobId) {
+      setViewJobId(initialOpenJobId);
+      onInitialOpenHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenJobId]);
   const listJob = useMemo(
     () => (viewJobId ? (jobs.find((j) => (j.uuid ?? j.id) === viewJobId) ?? null) : null),
     [viewJobId, jobs],
@@ -171,6 +188,8 @@ export function JobTable({
 
       {filtered.length === 0 ? (
         <EmptyState label={emptyLabel} />
+      ) : compact ? (
+        <CompactTableView jobs={filtered} onOpen={handleOpen} renderRowActions={renderRowActions} />
       ) : variant === 'delivered' ? (
         <DeliveredView jobs={filtered} renderRowActions={renderRowActions} />
       ) : (
@@ -221,6 +240,56 @@ export function JobTable({
           onClose={() => setAssignJob(null)}
         />
       )}
+    </div>
+  );
+}
+
+function CompactTableView({
+  jobs,
+  onOpen,
+  renderRowActions,
+}: {
+  jobs: Job[];
+  onOpen?: (job: Job) => void;
+  renderRowActions?: (job: Job) => ReactNode;
+}) {
+  return (
+    <div className="compact-table-wrap">
+      <table className="compact-table">
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Design</th>
+            <th>Order</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <tr key={j.id} onClick={() => onOpen?.(j)}>
+              <td><span className="compact-ref">{j.ref || j.id}</span></td>
+              <td><span className="compact-design">{j.design}</span></td>
+              <td><span className={cn('badge', orderBadgeAccent(j.order))}>{j.order}</span></td>
+              <td><PriorityChip priority={j.priority} /></td>
+              <td><span className={cn('badge', statusBadgeAccent(j.status))}>{statusDisplay(j.status)}</span></td>
+              <td onClick={(e) => e.stopPropagation()}>
+                {renderRowActions ? renderRowActions(j) : (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: 11, padding: '4px 10px' }}
+                    onClick={() => onOpen?.(j)}
+                  >
+                    View
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -296,7 +365,7 @@ function statusBadgeAccent(status: string): string {
     'Senior Review': 'purple',
     Sewout: 'purple',
     'Ready to Deliver': 'teal',
-    Delivered: 'green',
+    Dispatched: 'green',
     'Quote Submitted': 'blue',
     'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber',
@@ -474,16 +543,17 @@ function GridView({
               ) : (
                 <div className="w-full h-[160px]" />
               )}
-              {/* Order type badge — top-left */}
-              <span className={cn('badge absolute top-[10px] left-[10px] z-[1] whitespace-nowrap', orderBadgeAccent(j.order))}>
-                {j.order}
-              </span>
-              {/* Status badge — top-right */}
-              <span className={cn('jc-status-overlay badge', statusBadgeAccent(j.status))}>
-                {statusDisplay(j.status)}
-              </span>
             </div>
             <div className="jc-body">
+              {/* Order type + status badges below the image */}
+              <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
+                <span className={cn('badge whitespace-nowrap', orderBadgeAccent(j.order))}>
+                  {j.order}
+                </span>
+                <span className={cn('badge whitespace-nowrap', statusBadgeAccent(j.status))}>
+                  {statusDisplay(j.status)}
+                </span>
+              </div>
               <div className="jc-title">{j.design}</div>
               <div className="jc-desc">{briefText(j.summary)}</div>
               <div className="jc-meta">
@@ -494,8 +564,8 @@ function GridView({
                 <div className="jc-action">
                   <CheckCircle2 aria-hidden className="w-3.5 h-3.5 mt-px shrink-0" />
                   <span>
-                    Quoted price ready{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
-                    <strong>Tap to confirm &amp; start production</strong>
+                    Quote sent{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
+                    <strong>Awaiting client confirmation</strong>
                   </span>
                 </div>
               ) : null}

@@ -11,7 +11,7 @@ export function CSDeliverPage() {
   const [page, setPage] = useState(1);
 
   const readyJobs      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
-  const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Delivered'), [allData]);
+  const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Dispatched'), [allData]);
   const deliveredToday = useMemo(() => delivered.filter((j) => isToday(j.created)), [delivered]);
 
   const totalPages = Math.max(1, Math.ceil(readyJobs.length / PER_PAGE));
@@ -42,8 +42,8 @@ export function CSDeliverPage() {
         stats={[
           { accent: 'teal',  label: 'Ready Now',       value: isLoading ? '…' : readyJobs.length,     delta: 'QC approved'  },
           { accent: 'amber', label: 'Awaiting Files',  value: 0                                                              },
-          { accent: 'green', label: 'Delivered Today', value: isLoading ? '…' : deliveredToday.length                       },
-          { accent: 'blue',  label: 'Delivered (mo.)', value: isLoading ? '…' : delivered.length                            },
+          { accent: 'green', label: 'Dispatched Today', value: isLoading ? '…' : deliveredToday.length                       },
+          { accent: 'blue',  label: 'Dispatched (mo.)', value: isLoading ? '…' : delivered.length                            },
         ]}
       />
 

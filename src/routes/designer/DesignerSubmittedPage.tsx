@@ -17,7 +17,7 @@ export function DesignerSubmittedPage() {
         stats={[
           { accent: 'purple', label: 'In QC Review', value: inQc.length },
           { accent: 'amber', label: 'In Sewout', value: inSewout.length },
-          { accent: 'green', label: 'Delivered (mo.)', value: delivered.length },
+          { accent: 'green', label: 'Dispatched (mo.)', value: delivered.length },
           { accent: 'blue', label: 'Avg. Rework', value: '1.2h' },
         ]}
       />

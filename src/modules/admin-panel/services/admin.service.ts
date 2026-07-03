@@ -41,6 +41,8 @@ export interface ProfileChangeRequestFilters {
 
 export interface JobCardFilters {
   status?: string;
+  /** Comma-separated statuses, e.g. "JOB_PLACED,QUOTE_SUBMITTED". Takes precedence over `status`. */
+  statuses?: string;
   order_type?: string;
   project_type?: string;
   client_id?: string;

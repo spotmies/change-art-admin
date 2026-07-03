@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
-import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2 } from 'lucide-react';
+import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2, Copy } from 'lucide-react';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
@@ -91,7 +91,7 @@ function orderAccent(order: string): string {
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal', 'In Production': 'amber', Pending: 'blue', 'Senior Review': 'purple',
-    Sewout: 'purple', 'Ready to Deliver': 'teal', Delivered: 'green',
+    Sewout: 'purple', 'Ready to Deliver': 'teal', Dispatched: 'green',
     'Quote Submitted': 'blue', 'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber', Cancelled: 'gray',
     Amend: 'amber', 'In Review': 'purple',
@@ -133,6 +133,18 @@ function isQuoteAlreadySent(job: Job): boolean {
 
 function isReadyToDeliverStatus(job: Job): boolean {
   return normalizedStatus(job) === 'READY_TO_DELIVER';
+}
+
+const QUOTE_UNRESOLVED_STATUSES = new Set([
+  'DRAFT', 'QUOTE_SUBMITTED', 'QUOTE_APPROVED', 'QUOTE_REJECTED', 'CANCELLED',
+]);
+
+// The price is only truly "agreed" once the client has confirmed the quote
+// (action: place_job), moving the job out of the quote stage into JOB_PLACED+.
+// QUOTE_APPROVED only means CS has sent a price — the client hasn't acted yet.
+function isPriceAgreed(job: Job): boolean {
+  const s = normalizedStatus(job);
+  return !!s && !QUOTE_UNRESOLVED_STATUSES.has(s);
 }
 
 export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobDetailModalProps) {
@@ -392,7 +404,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
   const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
-  const agreedPrice = displayJob.negotiation?.finalPrice ?? displayJob.agreedPrice ?? null;
+  // Once the client has confirmed the quote (job moved past the quote stage),
+  // the CS-submitted price IS the agreed price — there's no separate stored
+  // "agreed_price" field on the job card, so fall back to adminCounter.
+  const agreedPrice =
+    displayJob.negotiation?.finalPrice ??
+    displayJob.agreedPrice ??
+    (isPriceAgreed(displayJob) ? adminCounter : null);
 
   // Whether the quote has already been priced & sent (status QUOTE_APPROVED).
   // Drives readonly fields and swaps the action buttons for a clear
@@ -1303,6 +1321,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                                   const n = parseFloat(next);
                                   setPriceInvalid(Number.isFinite(n) && n > MAX_PRICE);
                                 }}
+                                onWheel={(e) => e.currentTarget.blur()}
                                 style={{
                                   width: '100%',
                                   background: quoteSent ? '#FEF3C7' : '#FFFFFF',
@@ -1342,6 +1361,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                                 const n = parseFloat(next);
                                 setEtaInvalid(Number.isFinite(n) && n > MAX_ETA_HOURS);
                               }}
+                              onWheel={(e) => e.currentTarget.blur()}
                               style={{
                                 width: '100%',
                                 background: quoteSent ? '#FEF3C7' : '#FFFFFF',
@@ -1636,7 +1656,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                       const text = displayJob.notes || displayJob.summary;
                       const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
                       const customFormat = match && match[1] ? match[1].trim() : null;
-                      return displayJob.finalFiles.map(f => {
+                      const labels = displayJob.finalFiles.map(f => {
                         if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
                           if (customFormat) {
                             if (/^others:\s*/i.test(customFormat)) {
@@ -1647,7 +1667,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           return f;
                         }
                         return f;
-                      }).join(', ');
+                      });
+                      // Defensive dedup — older records saved before the
+                      // final_files mapping fix may carry repeated OTHERS
+                      // entries (one per unrecognized format token).
+                      return [...new Set(labels)].join(', ');
                     })()}
                   />
                 ) : null}
@@ -1707,6 +1731,57 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 ) : null}
               </div>
             </div>
+
+            {/* CLIENT INSTRUCTIONS — strip structured [Key: Value] metadata tokens */}
+            {(() => {
+              const clientText = (displayJob.summary ?? '')
+                .replace(/\[[^\]]*\]/g, '')
+                .trim();
+              if (!clientText) return null;
+              return (
+                <div className="mb-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-[0.14em] whitespace-nowrap shrink-0"
+                      style={{ color: '#94A3B8' }}
+                    >
+                      Client Instructions
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: '#E8EDF5' }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(clientText).then(() => {
+                          toast.success('Copied to clipboard');
+                        });
+                      }}
+                      className="flex items-center gap-1.5 shrink-0 text-[10.5px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                      style={{ color: '#64748B', border: '1px solid #E2E8F0', background: '#F8FAFC' }}
+                      onMouseOver={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#EFF6FF';
+                        (e.currentTarget as HTMLButtonElement).style.color = '#2563EB';
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = '#BFDBFE';
+                      }}
+                      onMouseOut={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                        (e.currentTarget as HTMLButtonElement).style.color = '#64748B';
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = '#E2E8F0';
+                      }}
+                      aria-label="Copy client instructions"
+                    >
+                      <Copy className="w-3 h-3" aria-hidden />
+                      Copy
+                    </button>
+                  </div>
+                  <div
+                    className="text-[12.5px] leading-relaxed p-3.5 rounded-xl whitespace-pre-wrap"
+                    style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0C4A6E' }}
+                  >
+                    {clientText}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* NOTES / BRIEF */}
             {displayJob.notes ? (
@@ -2753,7 +2828,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   Dispatch to Client
                 </div>
                 <div style={{ fontSize: 12, color: '#991B1B', opacity: 0.85 }}>
-                  The client will be notified and the job will move to Delivered.
+                  The client will be notified and the job will move to Dispatched.
                 </div>
               </div>
               <button
@@ -2790,7 +2865,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   </li>
                   <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#7F1D1D', fontWeight: 600, lineHeight: 1.5 }}>
                     <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
-                    Job moves to Delivered
+                    Job moves to Dispatched
                   </li>
                   <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#7F1D1D', fontWeight: 600, lineHeight: 1.5 }}>
                     <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
@@ -2943,7 +3018,7 @@ function CompareView({
         const text = j.notes || j.summary;
         const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
         const customFormat = match && match[1] ? match[1].trim() : null;
-        return j.finalFiles.map(f => {
+        const labels = j.finalFiles.map(f => {
           if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
             if (customFormat) {
               if (/^others:\s*/i.test(customFormat)) {
@@ -2954,7 +3029,8 @@ function CompareView({
             return f;
           }
           return f;
-        }).join(', ');
+        });
+        return [...new Set(labels)].join(', ');
       }
     },
     { label: 'Placement', get: (j) => j.placement || '—' },

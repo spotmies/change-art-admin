@@ -9,7 +9,7 @@ import { type Job, jobImages } from '../mocks/jobs';
 function statusBadgeAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal', 'In Production': 'amber', 'Senior Review': 'purple',
-    Sewout: 'purple', Delivered: 'green', 'Quote Submitted': 'blue',
+    Sewout: 'purple', Dispatched: 'green', 'Quote Submitted': 'blue',
     'Quote Approved': 'amber', 'Pending Client Confirm': 'amber',
     Cancelled: 'gray', Amend: 'amber', 'In Review': 'purple',
   };

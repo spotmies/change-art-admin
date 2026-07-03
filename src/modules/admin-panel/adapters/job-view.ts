@@ -96,9 +96,9 @@ const STATUS_MAP: Record<JobStatus, StageDisplay> = {
   [JobStatus.QC_APPROVED]: { status: 'Ready to Deliver', stage: 'delivered' },
   [JobStatus.QC_REJECTED]: { status: 'In Production', stage: 'junior' },
   [JobStatus.READY_TO_DELIVER]: { status: 'Ready to Deliver', stage: 'delivered' },
-  [JobStatus.DELIVERED]: { status: 'Delivered', stage: 'delivered' },
+  [JobStatus.DELIVERED]: { status: 'Dispatched', stage: 'delivered' },
   [JobStatus.MODIFICATION_REQUESTED]: { status: 'Amend', stage: 'qc' },
-  [JobStatus.CLOSED]: { status: 'Delivered', stage: 'delivered' },
+  [JobStatus.CLOSED]: { status: 'Dispatched', stage: 'delivered' },
   [JobStatus.CANCELLED]: { status: 'Cancelled', stage: 'quote' },
 };
 

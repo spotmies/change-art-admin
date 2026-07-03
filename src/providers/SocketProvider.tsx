@@ -156,6 +156,25 @@ export function SocketProvider({ children }: SocketProviderProps) {
     socket.on(SOCKET_EVENTS.QUERY_RAISED, (event: QueryRaisedEvent) => {
       if (!event?.jobId) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.queries.forJob(event.jobId) });
+
+      // Client-raised queries also create an in-app notification in the DB (via
+      // the BullMQ worker), but the worker has no socket access so NOTIFICATION_NEW
+      // is never emitted from that path. Bump the bell badge + invalidate the
+      // list here using the QUERY_RAISED event, which IS emitted by the main process.
+      if (event.raisedByRole === 'CLIENT') {
+        queryClient.setQueryData<{ count: number }>(
+          queryKeys.notifications.unreadCount(),
+          (old) => ({ count: (old?.count ?? 0) + 1 }),
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list() });
+        const snippet = event.message ? `"${event.message.slice(0, 80)}${event.message.length > 80 ? '…' : ''}"` : '';
+        toast(`New client query${snippet ? `\n${snippet}` : ''}`, {
+          id: `query-${event.queryId}`,
+          icon: '💬',
+          duration: 6000,
+          style: { whiteSpace: 'pre-line', maxWidth: 380 },
+        });
+      }
     });
 
     // Re-attach on tab focus — Chrome/Safari sometimes background-throttle the

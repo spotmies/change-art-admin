@@ -9,6 +9,7 @@ import { RootIndexRedirect } from '@layouts/RootIndexRedirect';
 import { LoginPage } from '@routes/auth/LoginPage';
 import { RegisterPage } from '@routes/auth/RegisterPage';
 import { ForgotPasswordPage } from '@routes/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from '@routes/auth/ResetPasswordPage';
 
 // CS panel
 import { CSDashboardPage } from '@routes/cs/CSDashboardPage';
@@ -86,6 +87,7 @@ export const router = createBrowserRouter([
       { path: '/login', element: <LoginPage /> },
       { path: '/register', element: <RegisterPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
+      { path: '/reset-password', element: <ResetPasswordPage /> },
     ],
   },
 

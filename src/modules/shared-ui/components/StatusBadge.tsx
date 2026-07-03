@@ -29,7 +29,7 @@ const STATUS_PRESENTATION: Record<JobStatusType, { accent: BadgeAccent; label: s
   [JobStatus.QC_APPROVED]: { accent: 'green', label: 'QC Passed' },
   [JobStatus.QC_REJECTED]: { accent: 'red', label: 'QC Rejected' },
   [JobStatus.READY_TO_DELIVER]: { accent: 'teal', label: 'Ready' },
-  [JobStatus.DELIVERED]: { accent: 'teal', label: 'Delivered' },
+  [JobStatus.DELIVERED]: { accent: 'teal', label: 'Dispatched' },
   [JobStatus.MODIFICATION_REQUESTED]: { accent: 'amber', label: 'Mod Requested' },
   [JobStatus.CLOSED]: { accent: 'gray', label: 'Closed' },
   [JobStatus.CANCELLED]: { accent: 'gray', label: 'Cancelled' },

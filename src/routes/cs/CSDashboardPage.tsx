@@ -71,7 +71,7 @@ export function CSDashboardPage() {
           },
           {
             accent: 'green',
-            label: 'Delivered',
+            label: 'Dispatched',
             value: m.delivered,
             delta: m.sub4,
             deltaDirection: 'up',
@@ -86,14 +86,14 @@ export function CSDashboardPage() {
             title={<span style={{ color: '#5eead4' }}>New Jobs</span>}
             action={<Link to="/cs/new-jobs">View All →</Link>}
           />
-          <JobTable jobs={newJobs} defaultView="table" withControls={false} />
+          <JobTable jobs={newJobs} compact withControls={false} />
 
           <div className="mt-6">
             <SectionHeader
               title={<span style={{ color: '#ff8a95' }}>Quotes Pending Your Review</span>}
               action={<Link to="/cs/new-quotes">View All →</Link>}
             />
-            <JobTable jobs={pendingQuotes} defaultView="table" withControls={false} />
+            <JobTable jobs={pendingQuotes} compact withControls={false} />
           </div>
         </div>
 

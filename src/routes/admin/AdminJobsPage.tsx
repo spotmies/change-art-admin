@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   GreetingHero,
   JobFilterBar,
@@ -55,7 +56,7 @@ function mapStatusFilter(display: string): { status?: string; stage?: string } {
       return { stage: 'qc' };
     case 'Ready to Deliver':
       return { status: 'READY_TO_DELIVER' };
-    case 'Delivered':
+    case 'Dispatched':
       return { status: 'DELIVERED' };
     case 'Amend':
       return { status: 'MODIFICATION_REQUESTED' };
@@ -69,6 +70,8 @@ function mapStatusFilter(display: string): { status?: string; stage?: string } {
 export function AdminJobsPage() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>(EMPTY_FILTERS);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openJobId = searchParams.get('open');
 
   const debouncedSearch = useDebounced(filters.search, 300);
   // per_page: 500 — needed to populate the client filter dropdown with all client names.
@@ -139,6 +142,12 @@ export function AdminJobsPage() {
             jobs={jobs}
             showActions
             defaultView="grid"
+            initialOpenJobId={openJobId}
+            onInitialOpenHandled={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('open');
+              setSearchParams(next, { replace: true });
+            }}
             toolbarSlot={
               <JobFilterBar
                 filters={filters}

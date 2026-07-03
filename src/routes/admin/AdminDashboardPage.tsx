@@ -162,7 +162,7 @@ export function AdminDashboardPage() {
           },
           {
             accent: 'purple',
-            label: 'Delivered',
+            label: 'Dispatched',
             value: loading(delivered.length),
             delta: 'Completed jobs',
             deltaDirection: 'up',

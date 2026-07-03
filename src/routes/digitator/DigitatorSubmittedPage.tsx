@@ -19,7 +19,7 @@ export function DigitatorSubmittedPage() {
         stats={[
           { accent: 'amber', label: 'In Sewout', value: inSewout.length },
           { accent: 'purple', label: 'In QC', value: inQc.length },
-          { accent: 'green', label: 'Delivered (mo.)', value: delivered.length },
+          { accent: 'green', label: 'Dispatched (mo.)', value: delivered.length },
           { accent: 'crimson', label: 'Returned (wk.)', value: 0 },
         ]}
       />

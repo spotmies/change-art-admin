@@ -91,7 +91,7 @@ const ORDER_TYPES = [
   { id: 'artwork', label: 'Artwork', sub: 'Logo, Vector, Illustration', icon: '🎨' },
   { id: 'digitizing', label: 'Digitizing Services', sub: 'Embroidery conversion', icon: '🧵' },
   { id: 'swatches', label: 'Embroidery Digitizing Swatches Only', sub: 'Physical sample review', icon: '🪡' },
-  { id: 'extras', label: 'Patches & Extras', sub: 'Custom patches, Name drops', icon: '📦' },
+  { id: 'extras', label: 'Patches & Extras', sub: 'Custom patches', icon: '📦' },
   { id: 'others', label: 'Others', sub: 'Custom request', icon: '✨' },
 ];
 
@@ -113,10 +113,11 @@ const SPECIFIC_SERVICES: Record<string, string[]> = {
     'Product Branding',
     'Image Manipulation',
     'Black & White To Color',
+    'Name Drops',
   ],
   digitizing: ['Embroidery Digitizing', 'Embroidery Digitizing - Sewout Swatches'],
   swatches: [],
-  extras: ['Custom Embroidery Patches', 'Name Drops'],
+  extras: ['Custom Embroidery Patches'],
   others: [],
 };
 

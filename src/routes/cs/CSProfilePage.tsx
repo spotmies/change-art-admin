@@ -162,11 +162,11 @@ export function CSProfilePage() {
           </div>
 
           {/* Name + badges */}
-          <div className="flex-1 min-w-0">
-            <h2 className="text-[22px] font-bold text-text-main leading-tight tracking-tight">
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <h2 className="text-[22px] font-bold text-text-main leading-tight tracking-tight truncate">
               {user.name}
             </h2>
-            <p className="text-[13px] text-text-muted mt-0.5 font-mono">{user.email}</p>
+            <p className="text-[12px] text-text-muted mt-0.5 font-mono break-all leading-snug">{user.email}</p>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <span className="badge crimson">{roleLabel}</span>
               {user.is_active
@@ -188,10 +188,10 @@ export function CSProfilePage() {
               <span className="font-semibold">{user.name}</span>
             </DetailRow>
             <DetailRow label="Email">
-              <span className="font-mono text-[12px]">{user.email}</span>
+              <span className="font-mono text-[11px] break-all">{user.email}</span>
             </DetailRow>
             <DetailRow label="User ID">
-              <span className="ref-code font-mono text-[11px]">{user.id}</span>
+              <span className="ref-code font-mono text-[10px] break-all">{user.id}</span>
             </DetailRow>
             <DetailRow label="Role">
               <span>{roleLabel}</span>
@@ -207,7 +207,7 @@ export function CSProfilePage() {
                 : <span className="badge red">Inactive</span>}
             </DetailRow>
             <DetailRow label="Tenant ID" last>
-              <span className="ref-code font-mono text-[11px]">{user.tenant_id}</span>
+              <span className="ref-code font-mono text-[10px] break-all">{user.tenant_id}</span>
             </DetailRow>
           </dl>
         </Panel>
@@ -267,12 +267,12 @@ function DetailRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-4 py-3 ${!last ? 'border-b border-glass-border' : ''}`}
+      className={`flex items-start gap-3 py-3 ${!last ? 'border-b border-glass-border' : ''}`}
     >
-      <dt className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-text-muted w-28 flex-shrink-0">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-muted w-24 flex-shrink-0 pt-0.5">
         {label}
       </dt>
-      <dd className="text-[13px] text-text-main flex-1 min-w-0">{children}</dd>
+      <dd className="text-[13px] text-text-main flex-1 min-w-0 overflow-hidden">{children}</dd>
     </div>
   );
 }

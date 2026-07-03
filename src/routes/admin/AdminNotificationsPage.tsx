@@ -240,7 +240,7 @@ export function AdminNotificationsPage() {
                   notification={n}
                   onMarkRead={() => markRead.mutate(n.id)}
                   busy={markRead.isPending}
-                  onNavigate={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+                  onNavigate={(path) => navigate(path)}
                 />
               ))}
             </ul>
@@ -259,24 +259,29 @@ export function AdminNotificationsPage() {
   );
 }
 
-/** Extract the job UUID from notification data, if present. */
-function getJobId(n: INotification): string | null {
-  return (n.data?.jobId as string | undefined) ?? null;
+/** Resolve where clicking this notification should navigate, if anywhere. */
+function getNotificationPath(n: INotification): string | null {
+  const data = n.data as Record<string, unknown> | null;
+  const jobId = data?.jobId as string | undefined;
+  const kind = data?.kind as string | undefined;
+  if (kind === 'profile_change_submitted') return '/admin/clients?tab=requests';
+  if (jobId) return `/admin/jobs?open=${jobId}`;
+  return null;
 }
 
 interface RowProps {
   notification: INotification;
   onMarkRead: () => void;
   busy: boolean;
-  onNavigate: (jobId: string) => void;
+  onNavigate: (path: string) => void;
 }
 
 function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowProps) {
-  const jobId = getJobId(n);
+  const path = getNotificationPath(n);
 
   function handleClick() {
     if (!n.is_read) onMarkRead();
-    if (jobId) onNavigate(jobId);
+    if (path) onNavigate(path);
   }
 
   return (
@@ -284,12 +289,12 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
       className="flex items-start gap-3 px-3 py-2.5 rounded-md border border-glass-border transition-colors"
       style={{
         background: n.is_read ? 'transparent' : 'rgba(220,38,38,0.04)',
-        cursor: jobId ? 'pointer' : 'default',
+        cursor: path ? 'pointer' : 'default',
       }}
-      onClick={jobId ? handleClick : undefined}
-      role={jobId ? 'button' : undefined}
-      tabIndex={jobId ? 0 : undefined}
-      onKeyDown={jobId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
+      onClick={path ? handleClick : undefined}
+      role={path ? 'button' : undefined}
+      tabIndex={path ? 0 : undefined}
+      onKeyDown={path ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
     >
       <span
         aria-hidden
@@ -307,9 +312,9 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
         {n.body ? (
           <div className="text-[12px] text-text-muted mt-1 whitespace-pre-wrap">{n.body}</div>
         ) : null}
-        {jobId ? (
+        {path ? (
           <div className="text-[11px] mt-1" style={{ color: 'var(--crimson)', fontWeight: 600 }}>
-            Click to open job →
+            {path.startsWith('/admin/clients') ? 'Click to review request →' : 'Click to open job →'}
           </div>
         ) : null}
       </div>

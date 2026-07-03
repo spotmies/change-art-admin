@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { X, Save, ArrowLeft } from 'lucide-react';
+import { X, Save, ArrowLeft, Pencil, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
 import { DesignComplexity, FinalFileFormat, OrderType, Placement, Priority, ProcessType } from '@contracts';
 import { useUpdateJobCard, useCreateAdminCopy } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useSendQuotePrice } from '@modules/cs-panel/hooks/use-cs-quote';
 import { toastApiError } from '@lib/toast-error';
 import type { UpdateJobCardBody } from '@modules/admin-panel/services/admin.service';
 import type {
@@ -110,7 +111,7 @@ const PRIORITY_TO_ENUM: Record<string, Priority> = {
 const PROCESS_OPTIONS = ['Screen Printing', 'Digital Printing', 'Offset Printing', 'Sublimation', 'Flex Printing', 'Others'];
 const COMPLEXITY_OPTIONS: JobComplexity[] = ['Simple', 'Medium', 'Super Medium', 'Complex', 'Super Complex'];
 const PRIORITY_OPTIONS: JobPriority[] = ['Normal', 'Rush', 'Super Rush'];
-const STATUS_OPTIONS: JobStatus[] = ['Quote Submitted', 'In Production', 'Senior Review', 'Sewout', 'In QC', 'Delivered'];
+const STATUS_OPTIONS: JobStatus[] = ['Quote Submitted', 'In Production', 'Senior Review', 'Sewout', 'In QC', 'Dispatched'];
 
 // ── Helper: map JobOrderType → client-form order id ─────────────────────────
 function getOrderTypeId(order: string): string {
@@ -179,15 +180,25 @@ function getFormatOptions(selectedService: string): string[] {
 }
 
 // ── Helper: format option string → FinalFileFormat[] ────────────────────────
+// The backend enum only recognizes PDF/EPS/AI/CDR — Digitizing/Virtual Proof
+// presets (DST, EMB, CND, EXP, PXF, JPEG, TIFF, SVG, ...) have no enum value
+// and must collapse to a single OTHERS sentinel. Mapping each unrecognized
+// token to its own OTHERS entry produced duplicate OTHERS entries, which
+// re-rendered the same "[Expected Output Format: ...]" note once per
+// duplicate in the detail view's Output Formats field.
 function parseFinalFiles(option: string): FinalFileFormat[] {
   if (!option || option === 'OTHERS') return [FinalFileFormat.OTHERS];
-  return option.split(',').map((s) => s.trim()).map((part) => {
-    if (part === 'PDF') return FinalFileFormat.PDF;
-    if (part === 'EPS') return FinalFileFormat.EPS;
-    if (part === 'AI') return FinalFileFormat.AI;
-    if (part === 'CDR') return FinalFileFormat.CDR;
-    return FinalFileFormat.OTHERS;
-  });
+  const KNOWN: Record<string, FinalFileFormat> = {
+    PDF: FinalFileFormat.PDF,
+    EPS: FinalFileFormat.EPS,
+    AI: FinalFileFormat.AI,
+    CDR: FinalFileFormat.CDR,
+  };
+  const parts = option.split(',').map((s) => s.trim());
+  if (parts.every((p) => KNOWN[p])) {
+    return parts.map((p) => KNOWN[p]);
+  }
+  return [FinalFileFormat.OTHERS];
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -288,7 +299,7 @@ function orderAccent(order: string): string {
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal', 'In Production': 'amber', 'Senior Review': 'purple',
-    Sewout: 'purple', Delivered: 'green', 'Quote Submitted': 'blue',
+    Sewout: 'purple', Dispatched: 'green', 'Quote Submitted': 'blue',
     'Quote Approved': 'amber', 'Pending Client Confirm': 'amber',
     Cancelled: 'gray', Amend: 'amber', 'In Review': 'purple',
   };
@@ -321,6 +332,14 @@ function hasClientAccepted(job: Job): boolean {
     && raw !== 'CANCELLED';
 }
 
+// Price can only be (re)submitted while the job is in quote stage and the
+// client hasn't acted yet — matches the backend's QUOTE_STATUSES guard
+// (cs-panel.service.ts#sendPrice): QUOTE_SUBMITTED or QUOTE_APPROVED only.
+function canEditPrice(job: Job): boolean {
+  const raw = (job.rawStatus ?? '').toUpperCase().replace(/\s+/g, '_');
+  return raw === 'QUOTE_SUBMITTED' || raw === 'QUOTE_APPROVED';
+}
+
 function resolveAgreedPrice(job: Job | null, adminPrice: string, agreedPrice: string): PriceCell {
   if (!job) return { text: '—', muted: true };
   if (agreedPrice && parseFloat(agreedPrice) > 0) return formatMoney(agreedPrice);
@@ -339,28 +358,34 @@ function resolveAdminOffer(job: Job | null, adminPrice: string): PriceCell {
   return { text: 'Not yet sent', muted: true };
 }
 
-function PricingRow({ label, value }: { label: string; value: PriceCell }) {
+function PricingRowValue({ value }: { value: PriceCell }) {
   const isObj = typeof value !== 'string';
   const text = isObj ? value.text : value;
   const muted = isObj && value.muted;
   const warn  = isObj && value.warn;
+  return (
+    <span
+      className="text-[13px]"
+      style={{
+        color: muted ? '#94A3B8' : warn ? '#B45309' : '#0D1B2A',
+        fontWeight: muted ? 500 : 700,
+        fontStyle: muted || warn ? 'italic' : 'normal',
+        fontFamily: muted || warn ? 'inherit' : 'IBM Plex Mono, monospace',
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function PricingRow({ label, value }: { label: string; value: PriceCell }) {
   return (
     <div
       className="flex items-center justify-between rounded-lg"
       style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', padding: '10px 14px' }}
     >
       <span className="text-[12px]" style={{ color: '#64748B', fontWeight: 500 }}>{label}</span>
-      <span
-        className="text-[13px]"
-        style={{
-          color: muted ? '#94A3B8' : warn ? '#B45309' : '#0D1B2A',
-          fontWeight: muted ? 500 : 700,
-          fontStyle: muted || warn ? 'italic' : 'normal',
-          fontFamily: muted || warn ? 'inherit' : 'IBM Plex Mono, monospace',
-        }}
-      >
-        {text}
-      </span>
+      <PricingRowValue value={value} />
     </div>
   );
 }
@@ -372,10 +397,15 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
   const [form, setForm] = useState<FormState | null>(null);
   const updateMutation = useUpdateJobCard();
   const createAdminCopyMutation = useCreateAdminCopy();
+  const sendPriceMutation = useSendQuotePrice();
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState('');
 
   useEffect(() => {
     if (job) {
       setForm(toForm(job));
+      setEditingPrice(false);
+      setPriceDraft('');
       const raf = requestAnimationFrame(() => setIsIn(true));
       return () => cancelAnimationFrame(raf);
     }
@@ -484,6 +514,27 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
     if (hi != null && hi > 0 && hi !== (job.height ?? null)) patch.height_inches = hi;
 
     return patch;
+  };
+
+  const handleSavePrice = () => {
+    if (!job.uuid) {
+      toast.error('This job is missing its backend reference — refresh the page and try again.');
+      return;
+    }
+    const amount = parseFloat(priceDraft);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Enter a valid price greater than 0.');
+      return;
+    }
+    sendPriceMutation.mutate(
+      { jobId: job.uuid, body: { amount } },
+      {
+        onSuccess: () => {
+          set('adminPrice', String(amount));
+          setEditingPrice(false);
+        },
+      },
+    );
   };
 
   const handleSave = () => {
@@ -708,6 +759,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                           placeholder="e.g. 3.5"
                           value={form.widthInches}
                           onChange={(e) => set('widthInches', e.target.value)}
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                       </Field>
                       <Field label="Height (inches)">
@@ -719,6 +771,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                           placeholder="e.g. 2.5"
                           value={form.heightInches}
                           onChange={(e) => set('heightInches', e.target.value)}
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                       </Field>
                     </div>
@@ -744,7 +797,7 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                 </Field>
 
                 <Field label="Number of Colors">
-                  <input className={FIELD_CLS} type="number" min={1} max={20} value={form.colors} onChange={(e) => set('colors', e.target.value)} />
+                  <input className={FIELD_CLS} type="number" min={1} max={20} value={form.colors} onChange={(e) => set('colors', e.target.value)} onWheel={(e) => e.currentTarget.blur()} />
                 </Field>
 
               </div>
@@ -762,12 +815,84 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                       : { text: 'Not provided', muted: true }
                   }
                 />
+                {!canEditPrice(job) ? (
+                  <PricingRow
+                    label={hasClientAccepted(job) ? 'Quoted Price ($)' : 'Admin Counter-Offer ($)'}
+                    value={resolveAdminOffer(job, form.adminPrice)}
+                  />
+                ) : editingPrice ? (
+                  <div
+                    className="flex items-center gap-2 rounded-lg"
+                    style={{ background: '#F8FAFC', border: '1px solid #B22234', padding: '8px 10px' }}
+                  >
+                    <span className="text-[12px] shrink-0" style={{ color: '#64748B', fontWeight: 500 }}>
+                      Admin Counter-Offer ($)
+                    </span>
+                    <input
+                      autoFocus
+                      type="number"
+                      min={0.01}
+                      step="0.01"
+                      className="flex-1 min-w-0 rounded-md px-2 py-1 text-[12.5px] text-right outline-none border border-[#E2E8F0] focus:border-[#B22234]"
+                      style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+                      value={priceDraft}
+                      onChange={(e) => setPriceDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSavePrice();
+                        if (e.key === 'Escape') setEditingPrice(false);
+                      }}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      disabled={sendPriceMutation.isPending}
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md p-1.5"
+                      style={{ background: '#059669', color: '#fff' }}
+                      onClick={handleSavePrice}
+                      disabled={sendPriceMutation.isPending}
+                      aria-label="Save price"
+                    >
+                      <Check className="w-3.5 h-3.5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md p-1.5"
+                      style={{ background: '#E2E8F0', color: '#475569' }}
+                      onClick={() => setEditingPrice(false)}
+                      disabled={sendPriceMutation.isPending}
+                      aria-label="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" aria-hidden />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className="flex items-center justify-between rounded-lg"
+                    style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', padding: '10px 14px' }}
+                  >
+                    <span className="text-[12px]" style={{ color: '#64748B', fontWeight: 500 }}>
+                      Admin Counter-Offer ($)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <PricingRowValue value={resolveAdminOffer(job, form.adminPrice)} />
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-md p-1"
+                        style={{ color: '#94A3B8' }}
+                        onClick={() => {
+                          setPriceDraft(form.adminPrice || '');
+                          setEditingPrice(true);
+                        }}
+                        aria-label="Edit admin counter-offer"
+                        title="Update price — only possible before the client confirms"
+                      >
+                        <Pencil className="w-3.5 h-3.5" aria-hidden />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <PricingRow
-                  label={job && hasClientAccepted(job) ? 'Quoted Price ($)' : 'Admin Counter-Offer ($)'}
-                  value={resolveAdminOffer(job, form.adminPrice)}
-                />
-                <PricingRow
-                  label={job && hasClientAccepted(job) ? 'Final Price ($)' : 'Agreed / Final Price ($)'}
+                  label={hasClientAccepted(job) ? 'Final Price ($)' : 'Agreed / Final Price ($)'}
                   value={resolveAgreedPrice(job, form.adminPrice, form.agreedPrice)}
                 />
               </div>
