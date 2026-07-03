@@ -23,6 +23,7 @@ import { CSCreateQuotePage } from '@routes/cs/CSCreateQuotePage';
 import { CSPlaceOrderPage } from '@routes/cs/CSPlaceOrderPage';
 import { CSClientsPage } from '@routes/cs/CSClientsPage';
 import { CSProfilePage } from '@routes/cs/CSProfilePage';
+import { CSEmailInboxPage } from '@routes/cs/CSEmailInboxPage';
 
 // Team Lead
 import { TeamLeadDashboardPage } from '@routes/team-lead/TeamLeadDashboardPage';
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
       { path: 'create-quote', element: <CSCreateQuotePage /> },
       { path: 'place-order', element: <CSPlaceOrderPage /> },
       { path: 'clients', element: <CSClientsPage /> },
+      { path: 'email-inbox', element: <CSEmailInboxPage /> },
       { path: 'profile', element: <CSProfilePage /> },
     ],
   },

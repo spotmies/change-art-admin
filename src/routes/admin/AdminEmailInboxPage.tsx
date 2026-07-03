@@ -66,7 +66,7 @@ function confidencePct(raw: string | null): number | null {
   return Math.round(parseFloat(raw) * 100);
 }
 
-export function AdminEmailInboxPage() {
+export function AdminEmailInboxPage({ jobsPath = '/admin/jobs' }: { jobsPath?: string }) {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
@@ -193,7 +193,7 @@ export function AdminEmailInboxPage() {
                     email={email}
                     selected={selectedId === email.id}
                     onClick={() => handleRowClick(email.id)}
-                    onViewJob={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+                    onViewJob={(jobId) => navigate(`${jobsPath}?open=${jobId}`)}
                   />
                 ))}
               </ul>
@@ -215,7 +215,7 @@ export function AdminEmailInboxPage() {
         <DetailPanel
           id={selectedId}
           onClose={() => setSelectedId(null)}
-          onViewJob={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+          onViewJob={(jobId) => navigate(`${jobsPath}?open=${jobId}`)}
           activatedJobIds={activatedJobIds}
           onActivated={markActivated}
         />

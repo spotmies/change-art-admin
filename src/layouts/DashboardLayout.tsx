@@ -9,6 +9,7 @@ import { NAV_CONFIG } from '@modules/shared-ui/nav-config';
 import { UserRole } from '@contracts';
 import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { JobDetailModal, EditJobModal, type Job } from '@modules/shared-ui';
+import { InactivityGuard } from './InactivityGuard';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -91,6 +92,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       <DeepLinkModal />
+      <InactivityGuard />
     </div>
   );
 }

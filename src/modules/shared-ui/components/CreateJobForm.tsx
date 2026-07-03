@@ -18,6 +18,7 @@ import { apiClient } from '@lib/api-client';
 export interface ClientBriefData {
   client_id?: string;
   order_type: OrderType;
+  specific_type?: string;
   project_type: ProjectType;
   design_name: string;
   eta_hours?: number;
@@ -50,6 +51,7 @@ interface CreateJobCardBody {
   client_id: string;
   mail: string;
   order_type: string;
+  specific_type?: string;
   project_type: string;
   design_name: string;
   eta_hours?: number;
@@ -500,6 +502,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     const data: Partial<ClientBriefData> = {
       client_id: clientId !== 'new' ? clientId : undefined,
       order_type,
+      specific_type: specificService || selectedService || undefined,
       project_type: isOrder ? ProjectType.LIVE : ProjectType.QUOTE,
       design_name: designName,
       ...(draftTurnaround != null ? { eta_hours: draftTurnaround } : {}),
@@ -595,6 +598,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     const data: ClientBriefData = {
       client_id: clientId !== 'new' ? clientId : undefined,
       order_type,
+      specific_type: specificService || selectedService || undefined,
       project_type: isOrder ? ProjectType.LIVE : ProjectType.QUOTE,
       design_name: designName,
       ...(turnaround != null ? { eta_hours: turnaround } : {}),
@@ -807,6 +811,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
         client_id: selectedClientData.id,
         mail: selectedClientData.email,
         order_type: data.order_type,
+        ...(data.specific_type ? { specific_type: data.specific_type } : {}),
         project_type: data.project_type,
         design_name: data.design_name,
         ...(data.eta_hours != null ? { eta_hours: data.eta_hours } : {}),
@@ -878,6 +883,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
       client_id: selectedClientData.id,
       mail: selectedClientData.email,
       order_type: pendingOrderData.order_type,
+      ...(pendingOrderData.specific_type ? { specific_type: pendingOrderData.specific_type } : {}),
       project_type: pendingOrderData.project_type,
       design_name: pendingOrderData.design_name,
       ...(pendingOrderData.eta_hours != null ? { eta_hours: pendingOrderData.eta_hours } : {}),

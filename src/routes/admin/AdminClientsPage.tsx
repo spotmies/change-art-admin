@@ -85,6 +85,7 @@ export function AdminClientsPage() {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [hotlistedOnly, setHotlistedOnly] = useState(false);
   const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
   const [addClientOpen, setAddClientOpen] = useState(false);
 
@@ -111,16 +112,17 @@ export function AdminClientsPage() {
       page,
       per_page: PER_PAGE,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+      ...(hotlistedOnly ? { hotlisted: true } : {}),
     }),
-    [page, debouncedSearch],
+    [page, debouncedSearch, hotlistedOnly],
   );
 
   const { data, isLoading, isError } = useAdminClients(clientsFilters);
 
-  // Reset to page 1 whenever the active search changes.
+  // Reset to page 1 whenever the active search or hotlist filter changes.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, hotlistedOnly]);
 
   // Reset state when switching tabs.
   useEffect(() => {
@@ -258,6 +260,17 @@ export function AdminClientsPage() {
           {tab === 'clients' && (
             <button
               type="button"
+              className={`btn ${hotlistedOnly ? 'btn-red' : 'btn-outline'}`}
+              onClick={() => setHotlistedOnly((v) => !v)}
+              aria-pressed={hotlistedOnly}
+            >
+              Hotlisted only
+            </button>
+          )}
+
+          {tab === 'clients' && (
+            <button
+              type="button"
               className="btn btn-crimson"
               onClick={() => setAddClientOpen(true)}
             >
@@ -281,7 +294,11 @@ export function AdminClientsPage() {
           </div>
         ) : clients.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-text-faint text-sm">
-            {debouncedSearch.trim() ? 'No clients match your search.' : 'No clients found.'}
+            {hotlistedOnly
+              ? 'No Hotlisted clients.'
+              : debouncedSearch.trim()
+                ? 'No clients match your search.'
+                : 'No clients found.'}
           </div>
         ) : (
           <>
@@ -302,7 +319,14 @@ export function AdminClientsPage() {
                 <tbody>
                   {clients.map((c) => (
                     <tr key={c.id}>
-                      <td><span className="ref-code">{c.client_id}</span></td>
+                      <td>
+                        <span className="ref-code">{c.client_id}</span>
+                        {c.is_hotlisted && (
+                          <span className="badge red" style={{ marginLeft: 6 }}>
+                            Hotlisted
+                          </span>
+                        )}
+                      </td>
                       <td className="font-semibold">{c.contact_name}</td>
                       <td className="text-text-muted">{c.company_name ?? '—'}</td>
                       <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>

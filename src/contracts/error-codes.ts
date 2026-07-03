@@ -57,6 +57,7 @@ export const ERROR_CODES = {
   CLIENT_NOT_FOUND: 'CLIENT_NOT_FOUND',
   CLIENT_ID_TAKEN: 'CLIENT_ID_TAKEN',
   CLIENT_PENDING_APPROVAL: 'CLIENT_PENDING_APPROVAL',
+  CLIENT_HOTLISTED: 'CLIENT_HOTLISTED',
 
   // Quotes
   QUOTE_NOT_FOUND: 'QUOTE_NOT_FOUND',
@@ -135,6 +136,7 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   CLIENT_NOT_FOUND: 'This client was not found.',
   CLIENT_ID_TAKEN: 'A client with this ID already exists.',
   CLIENT_PENDING_APPROVAL: 'This client account is pending approval.',
+  CLIENT_HOTLISTED: 'This client is Hotlisted and cannot submit new quotes or orders.',
 
   QUOTE_NOT_FOUND: 'This quote was not found.',
   QUOTE_FINALIZED: 'This quote is final and cannot be changed.',

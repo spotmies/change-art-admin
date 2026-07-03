@@ -42,12 +42,17 @@ function mapPriority(display: string): string | undefined {
   }
 }
 
-function mapStatusFilter(display: string): { status?: string; stage?: string } {
+function mapStatusFilter(display: string): { status?: string; stage?: string; statuses?: string; unacknowledged?: boolean } {
   switch (display) {
     case 'Order Placed':
       return { status: 'JOB_PLACED' };
+    case 'Pending':
+      // JOB_PLACED jobs that haven't been acknowledged yet (display as "Pending" in the adapter)
+      return { status: 'JOB_PLACED', unacknowledged: true };
     case 'In Production':
-      return { stage: 'junior' };
+      // Statuses that always display as "In Production" — excludes JOB_PLACED which
+      // shows as "Pending" until the CS acknowledgement is sent.
+      return { statuses: 'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED' };
     case 'Senior Review':
       return { stage: 'senior' };
     case 'Sewout':
@@ -67,11 +72,19 @@ function mapStatusFilter(display: string): { status?: string; stage?: string } {
   }
 }
 
+const VALID_STATUS_VALUES = new Set(JOB_STATUS_OPTIONS.map((o) => o.value));
+
 export function AdminJobsPage() {
-  const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<JobFilters>(EMPTY_FILTERS);
   const [searchParams, setSearchParams] = useSearchParams();
   const openJobId = searchParams.get('open');
+
+  // Pre-seed status filter from ?filter= URL param (used by dashboard stat cards).
+  // Validate against the known option list to reject junk values.
+  const filterParam = searchParams.get('filter') ?? '';
+  const initialStatus = VALID_STATUS_VALUES.has(filterParam) ? filterParam : '';
+
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<JobFilters>({ ...EMPTY_FILTERS, status: initialStatus });
 
   const debouncedSearch = useDebounced(filters.search, 300);
   // per_page: 500 — needed to populate the client filter dropdown with all client names.
@@ -128,8 +141,8 @@ export function AdminJobsPage() {
   return (
     <div className="page">
       <GreetingHero
-        title="All Jobs"
-        subtitle={`Every job across the platform — search, filter by type, priority, client, or date.${total > 0 ? ` ${total} total.` : ''}`}
+        title={initialStatus ? `${initialStatus} Jobs` : 'All Jobs'}
+        subtitle={`${initialStatus ? `Showing ${initialStatus.toLowerCase()} jobs.` : 'Every job across the platform — search, filter by type, priority, client, or date.'}${total > 0 ? ` ${total} total.` : ''}`}
       />
 
       {isFirstLoad ? (

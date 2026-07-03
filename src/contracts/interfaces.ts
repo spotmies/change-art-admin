@@ -88,6 +88,10 @@ export interface IClient {
   approval_status: ClientApprovalStatus | null;
   /** Admin's stated reason when approval_status = REJECTED. Null otherwise. */
   rejection_note: string | null;
+  /** Admin-set restriction: blocks new quote/order submissions while true. */
+  is_hotlisted: boolean;
+  hotlisted_at: IsoDateTime | null;
+  hotlisted_by: string | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

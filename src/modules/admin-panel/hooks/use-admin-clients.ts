@@ -49,6 +49,24 @@ export function useUpdateClient() {
   });
 }
 
+/** Admin-only: mark or unmark a client as Hotlisted. */
+export function useSetClientHotlisted() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hotlisted }: { id: string; hotlisted: boolean }) =>
+      adminService.setClientHotlisted(id, hotlisted),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(
+        client.is_hotlisted
+          ? `${client.company_name ?? client.client_name} is now Hotlisted`
+          : `${client.company_name ?? client.client_name} is no longer Hotlisted`,
+      );
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useDeleteClient() {
   const qc = useQueryClient();
   return useMutation({

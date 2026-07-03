@@ -64,6 +64,7 @@ export const NAV_CONFIG = {
           { id: 'new-quotes', label: 'New Quotes', to: '/cs/new-quotes', icon: Inbox },
           { id: 'new-jobs', label: 'New Jobs', to: '/cs/new-jobs', icon: ScrollText },
           { id: 'projects', label: 'All Projects', to: '/cs/projects', icon: ClipboardList },
+          { id: 'email-inbox', label: 'Email Inbox', to: '/cs/email-inbox', icon: Mail },
           { id: 'queue', label: 'Job Queue', to: '/cs/queue', icon: Gauge },
           { id: 'deliver', label: 'Ready to Deliver', to: '/cs/deliver', icon: Truck },
           { id: 'amend', label: 'Amendments', to: '/cs/amendments', icon: PencilRuler },

@@ -60,6 +60,8 @@ export interface JobCardFilters {
 
 export interface ClientFilters {
   search?: string;
+  /** When true, only Hotlisted clients are returned. */
+  hotlisted?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -255,6 +257,13 @@ export const adminService = {
 
   deleteClient(id: string): Promise<void> {
     return apiClient.delete<void>(`/api/v1/clients/${id}`);
+  },
+
+  /** Admin-only: mark or unmark a client as Hotlisted. */
+  setClientHotlisted(id: string, hotlisted: boolean): Promise<IClient> {
+    return apiClient.patch<IClient, { hotlisted: boolean }>(`/api/v1/clients/${id}/hotlist`, {
+      hotlisted,
+    });
   },
 
   /** List self-registered clients awaiting admin approval. */

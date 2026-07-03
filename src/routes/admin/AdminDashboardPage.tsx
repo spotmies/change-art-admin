@@ -27,7 +27,8 @@ export function AdminDashboardPage() {
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
     [jobs],
   );
-  const inProd   = useMemo(() => jobs.filter((j) => j.stage === 'junior' || j.stage === 'senior'), [jobs]);
+  // Count only jobs that display as "In Production" (not "Pending") — matches the filter on the jobs page.
+  const inProd   = useMemo(() => jobs.filter((j) => j.stage === 'junior' && j.status !== 'Pending'), [jobs]);
   const inQc     = useMemo(() => jobs.filter((j) => j.stage === 'qc'), [jobs]);
   const inSewout = useMemo(() => jobs.filter((j) => j.stage === 'sewout'), [jobs]);
   const delivered = useMemo(() => jobs.filter((j) => j.stage === 'delivered'), [jobs]);
@@ -148,9 +149,9 @@ export function AdminDashboardPage() {
       <StatGrid
         className="stats-grid-6"
         stats={[
-          { accent: 'blue',    label: 'Open Jobs',       value: loading(active.length),    href: '/admin/jobs' },
-          { accent: 'amber',   label: 'In Production',   value: loading(inProd.length),    href: '/admin/jobs' },
-          { accent: 'teal',    label: 'In QC',           value: loading(inQc.length),      href: '/admin/jobs' },
+          { accent: 'blue',    label: 'Open Jobs',     value: loading(active.length),    href: '/admin/jobs' },
+          { accent: 'amber',   label: 'In Production', value: loading(inProd.length),    href: '/admin/jobs?filter=In+Production' },
+          { accent: 'teal',    label: 'In QC',         value: loading(inQc.length),      href: '/admin/jobs?filter=In+QC' },
           {
             accent: 'green',
             label: 'Sewout',
@@ -158,7 +159,7 @@ export function AdminDashboardPage() {
             delta: 'Jobs in sewout stage',
             deltaDirection: 'up',
             icon: <Send aria-hidden />,
-            href: '/admin/jobs',
+            href: '/admin/jobs?filter=Sewout',
           },
           {
             accent: 'purple',
@@ -167,7 +168,7 @@ export function AdminDashboardPage() {
             delta: 'Completed jobs',
             deltaDirection: 'up',
             icon: <CheckCircle2 aria-hidden />,
-            href: '/admin/jobs',
+            href: '/admin/jobs?filter=Dispatched',
           },
           {
             accent: 'crimson',
@@ -200,7 +201,7 @@ export function AdminDashboardPage() {
             delta: 'Jobs delivered',
             deltaDirection: 'up',
             icon: <Target aria-hidden />,
-            href: '/admin/jobs',
+            href: '/admin/jobs?filter=Dispatched',
           },
           {
             accent: 'teal',
@@ -288,21 +289,19 @@ export function AdminDashboardPage() {
                   Jobs Status
                 </div>
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: 'var(--color-teal)' }} />
-                    <span className="text-[12px] text-text-muted font-medium flex-1">In Production</span>
-                    <span className="text-[12px] font-bold text-text-main">{isLoading ? '…' : inProd.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: 'var(--color-amber)' }} />
-                    <span className="text-[12px] text-text-muted font-medium flex-1">In QC</span>
-                    <span className="text-[12px] font-bold text-text-main">{isLoading ? '…' : inQc.length}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: 'var(--color-purple, #a855f7)' }} />
-                    <span className="text-[12px] text-text-muted font-medium flex-1">Sewout</span>
-                    <span className="text-[12px] font-bold text-text-main">{isLoading ? '…' : inSewout.length}</span>
-                  </div>
+                  {(
+                    [
+                      { label: 'In Production', count: inProd.length,    color: 'var(--color-teal)',             filter: 'In+Production' },
+                      { label: 'In QC',          count: inQc.length,     color: 'var(--color-amber)',            filter: 'In+QC' },
+                      { label: 'Sewout',         count: inSewout.length, color: 'var(--color-purple, #a855f7)', filter: 'Sewout' },
+                    ] as const
+                  ).map(({ label, count, color, filter }) => (
+                    <Link key={label} to={`/admin/jobs?filter=${filter}`} className="flex items-center gap-2 group">
+                      <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
+                      <span className="text-[12px] text-text-muted font-medium flex-1 group-hover:text-text-main transition-colors">{label}</span>
+                      <span className="text-[12px] font-bold text-text-main">{isLoading ? '…' : count}</span>
+                    </Link>
+                  ))}
                 </div>
               </div>
             </div>

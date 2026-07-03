@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, X } from 'lucide-react';
+import { Pencil, Search, X } from 'lucide-react';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
+import type { IClient } from '@contracts';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
+import { ClientDetailModal } from '../../modules/admin-panel/components/ClientDetailModal';
 
 const PER_PAGE = 20;
 
@@ -47,17 +49,20 @@ export function CSClientsPage() {
   const [pageGateOpen, setPageGateOpen] = useState(() => !isSessionVerified());
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [hotlistedOnly, setHotlistedOnly] = useState(false);
   const debouncedSearch = useDebounced(search, 300);
+  const [selectedClient, setSelectedClient] = useState<IClient | null>(null);
 
-  useEffect(() => { setPage(1); }, [debouncedSearch]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, hotlistedOnly]);
 
   const filters = useMemo(
     () => ({
       page,
       per_page: PER_PAGE,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+      ...(hotlistedOnly ? { hotlisted: true } : {}),
     }),
-    [page, debouncedSearch],
+    [page, debouncedSearch, hotlistedOnly],
   );
 
   const { data, isLoading, isError } = useAdminClients(filters);
@@ -87,31 +92,42 @@ export function CSClientsPage() {
       />
 
       <Panel title={`All Clients${total ? ` (${total})` : ''}`}>
-        <div className="relative mb-3 max-w-md">
-          <Search
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
-            aria-hidden
-          />
-          <input
-            type="text"
-            className="fi"
-            style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
-            placeholder="Search by name, company, email, or client ID…"
-            value={search}
-            maxLength={500}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search clients"
-          />
-          {search && (
-            <button
-              type="button"
-              className="fjb-search-x"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-            >
-              <X className="w-3.5 h-3.5" aria-hidden />
-            </button>
-          )}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
+              aria-hidden
+            />
+            <input
+              type="text"
+              className="fi"
+              style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
+              placeholder="Search by name, company, email, or client ID…"
+              value={search}
+              maxLength={500}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search clients"
+            />
+            {search && (
+              <button
+                type="button"
+                className="fjb-search-x"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`btn ${hotlistedOnly ? 'btn-red' : 'btn-outline'}`}
+            onClick={() => setHotlistedOnly((v) => !v)}
+            aria-pressed={hotlistedOnly}
+          >
+            Hotlisted only
+          </button>
         </div>
 
         {isLoading ? (
@@ -124,7 +140,11 @@ export function CSClientsPage() {
           </div>
         ) : clients.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-text-faint text-sm">
-            {debouncedSearch.trim() ? 'No clients match your search.' : 'No clients found.'}
+            {hotlistedOnly
+              ? 'No Hotlisted clients.'
+              : debouncedSearch.trim()
+                ? 'No clients match your search.'
+                : 'No clients found.'}
           </div>
         ) : (
           <>
@@ -138,12 +158,20 @@ export function CSClientsPage() {
                     <th>Phone</th>
                     <th>Location</th>
                     <th>Payment</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {clients.map((c) => (
                     <tr key={c.id}>
-                      <td><span className="ref-code">{c.client_id}</span></td>
+                      <td>
+                        <span className="ref-code">{c.client_id}</span>
+                        {c.is_hotlisted && (
+                          <span className="badge red" style={{ marginLeft: 6 }}>
+                            Hotlisted
+                          </span>
+                        )}
+                      </td>
                       <td className="font-semibold">{c.contact_name}</td>
                       <td className="text-text-muted">{c.company_name ?? '—'}</td>
                       <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
@@ -152,6 +180,17 @@ export function CSClientsPage() {
                         <span className="badge gray">
                           {c.payment_mode?.replace(/_/g, ' ') ?? '—'}
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          aria-label={`Manage ${c.contact_name}`}
+                          onClick={() => setSelectedClient(c)}
+                        >
+                          <Pencil aria-hidden className="w-3.5 h-3.5" />
+                          Manage
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -169,6 +208,10 @@ export function CSClientsPage() {
           </>
         )}
       </Panel>
+
+      {selectedClient && (
+        <ClientDetailModal client={selectedClient} onClose={() => setSelectedClient(null)} />
+      )}
 
       {/* Page-level OTP gate — shown once per session on first visit */}
       {pageGateOpen && (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { isJobEtaExpired } from '@lib/utils';
@@ -7,6 +8,8 @@ const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
 
 export function CSProjectsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openJobId = searchParams.get('open');
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
@@ -57,7 +60,17 @@ export function CSProjectsPage() {
         </div>
       ) : (
         <>
-          <JobTable jobs={pageItems} showActions defaultView="grid" />
+          <JobTable
+            jobs={pageItems}
+            showActions
+            defaultView="grid"
+            initialOpenJobId={openJobId}
+            onInitialOpenHandled={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('open');
+              setSearchParams(next, { replace: true });
+            }}
+          />
           <Pagination
             page={page}
             totalPages={totalPages}
