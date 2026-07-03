@@ -2248,7 +2248,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 </svg>
                 <div style={{ fontSize: 12.5, color: '#B22234', lineHeight: 1.55, fontWeight: 600 }}>
                   <strong>Please note:</strong> Sending this quote proposal locks the job status to{' '}
-                  <strong>Quote Approved</strong>. The client will be prompted to authorize the final price and ETA to commence production.
+                  <strong>Quote Sent</strong>. The client will be prompted to authorize the final price and ETA to commence production.
                 </div>
               </div>
 
