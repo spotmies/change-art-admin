@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Plus, Search, X } from 'lucide-react';
-import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
+import { Pencil, Plus, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
+import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
 import { PaymentMode } from '@contracts';
 import type { IClient } from '@contracts';
-import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useAdminClients, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { useProfileChangeRequests } from '../../modules/admin-panel/hooks/use-profile-change-requests';
 import {
   ClientDetailModal,
@@ -88,6 +88,11 @@ export function AdminClientsPage() {
   const [hotlistedOnly, setHotlistedOnly] = useState(false);
   const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
   const [addClientOpen, setAddClientOpen] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<IClient | null>(null);
+  const [hotlistTarget, setHotlistTarget] = useState<IClient | null>(null);
+
+  const setActive = useSetClientActive();
+  const setHotlisted = useSetClientHotlisted();
 
   function openClient(client: IClient, mode: ClientModalMode) {
     setSelected({ client, mode });
@@ -187,7 +192,7 @@ export function AdminClientsPage() {
               className={`btn ${tab === 'approve' ? 'btn-crimson' : 'btn-outline'}`}
               onClick={() => setTab('approve')}
             >
-              Client Approve
+              Sign Up Requests
               {pendingApprovalsCount > 0 ? (
                 <span
                   className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
@@ -313,6 +318,7 @@ export function AdminClientsPage() {
                     <th>Email</th>
                     <th>Location</th>
                     <th>Payment</th>
+                    <th>Status</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -321,11 +327,6 @@ export function AdminClientsPage() {
                     <tr key={c.id}>
                       <td>
                         <span className="ref-code">{c.client_id}</span>
-                        {c.is_hotlisted && (
-                          <span className="badge red" style={{ marginLeft: 6 }}>
-                            Hotlisted
-                          </span>
-                        )}
                       </td>
                       <td className="font-semibold">{c.contact_name}</td>
                       <td className="text-text-muted">{c.company_name ?? '—'}</td>
@@ -334,15 +335,51 @@ export function AdminClientsPage() {
                       <td className="text-text-muted">{c.location ?? '—'}</td>
                       <td><span className="badge gray">{formatPaymentMode(c.payment_mode)}</span></td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          aria-label={`Edit ${c.contact_name}`}
-                          onClick={() => openClient(c, 'edit')}
-                        >
-                          <Pencil aria-hidden className="w-3.5 h-3.5" />
-                          Edit
-                        </button>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`badge ${c.is_active ? 'green' : 'red'}`}>
+                            {c.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          {c.is_hotlisted && <span className="badge amber">Hotlisted</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <RowActionsMenu
+                          ariaLabel={`Actions for ${c.contact_name}`}
+                          actions={[
+                            {
+                              key: 'edit',
+                              label: 'Edit',
+                              icon: <Pencil aria-hidden className="w-3.5 h-3.5" />,
+                              onSelect: () => openClient(c, 'edit'),
+                            },
+                            {
+                              key: 'hotlist',
+                              label: c.is_hotlisted ? 'Remove Hotlist' : 'Mark Hotlisted',
+                              icon: c.is_hotlisted ? (
+                                <ShieldCheck aria-hidden className="w-3.5 h-3.5" />
+                              ) : (
+                                <ShieldAlert aria-hidden className="w-3.5 h-3.5" />
+                              ),
+                              danger: !c.is_hotlisted,
+                              onSelect: () => setHotlistTarget(c),
+                            },
+                            {
+                              key: 'status',
+                              label: c.is_active ? 'Deactivate' : 'Activate',
+                              icon: c.is_active ? (
+                                <UserX aria-hidden className="w-3.5 h-3.5" />
+                              ) : (
+                                <UserCheck aria-hidden className="w-3.5 h-3.5" />
+                              ),
+                              danger: c.is_active,
+                              disabled: !c.user_id,
+                              title: c.user_id
+                                ? undefined
+                                : 'This client has no portal login to activate or deactivate.',
+                              onSelect: () => setStatusTarget(c),
+                            },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -381,6 +418,66 @@ export function AdminClientsPage() {
         client={selected?.client ?? null}
         mode={selected?.mode}
         onClose={() => setSelected(null)}
+      />
+
+      <ConfirmModal
+        open={statusTarget !== null}
+        tone={statusTarget?.is_active ? 'destructive' : undefined}
+        title={statusTarget?.is_active ? 'Deactivate client account?' : 'Reactivate client account?'}
+        description={
+          statusTarget?.is_active ? (
+            <>
+              <strong>{statusTarget.company_name ?? statusTarget.client_name}</strong> (
+              {statusTarget.client_id}) will be signed out immediately and blocked from logging in
+              until you reactivate them.
+            </>
+          ) : (
+            <>
+              <strong>{statusTarget?.company_name ?? statusTarget?.client_name}</strong> (
+              {statusTarget?.client_id}) will regain the ability to log in and use the portal.
+            </>
+          )
+        }
+        confirmLabel={statusTarget?.is_active ? 'Deactivate' : 'Reactivate'}
+        onConfirm={() => {
+          if (!statusTarget) return;
+          setActive.mutate(
+            { id: statusTarget.id, is_active: !statusTarget.is_active },
+            { onSuccess: () => setStatusTarget(null) },
+          );
+        }}
+        onCancel={() => setStatusTarget(null)}
+      />
+
+      <ConfirmModal
+        open={hotlistTarget !== null}
+        tone={hotlistTarget?.is_hotlisted ? undefined : 'destructive'}
+        title={hotlistTarget?.is_hotlisted ? 'Remove Hotlist status?' : 'Mark client as Hotlisted?'}
+        description={
+          hotlistTarget?.is_hotlisted ? (
+            <>
+              <strong>{hotlistTarget.company_name ?? hotlistTarget.client_name}</strong> (
+              {hotlistTarget.client_id}) will regain the ability to submit new quote requests and
+              orders.
+            </>
+          ) : (
+            <>
+              <strong>{hotlistTarget?.company_name ?? hotlistTarget?.client_name}</strong> (
+              {hotlistTarget?.client_id}) will be blocked from submitting new quote requests or
+              orders until you remove this status. Existing orders and account history stay
+              accessible to them.
+            </>
+          )
+        }
+        confirmLabel={hotlistTarget?.is_hotlisted ? 'Remove Hotlist' : 'Mark Hotlisted'}
+        onConfirm={() => {
+          if (!hotlistTarget) return;
+          setHotlisted.mutate(
+            { id: hotlistTarget.id, hotlisted: !hotlistTarget.is_hotlisted },
+            { onSuccess: () => setHotlistTarget(null) },
+          );
+        }}
+        onCancel={() => setHotlistTarget(null)}
       />
     </div>
   );

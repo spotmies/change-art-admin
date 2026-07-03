@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Pencil, Trash2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { X, Pencil, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@modules/shared-ui';
 import type { IClient, ICardOnFile } from '@contracts';
-import { PaymentMode, UserRole } from '@contracts';
-import { useSessionUser } from '@modules/auth';
-import { useDeleteClient, useSetClientHotlisted, useUpdateClient } from '../hooks/use-admin-clients';
+import { PaymentMode } from '@contracts';
+import { useDeleteClient, useUpdateClient } from '../hooks/use-admin-clients';
 import type { UpdateClientBody } from '../services/admin.service';
 
 export type ClientModalMode = 'view' | 'edit';
@@ -84,28 +83,16 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [confirmingHotlist, setConfirmingHotlist] = useState(false);
-  // The `client` prop is a snapshot passed in when the modal opened — it does not
-  // update when the underlying list refetches. Track the hotlist mutation's own
-  // result locally so the badge/button reflect the change immediately, without
-  // waiting for the caller to re-pass a fresh client object.
-  const [hotlistOverride, setHotlistOverride] = useState<boolean | null>(null);
-
-  const sessionUser = useSessionUser();
-  const canHotlist = sessionUser?.role === UserRole.ADMIN || sessionUser?.role === UserRole.CS;
 
   const update = useUpdateClient();
   const remove = useDeleteClient();
-  const setHotlisted = useSetClientHotlisted();
   const saving = update.isPending;
-  const isHotlisted = hotlistOverride ?? client?.is_hotlisted ?? false;
 
   useEffect(() => {
     setForm(initialState(client));
     setEditing(mode === 'edit');
     setError(null);
     setFieldErrors({});
-    setHotlistOverride(null);
   }, [client, mode]);
 
   useEffect(() => {
@@ -234,7 +221,10 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
             <div className="modal-job-id">{client.client_id}</div>
             <div className="modal-title">{client.company_name ?? client.client_name}</div>
             <div className="modal-tags">
-              {isHotlisted && <span className="badge red">Hotlisted</span>}
+              <span className={`badge ${client.is_active ? 'green' : 'red'}`}>
+                {client.is_active ? 'Active' : 'Inactive'}
+              </span>
+              {client.is_hotlisted && <span className="badge amber">Hotlisted</span>}
               <span className="badge gray">{formatPaymentMode(client.payment_mode)}</span>
               <span className="badge blue">{client.email}</span>
             </div>
@@ -366,32 +356,12 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
         <div className="modal-actions">
           {editing ? (
             <>
-              {canHotlist && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setConfirmingHotlist(true)}
-                  disabled={setHotlisted.isPending}
-                  style={{ marginRight: 'auto' }}
-                >
-                  {isHotlisted ? (
-                    <>
-                      <ShieldCheck className="w-3.5 h-3.5" aria-hidden />
-                      Remove Hotlist
-                    </>
-                  ) : (
-                    <>
-                      <ShieldAlert className="w-3.5 h-3.5" aria-hidden />
-                      Mark Hotlisted
-                    </>
-                  )}
-                </button>
-              )}
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={() => (mode === 'edit' ? onClose() : setEditing(false))}
                 disabled={saving}
+                style={{ marginLeft: 'auto' }}
               >
                 Cancel
               </button>
@@ -410,26 +380,6 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                 <Trash2 className="w-3.5 h-3.5" aria-hidden />
                 Delete
               </button>
-              {canHotlist && (
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setConfirmingHotlist(true)}
-                  disabled={setHotlisted.isPending}
-                >
-                  {isHotlisted ? (
-                    <>
-                      <ShieldCheck className="w-3.5 h-3.5" aria-hidden />
-                      Remove Hotlist
-                    </>
-                  ) : (
-                    <>
-                      <ShieldAlert className="w-3.5 h-3.5" aria-hidden />
-                      Mark Hotlisted
-                    </>
-                  )}
-                </button>
-              )}
               <button type="button" className="btn btn-outline" onClick={onClose}>
                 Close
               </button>
@@ -456,39 +406,6 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
         confirmLabel="Delete Client"
         onConfirm={handleDelete}
         onCancel={() => setConfirmingDelete(false)}
-      />
-
-      <ConfirmModal
-        open={confirmingHotlist}
-        tone={isHotlisted ? undefined : 'destructive'}
-        title={isHotlisted ? 'Remove Hotlist status?' : 'Mark client as Hotlisted?'}
-        description={
-          isHotlisted ? (
-            <>
-              <strong>{client.company_name ?? client.client_name}</strong> ({client.client_id}) will
-              regain full access to submit new quote requests and orders.
-            </>
-          ) : (
-            <>
-              <strong>{client.company_name ?? client.client_name}</strong> ({client.client_id}) will
-              be blocked from submitting new quote requests or orders until you remove this status.
-              Existing orders and account history remain accessible to them.
-            </>
-          )
-        }
-        confirmLabel={isHotlisted ? 'Remove Hotlist' : 'Mark Hotlisted'}
-        onConfirm={() => {
-          setHotlisted.mutate(
-            { id: client.id, hotlisted: !isHotlisted },
-            {
-              onSuccess: (updated) => {
-                setHotlistOverride(updated.is_hotlisted);
-                setConfirmingHotlist(false);
-              },
-            },
-          );
-        }}
-        onCancel={() => setConfirmingHotlist(false)}
       />
     </div>
   );

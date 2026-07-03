@@ -10,6 +10,8 @@ export { Topbar } from './components/Topbar';
 export { MobileBottomNav } from './components/MobileBottomNav';
 export { NotificationBell } from './components/NotificationBell';
 export { ConfirmModal } from './components/ConfirmModal';
+export { RowActionsMenu } from './components/RowActionsMenu';
+export type { RowAction } from './components/RowActionsMenu';
 
 // Badges
 export { StatusBadge, PriorityBadge } from './components/StatusBadge';

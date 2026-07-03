@@ -92,6 +92,10 @@ export interface IClient {
   is_hotlisted: boolean;
   hotlisted_at: IsoDateTime | null;
   hotlisted_by: string | null;
+  /** Admin-controlled account status. When false the client cannot log in or use the portal. */
+  is_active: boolean;
+  deactivated_at: IsoDateTime | null;
+  deactivated_by: string | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

@@ -266,6 +266,13 @@ export const adminService = {
     });
   },
 
+  /** Admin/CS: activate or deactivate a client's portal account. */
+  setClientActive(id: string, is_active: boolean): Promise<IClient> {
+    return apiClient.patch<IClient, { is_active: boolean }>(`/api/v1/clients/${id}/status`, {
+      is_active,
+    });
+  },
+
   /** List self-registered clients awaiting admin approval. */
   getPendingClients(): Promise<IClient[]> {
     return apiClient.get<IClient[]>('/api/v1/clients/pending');

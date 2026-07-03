@@ -67,6 +67,24 @@ export function useSetClientHotlisted() {
   });
 }
 
+/** Admin/CS: activate or deactivate a client's portal account. */
+export function useSetClientActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      adminService.setClientActive(id, is_active),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(
+        client.is_active
+          ? `${client.company_name ?? client.client_name} is now Active`
+          : `${client.company_name ?? client.client_name} is now Inactive`,
+      );
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 export function useDeleteClient() {
   const qc = useQueryClient();
   return useMutation({
