@@ -309,6 +309,7 @@ function DeliveredView({
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="jc-id">{job.id}</span>
+                <PriorityChip priority={job.priority} />
                 {job.project === 'Amend' ? (
                   <>
                     <Badge accent="crimson">
@@ -321,7 +322,9 @@ function DeliveredView({
                 ) : (
                   <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
                 )}
-                <PriorityChip priority={job.priority} />
+                <Badge accent={projectTypeBadgeAccent(job.project)}>
+                  {job.project.toUpperCase()}
+                </Badge>
               </div>
               <div className="text-[15px] font-bold text-text-main">{job.design}</div>
               <div className="text-[12px] text-text-muted mt-0.5">
@@ -386,6 +389,17 @@ function orderBadgeAccent(order: string): string {
   return map[order] || 'gray';
 }
 
+/** Accent colour for the project-type (order type) badge — Quote / Live / Amend / Live Quote. */
+function projectTypeBadgeAccent(project: string): string {
+  const map: Record<string, string> = {
+    Quote: 'blue',
+    'Live Quote': 'teal',
+    Live: 'green',
+    Amend: 'amber',
+  };
+  return map[project] || 'gray';
+}
+
 function priorityClass(priority: string): string {
   const map: Record<string, string> = {
     Normal: 'normal',
@@ -432,6 +446,7 @@ function TableView({
             <th>Design Name</th>
             <th>Preview</th>
             <th>Order</th>
+            <th>Type</th>
             <th>Priority</th>
             <th>Status</th>
             <th>Created</th>
@@ -466,6 +481,7 @@ function TableView({
                 />
               </td>
               <td><Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge></td>
+              <td><Badge accent={projectTypeBadgeAccent(j.project)}>{j.project.toUpperCase()}</Badge></td>
               <td><PriorityChip priority={j.priority} /></td>
               <td><Badge accent={statusBadgeAccent(j.status)}>{j.status}</Badge></td>
               <td className="text-[12px] text-text-muted whitespace-nowrap">{formatDate(j.created)}</td>
@@ -545,14 +561,22 @@ function GridView({
               )}
             </div>
             <div className="jc-body">
-              {/* Order type + status badges below the image */}
+              {/* Order type + project-type + status badges below the image */}
               <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
                 <span className={cn('badge whitespace-nowrap', orderBadgeAccent(j.order))}>
                   {j.order}
                 </span>
-                <span className={cn('badge whitespace-nowrap', statusBadgeAccent(j.status))}>
-                  {statusDisplay(j.status)}
-                </span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span
+                    className={cn('badge whitespace-nowrap', projectTypeBadgeAccent(j.project))}
+                    title="Order type"
+                  >
+                    {j.project.toUpperCase()}
+                  </span>
+                  <span className={cn('badge whitespace-nowrap', statusBadgeAccent(j.status))}>
+                    {statusDisplay(j.status)}
+                  </span>
+                </div>
               </div>
               <div className="jc-title">{j.design}</div>
               <div className="jc-desc">{briefText(j.summary)}</div>
@@ -616,14 +640,15 @@ function ListView({
               <span className="list-title">{j.design}</span>
               <div className="list-badges">
                 <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
+                <Badge accent={projectTypeBadgeAccent(j.project)}>{j.project.toUpperCase()}</Badge>
                 <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
-                {j.priority !== 'Normal' && <PriorityChip priority={j.priority} />}
               </div>
             </div>
 
-            {/* Ref */}
-            <div className="flex items-center gap-2">
+            {/* Ref + Priority */}
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="list-ref">{j.ref || j.id}</span>
+              <PriorityChip priority={j.priority} />
               {j.specificType && (
                 <>
                   <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>·</span>

@@ -693,10 +693,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div
-                className="flex items-center gap-2 mb-1.5"
+                className="flex items-center gap-2 mb-1.5 flex-wrap"
                 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11.5, fontWeight: 700, color: '#B22234', letterSpacing: '0.04em' }}
               >
                 <span>{job.ref}</span>
+                <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
               <h2 className="text-[20px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
                 {job.design}
@@ -720,7 +721,6 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     <span className="badge gray">{job.project}</span>
                   </>
                 )}
-                <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2.5 flex-shrink-0">

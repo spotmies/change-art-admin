@@ -11,7 +11,7 @@ export type JobStage = 'quote' | 'junior' | 'senior' | 'sewout' | 'qc' | 'delive
 
 export type JobOrderType = 'Artwork' | 'Digitizing' | 'Digitizing + Sewout' | 'Sewout' | 'Other';
 
-export type JobProject = 'Live' | 'Quote' | 'Amend';
+export type JobProject = 'Live' | 'Quote' | 'Amend' | 'Live Quote';
 
 export type JobPriority = 'Normal' | 'Rush' | 'Super Rush';
 

@@ -30,7 +30,7 @@ const PROJECT_DISPLAY: Record<ProjectType, JobProject> = {
   [ProjectType.LIVE]: 'Live',
   [ProjectType.QUOTE]: 'Quote',
   [ProjectType.AMEND]: 'Amend',
-  [ProjectType.LIVE_QUOTE]: 'Live',
+  [ProjectType.LIVE_QUOTE]: 'Live Quote',
   [ProjectType.CLIENT_RETURN]: 'Amend',
   [ProjectType.VIRTUAL_LIVE]: 'Live',
   [ProjectType.VIRTUAL_AMEND]: 'Amend',
