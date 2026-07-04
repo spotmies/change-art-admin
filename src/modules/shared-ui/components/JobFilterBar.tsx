@@ -46,7 +46,7 @@ export const JOB_STATUS_OPTIONS = [
   { value: 'Senior Review',    label: 'Senior Review' },
   { value: 'Sewout',           label: 'Sewout' },
   { value: 'In QC',            label: 'In QC' },
-  { value: 'Ready to Deliver', label: 'Ready to Deliver' },
+  { value: 'Ready to Deliver', label: 'Ready to Dispatch' },
   { value: 'Dispatched',        label: 'Dispatched' },
   { value: 'Amend',            label: 'Amend' },
   { value: 'Cancelled',        label: 'Cancelled' },

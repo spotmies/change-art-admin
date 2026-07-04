@@ -23,7 +23,7 @@ export function CSDeliverPage() {
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="Ready to Deliver" subtitle="Jobs cleared QC and ready for release." />
+        <GreetingHero title="Ready to Dispatch" subtitle="Jobs cleared QC and ready for release." />
         <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
@@ -34,7 +34,7 @@ export function CSDeliverPage() {
   return (
     <div className="page">
       <GreetingHero
-        title="Ready to Deliver"
+        title="Ready to Dispatch"
         subtitle="Jobs that have cleared QC and are ready to release to the client."
       />
 
@@ -57,11 +57,11 @@ export function CSDeliverPage() {
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">Loading…</div>
         ) : readyJobs.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
-            Nothing ready to deliver right now.
+            Nothing ready to dispatch right now.
           </div>
         ) : (
           <>
-            <JobTable jobs={pageItems} showActions defaultView="grid" emptyLabel="Nothing ready to deliver" />
+            <JobTable jobs={pageItems} showActions defaultView="grid" emptyLabel="Nothing ready to dispatch" />
             <Pagination
               page={page}
               totalPages={totalPages}

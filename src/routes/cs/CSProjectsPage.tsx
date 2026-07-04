@@ -74,7 +74,7 @@ export function CSProjectsPage() {
         stats={[
           { accent: 'blue',   label: 'Total Projects',   value: isLoading ? '…' : allData.length },
           { accent: 'amber',  label: 'Open',             value: isLoading ? '…' : open.length    },
-          { accent: 'teal',   label: 'Ready to Deliver', value: isLoading ? '…' : ready.length   },
+          { accent: 'teal',   label: 'Ready to Dispatch', value: isLoading ? '…' : ready.length   },
           { accent: 'purple', label: 'Amendments',       value: isLoading ? '…' : amend.length   },
         ]}
       />

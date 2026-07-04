@@ -23,17 +23,17 @@ export function AdminDashboardPage() {
   // per_page: 1 — we only need meta.total for the "Total Clients" stat card; no items are used.
   const { data: clientsData } = useAdminClients({ per_page: 1 });
 
-  const active   = useMemo(
+  const active = useMemo(
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
     [jobs],
   );
   // Count only jobs that display as "In Production" (not "Pending") — matches the filter on the jobs page.
-  const inProd   = useMemo(() => jobs.filter((j) => j.stage === 'junior' && j.status !== 'Pending'), [jobs]);
-  const inQc     = useMemo(() => jobs.filter((j) => j.stage === 'qc'), [jobs]);
+  const inProd = useMemo(() => jobs.filter((j) => j.stage === 'junior' && j.status !== 'Pending'), [jobs]);
+  const inQc = useMemo(() => jobs.filter((j) => j.stage === 'qc'), [jobs]);
   const inSewout = useMemo(() => jobs.filter((j) => j.stage === 'sewout'), [jobs]);
   const delivered = useMemo(() => jobs.filter((j) => j.stage === 'delivered'), [jobs]);
 
-  const newJobs   = useMemo(() => active.slice(0, 4), [active]);
+  const newJobs = useMemo(() => active.slice(0, 4), [active]);
   const newQuotes = useMemo(() => jobs.filter((j) => j.stage === 'quote').slice(0, 4), [jobs]);
 
   const totalClients = clientsData?.meta.total ?? 0;
@@ -149,9 +149,9 @@ export function AdminDashboardPage() {
       <StatGrid
         className="stats-grid-6"
         stats={[
-          { accent: 'blue',    label: 'Open Jobs',     value: loading(active.length),    href: '/admin/jobs' },
-          { accent: 'amber',   label: 'In Production', value: loading(inProd.length),    href: '/admin/jobs?filter=In+Production' },
-          { accent: 'teal',    label: 'In QC',         value: loading(inQc.length),      href: '/admin/jobs?filter=In+QC' },
+          { accent: 'blue', label: 'Open Jobs', value: loading(active.length), href: '/admin/jobs' },
+          { accent: 'amber', label: 'In Production', value: loading(inProd.length), href: '/admin/jobs?filter=In+Production' },
+          { accent: 'teal', label: 'In QC', value: loading(inQc.length), href: '/admin/jobs?filter=In+QC' },
           {
             accent: 'green',
             label: 'Sewout',
@@ -219,7 +219,7 @@ export function AdminDashboardPage() {
                 ? `${Math.round((achievedTargets / Math.max(active.length + delivered.length, 1)) * 100)}%`
                 : '—',
             ),
-            delta: 'Delivered vs total jobs',
+            delta: 'Dispatched vs total jobs',
             deltaDirection: 'up',
           },
         ]}
@@ -291,9 +291,9 @@ export function AdminDashboardPage() {
                 <div className="flex flex-col gap-2">
                   {(
                     [
-                      { label: 'In Production', count: inProd.length,    color: 'var(--color-teal)',             filter: 'In+Production' },
-                      { label: 'In QC',          count: inQc.length,     color: 'var(--color-amber)',            filter: 'In+QC' },
-                      { label: 'Sewout',         count: inSewout.length, color: 'var(--color-purple, #a855f7)', filter: 'Sewout' },
+                      { label: 'In Production', count: inProd.length, color: 'var(--color-teal)', filter: 'In+Production' },
+                      { label: 'In QC', count: inQc.length, color: 'var(--color-amber)', filter: 'In+QC' },
+                      { label: 'Sewout', count: inSewout.length, color: 'var(--color-purple, #a855f7)', filter: 'Sewout' },
                     ] as const
                   ).map(({ label, count, color, filter }) => (
                     <Link key={label} to={`/admin/jobs?filter=${filter}`} className="flex items-center gap-2 group">

@@ -65,7 +65,7 @@ export function CSDashboardPage() {
           },
           {
             accent: 'teal',
-            label: 'Ready to Deliver',
+            label: 'Ready to Dispatch',
             value: m.ready,
             delta: m.sub3,
             deltaDirection: 'up',

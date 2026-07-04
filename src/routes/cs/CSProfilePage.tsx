@@ -100,7 +100,7 @@ const QUICK_LINKS = [
   { label: 'New Jobs',        to: '/cs/new-jobs' },
   { label: 'All Projects',    to: '/cs/projects' },
   { label: 'Job Queue',       to: '/cs/queue' },
-  { label: 'Ready to Deliver', to: '/cs/deliver' },
+  { label: 'Ready to Dispatch', to: '/cs/deliver' },
   { label: 'Amendments',      to: '/cs/amendments' },
   { label: 'Client Records',  to: '/cs/clients' },
 ];
