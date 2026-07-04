@@ -79,6 +79,28 @@ if (import.meta.env.DEV) {
   console.info('[config] wsUrl      =', config.wsUrl);
 }
 
+// Guard against a production build shipping without VITE_API_BASE_URL/VITE_WS_URL
+// set — it silently falls back to http://localhost:3000, so every API call from
+// real visitors' browsers tries to reach their own machine and fails. Vite inlines
+// `import.meta.env.PROD`/these vars at build time, so this only ever throws in an
+// actual production build missing the env vars — never in local dev.
+if (config.isProd) {
+  const localhostVars = (
+    [
+      ['VITE_API_BASE_URL', config.apiBaseUrl],
+      ['VITE_WS_URL', config.wsUrl],
+    ] as const
+  ).filter(([, value]) => /localhost|127\.0\.0\.1/.test(value));
+  if (localhostVars.length > 0) {
+    const message =
+      'Production build is missing required env vars — still pointing at localhost:\n' +
+      localhostVars.map(([name, value]) => `  ${name}=${value}`).join('\n') +
+      '\nSet these in the Vercel project settings to your real backend URL and redeploy.';
+    console.error(message);
+    throw new Error(message);
+  }
+}
+
 /** Whether Firebase Cloud Messaging is fully configured. */
 export const isFcmConfigured: boolean = Boolean(
   config.firebase.apiKey &&

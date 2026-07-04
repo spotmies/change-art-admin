@@ -53,6 +53,7 @@ export function CSDashboardPage() {
             delta: m.sub1,
             deltaDirection: 'up',
             icon: <Inbox aria-hidden />,
+            href: '/cs/new-quotes',
           },
           {
             accent: 'amber',
@@ -60,6 +61,7 @@ export function CSDashboardPage() {
             value: m.inProd,
             delta: m.sub2,
             icon: <Cog aria-hidden />,
+            href: '/cs/projects?filter=In+Production',
           },
           {
             accent: 'teal',
@@ -68,6 +70,7 @@ export function CSDashboardPage() {
             delta: m.sub3,
             deltaDirection: 'up',
             icon: <CheckCircle2 aria-hidden />,
+            href: '/cs/deliver',
           },
           {
             accent: 'green',
@@ -76,6 +79,7 @@ export function CSDashboardPage() {
             delta: m.sub4,
             deltaDirection: 'up',
             icon: <Package aria-hidden />,
+            href: '/cs/projects?filter=Dispatched',
           },
         ]}
       />

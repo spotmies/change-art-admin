@@ -254,7 +254,7 @@ html[data-theme='light'] .mb-track {
 
   /* Status badges — color + dot pattern from demo */
   .badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full text-[10.5px] font-semibold tracking-wide;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded text-[10.5px] font-semibold tracking-wide;
   }
 
   .badge::before {

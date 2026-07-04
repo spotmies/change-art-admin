@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
@@ -10,6 +10,8 @@ const PER_PAGE   = 20;
 export function CSProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const openJobId = searchParams.get('open');
+  // Pre-seed a status filter from ?filter= (used by the CS dashboard stat cards).
+  const filterParam = searchParams.get('filter') ?? '';
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
@@ -17,11 +19,27 @@ export function CSProjectsPage() {
   const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
   const amend      = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
 
-  const totalPages = Math.max(1, Math.ceil(allData.length / PER_PAGE));
-  const pageItems  = useMemo(
-    () => allData.slice((page - 1) * PER_PAGE, page * PER_PAGE),
-    [allData, page],
+  const filteredData = useMemo(
+    () => (filterParam ? allData.filter((j) => j.status === filterParam) : allData),
+    [allData, filterParam],
   );
+
+  // Reset to page 1 whenever the active filter changes.
+  useEffect(() => {
+    setPage(1);
+  }, [filterParam]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / PER_PAGE));
+  const pageItems  = useMemo(
+    () => filteredData.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filteredData, page],
+  );
+
+  function clearFilter() {
+    const next = new URLSearchParams(searchParams);
+    next.delete('filter');
+    setSearchParams(next, { replace: true });
+  }
 
   if (isError) {
     return (
@@ -38,7 +56,18 @@ export function CSProjectsPage() {
     <div className="page">
       <GreetingHero
         title="All Projects"
-        subtitle="Browse every active, delivered, and amendment job across the Client Servicing pipeline."
+        subtitle={
+          filterParam
+            ? `Showing ${filterParam.toLowerCase()} jobs.`
+            : 'Browse every active, delivered, and amendment job across the Client Servicing pipeline.'
+        }
+        action={
+          filterParam ? (
+            <button type="button" className="btn btn-outline" onClick={clearFilter}>
+              Clear filter: {filterParam} ✕
+            </button>
+          ) : undefined
+        }
       />
 
       <StatGrid
@@ -54,9 +83,9 @@ export function CSProjectsPage() {
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
           Loading projects…
         </div>
-      ) : allData.length === 0 ? (
+      ) : filteredData.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
-          No projects yet.
+          {filterParam ? `No ${filterParam.toLowerCase()} jobs.` : 'No projects yet.'}
         </div>
       ) : (
         <>
@@ -74,7 +103,7 @@ export function CSProjectsPage() {
           <Pagination
             page={page}
             totalPages={totalPages}
-            total={allData.length}
+            total={filteredData.length}
             perPage={PER_PAGE}
             onPageChange={setPage}
           />
