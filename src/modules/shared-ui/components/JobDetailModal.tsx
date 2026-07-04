@@ -704,13 +704,12 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className={cn('badge', orderAccent(job.order))}>{job.order}</span>
+                {/* Order / project type badges commented out per user request:
                 {job.project === 'Amend' ? (
                   <>
-                    {/* Collapse status + project into one Amend R{n} badge */}
                     <span className={cn('badge', 'crimson')}>
                       Amend{job.modificationCount ? ` R${job.modificationCount}` : ''}
                     </span>
-                    {/* Show the workflow status separately only when it's not redundant */}
                     {job.status !== 'Amend' && (
                       <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
                     )}
@@ -721,6 +720,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     <span className="badge gray">{job.project}</span>
                   </>
                 )}
+                */}
+                <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
