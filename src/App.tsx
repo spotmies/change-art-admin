@@ -29,6 +29,9 @@ export function App() {
                   border: '1px solid var(--glass-border)',
                   backdropFilter: 'blur(20px)',
                   fontSize: '13px',
+                  maxWidth: '420px',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'break-word',
                 },
               }}
             >

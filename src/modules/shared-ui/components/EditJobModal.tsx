@@ -296,6 +296,11 @@ function orderAccent(order: string): string {
   return map[order] ?? 'gray';
 }
 
+function displayStatus(status: string): string {
+  if (status === 'Quote Approved') return 'Quote Sent';
+  return status;
+}
+
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal', 'In Production': 'amber', 'Senior Review': 'purple',
@@ -639,12 +644,12 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                 <span style={{ color: '#CBD5E1' }}>·</span>
                 <span>Edit Job</span>
               </div>
-              <h2 className="text-[20px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[20px] font-extrabold leading-tight line-clamp-2 break-words" style={{ color: '#0D1B2A' }}>
                 {form.design || job.design}
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className={cn('badge', orderAccent(form.order))}>{form.order}</span>
-                <span className={cn('badge', statusAccent(form.status))}>{form.status}</span>
+                <span className={cn('badge', statusAccent(form.status))}>{displayStatus(form.status)}</span>
                 <span className={cn('badge', job.project === 'Amend' ? 'amber' : 'gray')}>{job.project}</span>
                 <span className={cn('priority-badge', priorityClass(form.priority))}>{form.priority}</span>
               </div>

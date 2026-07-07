@@ -134,7 +134,7 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
                 <span style={{ color: '#CBD5E1' }}>·</span>
                 <span>Assign Job</span>
               </div>
-              <h2 className="text-[18px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[18px] font-extrabold leading-tight line-clamp-2 break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
               </h2>
               <div className="text-[12px] mt-1" style={{ color: '#64748B' }}>

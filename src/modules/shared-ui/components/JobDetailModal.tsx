@@ -88,6 +88,11 @@ function orderAccent(order: string): string {
   return map[order] ?? 'gray';
 }
 
+function displayStatus(status: string): string {
+  if (status === 'Quote Approved') return 'Quote Sent';
+  return status;
+}
+
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
     'In QC': 'teal', 'In Production': 'amber', Pending: 'blue', 'Senior Review': 'purple',
@@ -699,7 +704,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <span>{job.ref}</span>
                 <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
-              <h2 className="text-[20px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[20px] font-extrabold leading-tight line-clamp-2 break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -721,7 +726,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   </>
                 )}
                 */}
-                <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
+                <span className={cn('badge', statusAccent(job.status))}>{displayStatus(job.status)}</span>
               </div>
             </div>
             <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
@@ -1437,8 +1442,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           <AlertCircle className="w-3 h-3 shrink-0" style={{ marginTop: 1 }} aria-hidden />
                           <span>
                             {quoteSent
-                              ? <>Price already sent. Status is <b>Quote Approved</b> — awaiting client confirmation.</>
-                              : <>Sending price updates status to <b>Quote Approved</b> and requests client confirmation.</>}
+                              ? <>Price already sent. Status is <b>Quote Sent</b> — awaiting client confirmation.</>
+                              : <>Sending price updates status to <b>Quote Sent</b> and requests client confirmation.</>}
                           </span>
                         </div>
 
@@ -1778,7 +1783,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     className="text-[12.5px] leading-relaxed p-3.5 rounded-xl whitespace-pre-wrap"
                     style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0C4A6E' }}
                   >
-                    {clientText}
+                    <ExpandableText text={clientText} color="#2563EB" />
                   </div>
                 </div>
               );
@@ -1789,10 +1794,10 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               <div className="mb-5">
                 <SectionLabel>NOTES / BRIEF</SectionLabel>
                 <div
-                  className="text-[12.5px] leading-relaxed p-3.5 rounded-xl"
+                  className="text-[12.5px] leading-relaxed p-3.5 rounded-xl whitespace-pre-wrap"
                   style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', color: '#475569' }}
                 >
-                  {displayJob.notes}
+                  <ExpandableText text={displayJob.notes} color="#B22234" />
                 </div>
               </div>
             ) : null}
@@ -2933,6 +2938,35 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
         </div>
       ) : null}
 
+    </div>
+  );
+}
+
+const TEXT_COLLAPSE_CHARS = 300;
+const TEXT_COLLAPSE_LINES = 4;
+
+function ExpandableText({ text, color = '#B22234' }: { text: string; color?: string }) {
+  const isLong = text.length > TEXT_COLLAPSE_CHARS || text.split('\n').length > TEXT_COLLAPSE_LINES;
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [text]);
+  const preview = isLong && !expanded ? text.slice(0, TEXT_COLLAPSE_CHARS).trimEnd() : text;
+
+  return (
+    <div>
+      <div style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+        {preview}
+        {isLong && !expanded ? '…' : null}
+      </div>
+      {isLong ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-[11.5px] font-semibold"
+          style={{ color, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          {expanded ? 'Show less ↑' : 'View more ↓'}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -52,7 +52,7 @@ export function RequestModificationModal({ job, onClose, onSubmit }: RequestModi
         <div className="flex-shrink-0 px-6 py-4 border-b border-[var(--glass-border)] bg-white flex items-start justify-between">
           <div>
             <h2 className="text-[18px] font-bold text-text-main leading-tight">Request Modification</h2>
-            <div className="text-[13px] text-text-muted mt-0.5">
+            <div className="text-[13px] text-text-muted mt-0.5 line-clamp-2 break-words">
               {job.design} · {job.id}
             </div>
           </div>

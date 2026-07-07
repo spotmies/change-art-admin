@@ -76,6 +76,11 @@ export function briefText(raw: string | null | undefined): string {
     .trim();
 }
 
+/** Truncate a display string to `max` chars, appending an ellipsis if cut. */
+export function truncate(text: string, max = 40): string {
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
 /** Tailwind classname for a numeric trend delta. */
 export function deltaToneClass(delta: number): string {
   if (delta > 0) return 'text-status-green';

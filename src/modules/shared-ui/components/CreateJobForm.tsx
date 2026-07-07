@@ -224,6 +224,23 @@ function toNum(v: FormDataEntryValue | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function enforceNoSpaceMaxLength(value: string, max: number): string {
+  let nonSpaces = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (!/\\s/.test(value[i])) {
+      nonSpaces++;
+    }
+    if (nonSpaces > max) {
+      return value.slice(0, i);
+    }
+  }
+  return value;
+}
+
+function getNonSpaceLength(value: string): number {
+  return value.replace(/\\s/g, '').length;
+}
+
 export function CreateJobForm({ mode, clients = [], clientsLoading = false, clientsError = false, onProvisionClient, onCreateJob, onSendPrice, onSubmit, onSaveDraft, submitting = false, savingDraft = false }: CreateJobFormProps) {
   const isOrder = mode === 'order';
   const [phase, setPhase] = useState<1 | 2>(1);
@@ -250,6 +267,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
   const [selectedClientData, setSelectedClientData] = useState<IClient | null>(null);
   const [quotedPrice, setQuotedPrice] = useState('');
   const [quoteCurrency] = useState('USD');
+  const [briefCount, setBriefCount] = useState(0);
+  const [formatOtherCount, setFormatOtherCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -471,16 +490,18 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     setNewClientFieldErrors({});
     setSelectedClientData(null);
     setQuotedPrice('');
+    setBriefCount(0);
+    setFormatOtherCount(0);
   }
 
   async function handleSaveDraft() {
     if (!onSaveDraft || !formRef.current) return;
     const fd = new FormData(formRef.current);
 
-    const designName = String(fd.get('design') ?? '').trim() || 'Draft';
-    const brief = String(fd.get('brief') ?? '').trim();
+    const designName = String(fd.get('design') ?? '') || 'Draft';
+    const brief = String(fd.get('brief') ?? '');
     const priorityLabel = String(fd.get('priority') ?? '');
-    const cloudLink = String(fd.get('cloud_link') ?? '').trim();
+    const cloudLink = String(fd.get('cloud_link') ?? '');
 
     const order_type = resolveOrderType(selectedService);
 
@@ -530,8 +551,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
       if (h != null) data.height_inches = h;
     }
 
-    const fabric = String(fd.get('fabric') ?? '').trim();
-    if (fabric && order_type !== OrderType.OTHERS) data.fabric = fabric;
+    const fabric = String(fd.get('fabric') ?? '');
+    if (fabric.trim() && order_type !== OrderType.OTHERS) data.fabric = fabric;
 
     await onSaveDraft(data);
   }
@@ -543,17 +564,17 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
 
     if (!clientId) { toast.error('Client selection is missing.'); return; }
 
-    const designName = String(fd.get('design') ?? '').trim();
-    const brief = String(fd.get('brief') ?? '').trim();
+    const designName = String(fd.get('design') ?? '');
+    const brief = String(fd.get('brief') ?? '');
     const turnaround = toNum(fd.get('eta'));
     const priorityLabel = String(fd.get('priority') ?? '');
 
     const isColorSeparation = specificService === 'Color Separation';
     const isEmbroideryPatches = specificService === 'Custom Embroidery Patches';
 
-    if (!designName) { markFieldError('design', 'Please enter a design name to continue.'); return; }
-    if (!priorityLabel) { markFieldError('priority', 'Please select a priority to continue.'); return; }
-    if (!brief) { markFieldError('brief', 'Please add a description for your request.'); return; }
+    if (!designName.trim()) { markFieldError('design', 'Please enter a design name to continue.'); return; }
+    if (!priorityLabel.trim()) { markFieldError('priority', 'Please select a priority to continue.'); return; }
+    if (!brief.trim()) { markFieldError('brief', 'Please add a description for your request.'); return; }
     if (isColorSeparation) {
       const colorsVal = Number(fd.get('colors'));
       if (!colorsVal || colorsVal < 1) { markFieldError('colors', 'Number of Colors is required for Color Separation.'); return; }
@@ -563,25 +584,25 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     }
 
     if (selectedFormatOption === 'OTHERS') {
-      const otherFormatVal = String(fd.get('format_other') ?? '').trim();
-      if (!otherFormatVal) { markFieldError('format_other', 'Please specify your custom output format.'); return; }
+      const otherFormatVal = String(fd.get('format_other') ?? '');
+      if (!otherFormatVal.trim()) { markFieldError('format_other', 'Please specify your custom output format.'); return; }
     }
 
     if (selectedProcessType === 'Others') {
-      const otherProcessVal = String(fd.get('process_type_other') ?? '').trim();
-      if (!otherProcessVal) { markFieldError('process_type_other', 'Please specify your custom process type.'); return; }
+      const otherProcessVal = String(fd.get('process_type_other') ?? '');
+      if (!otherProcessVal.trim()) { markFieldError('process_type_other', 'Please specify your custom process type.'); return; }
     }
 
     if (selectedPlacement === 'Others') {
-      const otherPlacementVal = String(fd.get('placement_other') ?? '').trim();
-      if (!otherPlacementVal) { markFieldError('placement_other', 'Please specify your custom placement.'); return; }
+      const otherPlacementVal = String(fd.get('placement_other') ?? '');
+      if (!otherPlacementVal.trim()) { markFieldError('placement_other', 'Please specify your custom placement.'); return; }
     }
 
     if (selectedService === 'Logo Designing') {
-      const fontStyle = String(fd.get('preferable_font_style') ?? '').trim();
-      if (!fontStyle) { markFieldError('preferable_font_style', 'Please enter a preferable font style.'); return; }
-      const ageGroup = String(fd.get('age_group_audience') ?? '').trim();
-      if (!ageGroup) { markFieldError('age_group_audience', 'Please enter the age group / audience.'); return; }
+      const fontStyle = String(fd.get('preferable_font_style') ?? '');
+      if (!fontStyle.trim()) { markFieldError('preferable_font_style', 'Please enter a preferable font style.'); return; }
+      const ageGroup = String(fd.get('age_group_audience') ?? '');
+      if (!ageGroup.trim()) { markFieldError('age_group_audience', 'Please enter the age group / audience.'); return; }
     }
 
     if (selectedService === 'Carton Box Designing') {
@@ -590,7 +611,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     }
 
     const order_type = resolveOrderType(selectedService);
-    const cloudLink = String(fd.get('cloud_link') ?? '').trim();
+    const cloudLink = String(fd.get('cloud_link') ?? '');
 
     setError(null);
     setFieldErrors(new Set());
@@ -621,8 +642,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
         if (selectedFormatOption) {
           let formatText = selectedFormatOption;
           if (selectedFormatOption === 'OTHERS') {
-            const otherFormatVal = String(fd.get('format_other') ?? '').trim();
-            if (otherFormatVal) {
+            const otherFormatVal = String(fd.get('format_other') ?? '');
+            if (otherFormatVal.trim()) {
               formatText = `Others: ${otherFormatVal}`;
             }
           }
@@ -631,8 +652,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
 
         const processVal = fd.get('process_type');
         if (processVal) {
-          const processOtherVal = String(fd.get('process_type_other') ?? '').trim();
-          if (processVal === 'Others' && processOtherVal) {
+          const processOtherVal = String(fd.get('process_type_other') ?? '');
+          if (processVal === 'Others' && processOtherVal.trim()) {
             desc += `\n[Process Type: Others - ${processOtherVal}]`;
           } else {
             desc += `\n[Process Type: ${processVal}]`;
@@ -641,8 +662,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
 
         const placementVal = fd.get('placement');
         if (placementVal) {
-          const placementOtherVal = String(fd.get('placement_other') ?? '').trim();
-          if (placementVal === 'Others' && placementOtherVal) {
+          const placementOtherVal = String(fd.get('placement_other') ?? '');
+          if (placementVal === 'Others' && placementOtherVal.trim()) {
             desc += `\n[Placement: Others - ${placementOtherVal}]`;
           }
         }
@@ -764,10 +785,10 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     }
 
     if (specificService === 'Custom Embroidery Patches') {
-      const billing = String(fd.get('billing_address') ?? '').trim();
-      const shipping = String(fd.get('shipping_address') ?? '').trim();
-      if (!billing) { markFieldError('billing_address', 'Please enter a billing address.'); return; }
-      if (!shipping) { markFieldError('shipping_address', 'Please enter a shipping address.'); return; }
+      const billing = String(fd.get('billing_address') ?? '');
+      const shipping = String(fd.get('shipping_address') ?? '');
+      if (!billing.trim()) { markFieldError('billing_address', 'Please enter a billing address.'); return; }
+      if (!shipping.trim()) { markFieldError('shipping_address', 'Please enter a shipping address.'); return; }
     }
 
     if (PLACEMENT_MAP[placementLabel]) {
@@ -784,8 +805,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     }
 
     if (order_type !== OrderType.OTHERS) {
-      const fabric = String(fd.get('fabric') ?? '').trim();
-      if (fabric) data.fabric = fabric;
+      const fabric = String(fd.get('fabric') ?? '');
+      if (fabric.trim()) data.fabric = fabric;
     }
 
     if (isOrder) {
@@ -806,7 +827,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
         return;
       }
 
-      const clientPO = String(fd.get('client_po') ?? '').trim();
+      const clientPO = String(fd.get('client_po') ?? '');
       const body: CreateJobCardBody = {
         client_id: selectedClientData.id,
         mail: selectedClientData.email,
@@ -876,7 +897,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     setConfirmOrderText('');
 
     const clientPO = formRef.current
-      ? String(new FormData(formRef.current).get('client_po') ?? '').trim()
+      ? String(new FormData(formRef.current).get('client_po') ?? '')
       : '';
 
     const body: CreateJobCardBody = {
@@ -927,23 +948,23 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
 
   return (
     <>
-    <form ref={formRef} onSubmit={handleSubmit} className="max-w-[920px] mx-auto">
-      <div className="qf-card">
-        {/* ── Phase stepper ─────────────────────────────────────── */}
-        <div className="form-phase-stepper">
-          <div className="fps-title-block">
-            {phase === 2 && (specificService || selectedService) ? (
-              <>
-                <span className="fps-mode-label">{specificService || selectedService}</span>
-                <span className="fps-service-label">
-                  {ORDER_TYPES.find((t) => t.id === orderType)?.label ?? ''}
+      <form ref={formRef} onSubmit={handleSubmit} className="max-w-[920px] mx-auto">
+        <div className="qf-card">
+          {/* ── Phase stepper ─────────────────────────────────────── */}
+          <div className="form-phase-stepper">
+            <div className="fps-title-block">
+              {phase === 2 && (specificService || selectedService) ? (
+                <>
+                  <span className="fps-mode-label">{specificService || selectedService}</span>
+                  <span className="fps-service-label">
+                    {ORDER_TYPES.find((t) => t.id === orderType)?.label ?? ''}
+                  </span>
+                </>
+              ) : (
+                <span className="fps-mode-label">
+                  {isOrder ? 'Place New Order' : 'Request Quote'}
                 </span>
-              </>
-            ) : (
-              <span className="fps-mode-label">
-                {isOrder ? 'Place New Order' : 'Request Quote'}
-              </span>
-            )}
+              )}
             </div>
 
             <div className="fps-right-col">
@@ -975,7 +996,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                   <div className="qf-step-num">A</div>
                   <span className="qf-section-title">Client Details</span>
                 </div>
-                
+
                 <div style={{ marginBottom: '30px' }}>
                   <label className="fl">Select Existing Client <span style={{ color: '#c41e3a' }}>*</span></label>
                   {/* Custom searchable client dropdown */}
@@ -998,7 +1019,16 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         ...((!clientId && fieldErrors.has('client')) ? { borderColor: 'var(--color-crimson)' } : {}),
                       }}
                     >
-                      <span style={{ color: clientId ? 'inherit' : 'var(--color-muted, #888)' }}>
+                      <span
+                        style={{
+                          color: clientId ? 'inherit' : 'var(--color-muted, #888)',
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {clientsLoading
                           ? 'Loading clients…'
                           : clientsError
@@ -1009,7 +1039,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                                 ? (() => { const c = clients.find((x) => x.client_id === clientId); return c ? `${c.company_name ?? c.client_name} — ${c.contact_name} (${c.client_id})` : clientId; })()
                                 : '— Search or select an existing client —'}
                       </span>
-                      <span style={{ fontSize: 10, marginLeft: 8, opacity: 0.5 }}>{clientDropdownOpen ? '▲' : '▼'}</span>
+                      <span style={{ fontSize: 10, marginLeft: 8, opacity: 0.5, flexShrink: 0 }}>{clientDropdownOpen ? '▲' : '▼'}</span>
                     </button>
 
                     {/* Dropdown panel */}
@@ -1065,11 +1095,11 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                             const term = clientSearch.trim().toLowerCase();
                             const filtered = term
                               ? clients.filter((c) =>
-                                  (c.company_name ?? '').toLowerCase().includes(term) ||
-                                  c.client_name.toLowerCase().includes(term) ||
-                                  c.contact_name.toLowerCase().includes(term) ||
-                                  c.client_id.toLowerCase().includes(term),
-                                )
+                                (c.company_name ?? '').toLowerCase().includes(term) ||
+                                c.client_name.toLowerCase().includes(term) ||
+                                c.contact_name.toLowerCase().includes(term) ||
+                                c.client_id.toLowerCase().includes(term),
+                              )
                               : clients;
 
                             if (filtered.length === 0) {
@@ -1102,6 +1132,9 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                                   border: 'none',
                                   cursor: 'pointer',
                                   borderBottom: '1px solid var(--color-border, #f0f0f0)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
                                 }}
                                 onMouseEnter={(e) => { if (clientId !== c.client_id) (e.currentTarget as HTMLButtonElement).style.background = 'var(--color-hover, rgba(0,0,0,0.04))'; }}
                                 onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = clientId === c.client_id ? 'rgba(196,30,58,0.07)' : 'transparent'; }}
@@ -1158,32 +1191,31 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="fl">Client Name *</label>
-                          <input name="newClientName" className="fi" placeholder="e.g. Ravi Kumar"
+                          <input name="newClientName" className="fi" placeholder="e.g. Ravi Kumar" maxLength={50}
                             style={newClientFieldErrors.newClientName ? { borderColor: 'var(--color-crimson)' } : undefined}
-                            onChange={() => setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientName; return n; })}
+                            onChange={() => setNewClientFieldErrors(p => { const n = { ...p }; delete n.newClientName; return n; })}
                           />
                           {newClientFieldErrors.newClientName && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.newClientName}</p>}
                         </div>
                         <div>
                           <label className="fl">Company Name</label>
-                          <input name="newClientCompany" className="fi" placeholder="e.g. Ravi Textiles" />
+                          <input name="newClientCompany" className="fi" placeholder="e.g. Ravi Textiles" maxLength={50} />
                         </div>
                         <div>
                           <label className="fl">Contact Number *</label>
                           <input
                             name="newClientContact"
                             className="fi"
-                            placeholder="+91 98765 43210"
+                            placeholder="9198765432"
                             type="tel"
-                            inputMode="tel"
+                            inputMode="numeric"
                             value={newClientContact}
+                            maxLength={15}
                             onChange={(e) => {
-                              // Strip non-phone chars, then cap at 15 digits
-                              const filtered = e.target.value.replace(/[^+\d\s\-()]/g, '');
-                              const digits = filtered.replace(/\D/g, '');
-                              if (digits.length > 15) return;
-                              setNewClientContact(filtered);
-                              setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientContact; return n; });
+                              // Digits only, capped at 15
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 15);
+                              setNewClientContact(digits);
+                              setNewClientFieldErrors(p => { const n = { ...p }; delete n.newClientContact; return n; });
                             }}
                             style={newClientFieldErrors.newClientContact ? { borderColor: 'var(--color-crimson)' } : undefined}
                           />
@@ -1191,9 +1223,9 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         </div>
                         <div>
                           <label className="fl">Email Address *</label>
-                          <input name="newClientEmail" className="fi" placeholder="client@company.com" type="email"
+                          <input name="newClientEmail" className="fi" placeholder="client@company.com" type="email" maxLength={50}
                             style={newClientFieldErrors.newClientEmail ? { borderColor: 'var(--color-crimson)' } : undefined}
-                            onChange={() => setNewClientFieldErrors(p => { const n = {...p}; delete n.newClientEmail; return n; })}
+                            onChange={() => setNewClientFieldErrors(p => { const n = { ...p }; delete n.newClientEmail; return n; })}
                           />
                           {newClientFieldErrors.newClientEmail && <p style={{ color: 'var(--color-crimson)', fontSize: 11, marginTop: 3 }}>{newClientFieldErrors.newClientEmail}</p>}
                         </div>
@@ -1205,7 +1237,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                               type={showPassword ? 'text' : 'password'}
                               placeholder="Set a password for the client"
                               value={newClientPassword}
-                              onChange={(e) => { setNewClientPassword(e.target.value); setNewClientFieldErrors(p => { const n = {...p}; delete n.password; return n; }); }}
+                              maxLength={128}
+                              onChange={(e) => { setNewClientPassword(e.target.value); setNewClientFieldErrors(p => { const n = { ...p }; delete n.password; return n; }); }}
                               autoComplete="new-password"
                               style={{ paddingRight: 72, ...(newClientFieldErrors.password ? { borderColor: 'var(--color-crimson)' } : {}) }}
                             />
@@ -1232,7 +1265,8 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                               type={showConfirmPassword ? 'text' : 'password'}
                               placeholder="Repeat the password"
                               value={newClientConfirmPassword}
-                              onChange={(e) => { setNewClientConfirmPassword(e.target.value); setNewClientFieldErrors(p => { const n = {...p}; delete n.confirmPassword; return n; }); }}
+                              maxLength={128}
+                              onChange={(e) => { setNewClientConfirmPassword(e.target.value); setNewClientFieldErrors(p => { const n = { ...p }; delete n.confirmPassword; return n; }); }}
                               autoComplete="new-password"
                               style={{ paddingRight: 72, ...(newClientFieldErrors.confirmPassword ? { borderColor: 'var(--color-crimson)' } : {}) }}
                             />
@@ -1261,10 +1295,10 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                             const form = formRef.current;
                             if (!form) return;
                             const fd = new FormData(form);
-                            const clientName = String(fd.get('newClientName') ?? '').trim();
-                            const company = String(fd.get('newClientCompany') ?? '').trim();
-                            const contact = String(fd.get('newClientContact') ?? '').trim();
-                            const email = String(fd.get('newClientEmail') ?? '').trim();
+                            const clientName = String(fd.get('newClientName') ?? '');
+                            const company = String(fd.get('newClientCompany') ?? '');
+                            const contact = String(fd.get('newClientContact') ?? '');
+                            const email = String(fd.get('newClientEmail') ?? '');
 
                             const errors: Record<string, string> = {};
 
@@ -1272,17 +1306,14 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                               errors.newClientName = 'Client name is required.';
                             }
 
-                            // Contact: no letters, only phone-safe chars, 7–15 digits
-                            const digitsOnly = contact.replace(/\D/g, '');
+                            // Contact: digits only, 7–15 digits
                             if (!contact) {
                               errors.newClientContact = 'Contact number is required.';
-                            } else if (/[a-zA-Z]/.test(contact)) {
-                              errors.newClientContact = 'Contact number must not contain letters.';
-                            } else if (/[^+\d\s\-().]/.test(contact)) {
-                              errors.newClientContact = 'Only digits, spaces, +, -, and brackets are allowed.';
-                            } else if (digitsOnly.length < 7) {
-                              errors.newClientContact = 'Must have at least 7 digits (e.g. +91 98765 43210).';
-                            } else if (digitsOnly.length > 15) {
+                            } else if (/\D/.test(contact)) {
+                              errors.newClientContact = 'Only digits are allowed.';
+                            } else if (contact.length < 7) {
+                              errors.newClientContact = 'Must have at least 7 digits.';
+                            } else if (contact.length > 15) {
                               errors.newClientContact = 'Must not exceed 15 digits.';
                             }
 
@@ -1429,12 +1460,13 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                    <Field name="design" label="DESIGN NAME" required placeholder=" " fieldError={fieldErrors.has('design')} onChange={() => clearFieldError('design')} />
+                    <Field name="design" label="DESIGN NAME" required placeholder=" " maxLength={150} fieldError={fieldErrors.has('design')} onChange={() => clearFieldError('design')} />
 
                     <Field
                       name="client_po"
                       label="CLIENT PO / REFERENCE NO."
                       placeholder=" "
+                      maxLength={15}
                     />
 
                     <Field
@@ -1442,13 +1474,19 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                       label="ESTIMATED TURNAROUND (HOURS)"
                       type="number"
                       min={2}
+                      maxLength={4}
                       placeholder="e.g. 24"
                     />
 
                     {/* Price — quote mode only */}
                     {!isOrder && (
                       <div>
-                        <label className="fl">QUOTED PRICE (USD)</label>
+                        <label className="fl">
+                          QUOTED PRICE (USD)
+                          <span style={{ float: 'right', fontWeight: 400, fontSize: 10.5, color: 'var(--text-faint, #94a3b8)' }}>
+                            {quotedPrice.length}/10
+                          </span>
+                        </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ color: 'var(--color-text-muted, #94a3b8)', fontWeight: 600, fontSize: 14 }}>$</span>
                           <input
@@ -1456,9 +1494,10 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                             type="number"
                             min="0"
                             step="0.01"
+                            maxLength={10}
                             placeholder="e.g. 150.00"
                             value={quotedPrice}
-                            onChange={(e) => setQuotedPrice(e.target.value)}
+                            onChange={(e) => setQuotedPrice(e.target.value.slice(0, 10))}
                             style={{ flex: 1 }}
                           />
                         </div>
@@ -1650,6 +1689,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         label="NUMBER OF PAGES"
                         type="number"
                         min={1}
+                        maxLength={4}
                         placeholder="e.g. 4"
                       />
                     )}
@@ -1723,6 +1763,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         type="number"
                         min={1}
                         max={20}
+                        maxLength={2}
                         placeholder=" "
                         fieldError={fieldErrors.has('colors')}
                         onChange={() => clearFieldError('colors')}
@@ -1745,6 +1786,9 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                   <div className="mb-4">
                     <label className="fl" htmlFor="brief">
                       Description <span style={{ color: '#c41e3a' }}>*</span>
+                      <span style={{ float: 'right', fontWeight: 400, fontSize: 10.5, color: 'var(--text-faint, #94a3b8)' }}>
+                        {briefCount}/1500
+                      </span>
                     </label>
                     <textarea
                       id="brief"
@@ -1752,7 +1796,11 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                       className="fi fi-ta"
                       style={{ minHeight: 220, ...(fieldErrors.has('brief') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : {}) }}
                       placeholder=" "
-                      onChange={() => clearFieldError('brief')}
+                      onChange={(e) => {
+                        e.target.value = enforceNoSpaceMaxLength(e.target.value, 1500);
+                        setBriefCount(getNonSpaceLength(e.target.value));
+                        clearFieldError('brief');
+                      }}
                     />
                   </div>
 
@@ -1828,15 +1876,24 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         })}
                       </div>
                       {selectedFormatOption === 'OTHERS' && (
-                        <input
-                          id="format_other"
-                          className="fi mt-3"
-                          name="format_other"
-                          placeholder="Please specify format (e.g. DST, PXF, AI, CDR)"
-                          autoFocus
-                          style={fieldErrors.has('format_other') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
-                          onChange={() => clearFieldError('format_other')}
-                        />
+                        <>
+                          <input
+                            id="format_other"
+                            className="fi mt-3"
+                            name="format_other"
+                            placeholder="Please specify format (e.g. DST, PXF, AI, CDR)"
+                            autoFocus
+                            style={fieldErrors.has('format_other') ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
+                            onChange={(e) => {
+                              e.target.value = enforceNoSpaceMaxLength(e.target.value, 50);
+                              setFormatOtherCount(getNonSpaceLength(e.target.value));
+                              clearFieldError('format_other');
+                            }}
+                          />
+                          <div style={{ textAlign: 'right', fontSize: 10.5, color: 'var(--text-faint, #94a3b8)', marginTop: 2 }}>
+                            {formatOtherCount}/50
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
@@ -1982,100 +2039,100 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
         </div>
       </form>
 
-    {/* Confirm Order dialog — order mode only */}
-    {confirmOrderOpen && pendingOrderData && (
-      <div
-        className="fixed inset-0 z-[60] flex items-center justify-center px-4"
-        style={{
-          background: 'rgba(15,23,42,0.35)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-        }}
-        onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) { setConfirmOrderOpen(false); setConfirmOrderText(''); } }}
-        role="presentation"
-      >
+      {/* Confirm Order dialog — order mode only */}
+      {confirmOrderOpen && pendingOrderData && (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm place order"
-          className="w-full max-w-[440px] rounded-2xl overflow-hidden"
+          className="fixed inset-0 z-[60] flex items-center justify-center px-4"
           style={{
-            background: 'var(--glass-bg)',
-            border: '1px solid var(--glass-border-bright)',
-            boxShadow: '0 8px 32px rgba(15,23,42,0.12)',
+            background: 'rgba(15,23,42,0.35)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
           }}
+          onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) { setConfirmOrderOpen(false); setConfirmOrderText(''); } }}
+          role="presentation"
         >
-          {/* Header */}
           <div
-            className="px-5 py-4 font-semibold"
-            style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--glass-border)' }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm place order"
+            className="w-full max-w-[440px] rounded-2xl overflow-hidden"
+            style={{
+              background: 'var(--glass-bg)',
+              border: '1px solid var(--glass-border-bright)',
+              boxShadow: '0 8px 32px rgba(15,23,42,0.12)',
+            }}
           >
-            Place this order?
-          </div>
-
-          {/* Body */}
-          <div className="px-5 py-4 text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
-            <div className="mb-2">
-              <span className="font-bold" style={{ color: 'var(--text-main)' }}>{pendingOrderData.design_name}</span>
-              {selectedClientData ? <> &mdash; {selectedClientData.client_name}</> : null}
+            {/* Header */}
+            <div
+              className="px-5 py-4 font-semibold"
+              style={{ color: 'var(--text-main)', borderBottom: '1px solid var(--glass-border)' }}
+            >
+              Place this order?
             </div>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Order is placed directly into production.</li>
-              <li>The client will be notified by email.</li>
-              <li>This action cannot be undone.</li>
-            </ul>
-            <div className="mt-4">
-              <label className="block mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                Type <span className="font-bold" style={{ color: 'var(--text-main)' }}>CONFIRM</span> to proceed
-              </label>
-              <input
-                type="text"
-                value={confirmOrderText}
-                onChange={(e) => setConfirmOrderText(e.target.value)}
-                placeholder="CONFIRM"
-                autoFocus
-                className="w-full rounded-lg px-3 py-2 text-[12.5px] outline-none"
-                style={{
-                  background: 'var(--glass-bg-light)',
-                  border: `1px solid ${confirmOrderText.trim().toUpperCase() === 'CONFIRM' ? '#22c55e' : 'var(--glass-border)'}`,
-                  color: 'var(--text-main)',
-                  transition: 'border-color 0.15s',
-                }}
+
+            {/* Body */}
+            <div className="px-5 py-4 text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
+              <div className="mb-2">
+                <span className="font-bold line-clamp-2 break-words" style={{ color: 'var(--text-main)' }}>{pendingOrderData.design_name}</span>
+                {selectedClientData ? <> &mdash; {selectedClientData.client_name}</> : null}
+              </div>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Order is placed directly into production.</li>
+                <li>The client will be notified by email.</li>
+                <li>This action cannot be undone.</li>
+              </ul>
+              <div className="mt-4">
+                <label className="block mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  Type <span className="font-bold" style={{ color: 'var(--text-main)' }}>CONFIRM</span> to proceed
+                </label>
+                <input
+                  type="text"
+                  value={confirmOrderText}
+                  onChange={(e) => setConfirmOrderText(e.target.value)}
+                  placeholder="CONFIRM"
+                  autoFocus
+                  className="w-full rounded-lg px-3 py-2 text-[12.5px] outline-none"
+                  style={{
+                    background: 'var(--glass-bg-light)',
+                    border: `1px solid ${confirmOrderText.trim().toUpperCase() === 'CONFIRM' ? '#22c55e' : 'var(--glass-border)'}`,
+                    color: 'var(--text-main)',
+                    transition: 'border-color 0.15s',
+                  }}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              className="flex justify-end gap-2 px-5 py-3.5"
+              style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--glass-bg-light, rgba(15,23,42,0.03))' }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline disabled:opacity-60"
                 disabled={isSubmitting}
-              />
+                onClick={() => { setConfirmOrderOpen(false); setConfirmOrderText(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || confirmOrderText.trim().toUpperCase() !== 'CONFIRM'}
+                className="btn btn-crimson disabled:opacity-50"
+                onClick={handleConfirmedOrder}
+              >
+                {isSubmitting ? (
+                  <Loader2 aria-hidden className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send aria-hidden className="w-3.5 h-3.5" />
+                )}
+                {isSubmitting ? 'Placing…' : 'Place Order'}
+              </button>
             </div>
-          </div>
-
-          {/* Footer */}
-          <div
-            className="flex justify-end gap-2 px-5 py-3.5"
-            style={{ borderTop: '1px solid var(--glass-border)', background: 'var(--glass-bg-light, rgba(15,23,42,0.03))' }}
-          >
-            <button
-              type="button"
-              className="btn btn-outline disabled:opacity-60"
-              disabled={isSubmitting}
-              onClick={() => { setConfirmOrderOpen(false); setConfirmOrderText(''); }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting || confirmOrderText.trim().toUpperCase() !== 'CONFIRM'}
-              className="btn btn-crimson disabled:opacity-50"
-              onClick={handleConfirmedOrder}
-            >
-              {isSubmitting ? (
-                <Loader2 aria-hidden className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Send aria-hidden className="w-3.5 h-3.5" />
-              )}
-              {isSubmitting ? 'Placing…' : 'Place Order'}
-            </button>
           </div>
         </div>
-      </div>
-    )}
+      )}
     </>
   );
 }
@@ -2086,6 +2143,8 @@ function Field({
   required,
   labelSuffix,
   fieldError,
+  maxLength,
+  onChange,
   ...rest
 }: {
   name: string;
@@ -2093,19 +2152,33 @@ function Field({
   required?: boolean;
   labelSuffix?: string;
   fieldError?: boolean;
+  maxLength?: number;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const [count, setCount] = useState(0);
   return (
     <div>
       <label className="fl" htmlFor={name}>
         {label}
         {required && <span style={{ color: '#c41e3a', marginLeft: 2 }}>*</span>}
         {labelSuffix && <span className="qf-label-suffix">{labelSuffix}</span>}
+        {maxLength ? (
+          <span style={{ float: 'right', fontWeight: 400, fontSize: 10.5, color: 'var(--text-faint, #94a3b8)' }}>
+            {count}/{maxLength}
+          </span>
+        ) : null}
       </label>
       <input
         id={name}
         name={name}
         className="fi"
         style={fieldError ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.25)' } : undefined}
+        onChange={(e) => {
+          if (maxLength) {
+            e.target.value = enforceNoSpaceMaxLength(e.target.value, maxLength);
+            setCount(getNonSpaceLength(e.target.value));
+          }
+          onChange?.(e);
+        }}
         {...rest}
       />
     </div>

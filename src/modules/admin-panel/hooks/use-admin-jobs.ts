@@ -32,6 +32,12 @@ export function useDeleteUser() {
   });
 }
 
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: (id: string) => adminService.resetUserPassword(id),
+  });
+}
+
 export function useAdminJobCards(filters: JobCardFilters = {}) {
   return useQuery({
     queryKey: queryKeys.jobs.list(filters as Record<string, unknown>),

@@ -155,7 +155,7 @@ export function JobModal({ job, onClose }: JobModalProps) {
         <div className="modal-top">
           <div style={{ flex: 1 }}>
             <div className="modal-job-id">{job.id}&nbsp;·&nbsp;{job.ref}</div>
-            <div className="modal-title">{job.design}</div>
+            <div className="modal-title line-clamp-2 break-words">{job.design}</div>
             <div className="modal-tags">
               <Badge accent={orderBadgeAccent(job.order)}>{job.order}</Badge>
               <Badge accent={statusBadgeAccent(job.status)}>{job.status}</Badge>

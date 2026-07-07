@@ -54,7 +54,7 @@ export const JOB_STATUS_OPTIONS = [
 
 export const QUOTE_STATUS_OPTIONS = [
   { value: 'Quote Submitted', label: 'Quote Submitted' },
-  { value: 'Quote Approved',  label: 'Quote Approved' },
+  { value: 'Quote Approved',  label: 'Quote Sent' },
 ];
 
 export function isFiltersEmpty(f: JobFilters): boolean {

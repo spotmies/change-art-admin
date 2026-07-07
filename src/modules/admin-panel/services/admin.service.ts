@@ -358,6 +358,11 @@ export const adminService = {
     return apiClient.patch<IUser>(`/api/v1/users/${id}/deactivate`);
   },
 
+  // Emails the user a password reset link via the same flow as self-service "forgot password".
+  resetUserPassword(id: string): Promise<IUser> {
+    return apiClient.patch<IUser>(`/api/v1/users/${id}/reset-password`);
+  },
+
   listProfileChangeRequests(
     filters: ProfileChangeRequestFilters = {},
   ): Promise<PaginatedList<ProfileChangeRequest>> {

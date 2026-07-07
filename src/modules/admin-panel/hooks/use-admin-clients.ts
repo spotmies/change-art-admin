@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
 import { toastApiError, ValidationError } from '@lib/toast-error';
+import { truncate } from '@lib/utils';
 import { adminService, type ClientFilters, type CreateClientBody, type CreateJobCardBody, type ProvisionClientBody, type SendQuotePriceBody, type UpdateClientBody } from '../services/admin.service';
 
 export function useAdminClients(filters: ClientFilters = {}) {
@@ -18,7 +19,7 @@ export function useCreateClient() {
     mutationFn: (body: CreateClientBody) => adminService.createClient(body),
     onSuccess: (client) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
-      toast.success(`${client.company_name ?? client.client_name} added`);
+      toast.success(`${truncate(client.company_name ?? client.client_name)} added`);
     },
     onError: (err) => toastApiError(err),
   });
@@ -30,7 +31,7 @@ export function useProvisionClient() {
     mutationFn: (body: ProvisionClientBody) => adminService.provisionClient(body),
     onSuccess: (client) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
-      toast.success(`${client.company_name ?? client.client_name} provisioned`);
+      toast.success(`${truncate(client.company_name ?? client.client_name)} provisioned`);
     },
     onError: (err) => toastApiError(err),
   });

@@ -261,6 +261,7 @@ function CompactTableView({
             <th>Job</th>
             <th>Design</th>
             <th>Order</th>
+            <th>Type</th>
             <th>Priority</th>
             <th>Status</th>
             <th></th>
@@ -272,6 +273,7 @@ function CompactTableView({
               <td><span className="compact-ref">{j.ref || j.id}</span></td>
               <td><span className="compact-design">{j.design}</span></td>
               <td><span className={cn('badge', orderBadgeAccent(j.order))}>{j.order}</span></td>
+              <td><span className={cn('badge', projectTypeBadgeAccent(j.project))}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</span></td>
               <td><PriorityChip priority={j.priority} /></td>
               <td><span className={cn('badge', statusBadgeAccent(j.status))}>{statusDisplay(j.status)}</span></td>
               <td onClick={(e) => e.stopPropagation()}>
@@ -328,7 +330,7 @@ function DeliveredView({
                 */}
                 <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
               </div>
-              <div className="text-[15px] font-bold text-text-main">{job.design}</div>
+              <div className="text-[15px] font-bold text-text-main line-clamp-2 break-words">{job.design}</div>
               <div className="text-[12px] text-text-muted mt-0.5">
                 Order Type: {job.order} &middot; Assigned: {job.assignedTo || 'Unassigned'}
               </div>
@@ -391,6 +393,25 @@ function orderBadgeAccent(order: string): string {
   return map[order] || 'gray';
 }
 
+/** Accent colour for the project-type badge (Quote / Live / Amend / Live Quote). */
+function projectTypeBadgeAccent(project: string): string {
+  const map: Record<string, string> = {
+    Quote: 'blue',
+    'Live Quote': 'teal',
+    Live: 'green',
+    Amend: 'amber',
+  };
+  return map[project] || 'gray';
+}
+
+/** Display label for the project-type badge — shows revision number for Amend jobs. */
+function projectTypeBadgeLabel(project: string, modificationCount?: number | null): string {
+  if (project === 'Amend' && modificationCount && modificationCount > 0) {
+    return `Amend R${modificationCount}`;
+  }
+  return project;
+}
+
 
 function priorityClass(priority: string): string {
   const map: Record<string, string> = {
@@ -438,7 +459,7 @@ function TableView({
             <th>Design Name</th>
             <th>Preview</th>
             <th>Order</th>
-            {/* <th>Type</th> commented out per user request */}
+            <th>Type</th>
             <th>Priority</th>
             <th>Status</th>
             <th>Created</th>
@@ -473,7 +494,7 @@ function TableView({
                 />
               </td>
               <td><Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge></td>
-              {/* <td><Badge accent={projectTypeBadgeAccent(j.project)}>{j.project.toUpperCase()}</Badge></td> commented out per user request */}
+              <td><Badge accent={projectTypeBadgeAccent(j.project)}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</Badge></td>
               <td><PriorityChip priority={j.priority} /></td>
               <td><Badge accent={statusBadgeAccent(j.status)}>{j.status}</Badge></td>
               <td className="text-[12px] text-text-muted whitespace-nowrap">{formatDate(j.created)}</td>
@@ -559,14 +580,12 @@ function GridView({
                   {j.order}
                 </span>
                 <div className="flex items-center gap-1 flex-wrap">
-                  {/* Order type badge commented out per user request:
                   <span
                     className={cn('badge whitespace-nowrap', projectTypeBadgeAccent(j.project))}
                     title="Order type"
                   >
-                    {j.project.toUpperCase()}
+                    {projectTypeBadgeLabel(j.project, j.modificationCount)}
                   </span>
-                  */}
                   <span className={cn('badge whitespace-nowrap', statusBadgeAccent(j.status))}>
                     {statusDisplay(j.status)}
                   </span>
@@ -634,7 +653,7 @@ function ListView({
               <span className="list-title">{j.design}</span>
               <div className="list-badges">
                 <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
-                {/* <Badge accent={projectTypeBadgeAccent(j.project)}>{j.project.toUpperCase()}</Badge> commented out per user request */}
+                <Badge accent={projectTypeBadgeAccent(j.project)}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</Badge>
                 <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
               </div>
             </div>

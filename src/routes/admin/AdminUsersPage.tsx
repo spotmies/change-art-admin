@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { KeyRound, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
+import { ConfirmModal, GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
 import type { IUser } from '@contracts';
-import { useAdminUsers, useDeleteUser } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminUsers, useDeleteUser, useResetUserPassword } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { ApiClientError } from '@lib/api-client';
 import { UserFormModal, type UserModalMode } from '../../modules/admin-panel/components/UserFormModal';
 
@@ -43,9 +43,11 @@ export function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [modal, setModal] = useState<{ mode: UserModalMode; user: IUser | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<IUser | null>(null);
+  const [resetTarget, setResetTarget] = useState<IUser | null>(null);
 
   const { data, isLoading, isError } = useAdminUsers({ per_page: FETCH_LIMIT });
   const deleteMutation = useDeleteUser();
+  const resetPasswordMutation = useResetUserPassword();
 
   const allUsers = useMemo<IUser[]>(() => data?.items ?? [], [data]);
 
@@ -208,27 +210,37 @@ export function AdminUsersPage() {
                         </span>
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            aria-label={`Edit ${u.name}`}
-                            onClick={() => setModal({ mode: 'edit', user: u })}
-                          >
-                            <Pencil aria-hidden className="w-3.5 h-3.5" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-outline"
-                            aria-label={`Delete ${u.name}`}
-                            style={{ color: 'var(--color-crimson)', borderColor: 'rgba(196,30,58,0.35)' }}
-                            onClick={() => setDeleteTarget(u)}
-                          >
-                            <Trash2 aria-hidden className="w-3.5 h-3.5" />
-                            Delete
-                          </button>
-                        </div>
+                        {u.role !== UserRole.ADMIN && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="row-icon-btn row-icon-btn--blue"
+                              data-tooltip="Edit"
+                              aria-label={`Edit ${u.name}`}
+                              onClick={() => setModal({ mode: 'edit', user: u })}
+                            >
+                              <Pencil aria-hidden className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="row-icon-btn row-icon-btn--amber"
+                              data-tooltip="Reset Password"
+                              aria-label={`Reset password for ${u.name}`}
+                              onClick={() => setResetTarget(u)}
+                            >
+                              <KeyRound aria-hidden className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="row-icon-btn row-icon-btn--crimson"
+                              data-tooltip="Delete"
+                              aria-label={`Delete ${u.name}`}
+                              onClick={() => setDeleteTarget(u)}
+                            >
+                              <Trash2 aria-hidden className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -322,6 +334,36 @@ export function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={resetTarget !== null}
+        title="Send password reset link?"
+        description={
+          resetTarget ? (
+            <>
+              A password reset link will be emailed to{' '}
+              <strong>{resetTarget.email}</strong>. They can use it to set a new
+              password and log back in.
+            </>
+          ) : null
+        }
+        confirmLabel="Send Reset Link"
+        onCancel={() => setResetTarget(null)}
+        onConfirm={async () => {
+          if (!resetTarget) return;
+          const target = resetTarget;
+          try {
+            await resetPasswordMutation.mutateAsync(target.id);
+            toast.success(`Password reset link sent to ${target.email}.`);
+          } catch (err) {
+            toast.error(
+              err instanceof ApiClientError ? err.toUserMessage() : 'Failed to send password reset link.',
+            );
+          } finally {
+            setResetTarget(null);
+          }
+        }}
+      />
     </div>
   );
 }
