@@ -1133,7 +1133,7 @@ html[data-theme='light'] .mb-track {
   .compact-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 460px;
+    min-width: 700px;
     table-layout: fixed;
   }
 
@@ -1155,10 +1155,11 @@ html[data-theme='light'] .mb-track {
 
   .compact-table thead th:nth-child(1) { width: 110px; }
   .compact-table thead th:nth-child(2) { width: auto; }
-  .compact-table thead th:nth-child(3) { width: 100px; }
-  .compact-table thead th:nth-child(4) { width: 80px; }
-  .compact-table thead th:nth-child(5) { width: 110px; }
-  .compact-table thead th:nth-child(6) { width: 58px; }
+  .compact-table thead th:nth-child(3) { width: 140px; }
+  .compact-table thead th:nth-child(4) { width: 90px; }
+  .compact-table thead th:nth-child(5) { width: 100px; }
+  .compact-table thead th:nth-child(6) { width: 140px; }
+  .compact-table thead th:nth-child(7) { width: 80px; }
 
   .compact-table tbody tr {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
