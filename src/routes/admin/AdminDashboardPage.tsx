@@ -55,7 +55,7 @@ export function AdminDashboardPage() {
   // Achieved Targets: delivered jobs (completed successfully)
   const achievedTargets = delivered.length;
 
-  // Weekly Trend: jobs created on each weekday of the current week (Mon–Fri)
+  // Weekly Trend: jobs created on each day of the current week (Mon–Sun)
   const weeklyData = useMemo(() => {
     const now = new Date();
     // Start of this week's Monday
@@ -65,11 +65,11 @@ export function AdminDashboardPage() {
     monday.setDate(now.getDate() + mondayOffset);
     monday.setHours(0, 0, 0, 0);
 
-    const counts = [0, 0, 0, 0, 0];
+    const counts = [0, 0, 0, 0, 0, 0, 0];
     for (const job of jobs) {
       const created = new Date(job.created);
       const dayIdx = Math.floor((created.getTime() - monday.getTime()) / 86_400_000);
-      if (dayIdx >= 0 && dayIdx < 5) counts[dayIdx]++;
+      if (dayIdx >= 0 && dayIdx < 7) counts[dayIdx]++;
     }
 
     const maxVal = Math.max(...counts, 1);
@@ -79,13 +79,15 @@ export function AdminDashboardPage() {
       'var(--color-purple, #a855f7)',
       'var(--color-blue)',
       undefined,
+      undefined,
+      undefined,
     ];
-    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => ({
+    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => ({
       label,
       value: counts[i],
       height: Math.max(Math.round((counts[i] / maxVal) * 100), 4),
       color: colors[i],
-      highlight: i === 4,
+      highlight: i === 6,
     }));
   }, [jobs]);
 
@@ -235,7 +237,7 @@ export function AdminDashboardPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
           ) : (
-            <JobTable jobs={newJobs} defaultView="grid" showActions />
+            <JobTable jobs={newJobs} defaultView="table" showActions />
           )}
 
           <div className="mt-7">
@@ -246,7 +248,7 @@ export function AdminDashboardPage() {
             {isLoading ? (
               <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
             ) : (
-              <JobTable jobs={newQuotes} defaultView="grid" showActions quoteView />
+              <JobTable jobs={newQuotes} defaultView="table" showActions quoteView />
             )}
           </div>
         </div>

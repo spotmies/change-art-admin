@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
+import { ApiClientError } from '@lib/api-client';
 import { toastApiError, ValidationError } from '@lib/toast-error';
 import {
   csQuoteService,
@@ -26,7 +27,17 @@ export function useSendQuotePrice() {
       void qc.invalidateQueries({ queryKey: queryKeys.quotes.all() });
       toast.success('Price sent to client for confirmation.');
     },
-    onError: (err) => toastApiError(err),
+    onError: (err, { jobId }) => {
+      // Someone else (another CS rep, or Admin) won the race and already sent
+      // a price for this job — refetch so the modal drops the stale "send
+      // price" form and shows what actually happened instead of leaving the
+      // user staring at an outdated view they could resubmit into again.
+      if (err instanceof ApiClientError && err.code === 'JOB_CARD_VERSION_MISMATCH') {
+        void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(jobId) });
+        void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      }
+      toastApiError(err);
+    },
   });
 }
 

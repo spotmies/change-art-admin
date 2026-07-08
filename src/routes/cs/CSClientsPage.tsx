@@ -157,26 +157,65 @@ export function CSClientsPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Client ID</th>
-                    <th>Contact Name</th>
-                    <th>Company</th>
-                    <th>Phone</th>
-                    <th>Location</th>
-                    <th>Payment</th>
-                    <th>Status</th>
-                    <th></th>
+                    <th style={{ width: 80 }}>Client ID</th>
+                    <th style={{ width: 130 }}>Contact Name</th>
+                    <th style={{ width: 'auto' }}>Company</th>
+                    <th style={{ width: 120 }}>Phone</th>
+                    <th style={{ width: 140 }}>Location</th>
+                    <th style={{ width: 100 }}>Payment</th>
+                    <th style={{ width: 90 }}>Status</th>
+                    <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {clients.map((c) => (
-                    <tr key={c.id}>
+                    <tr key={c.id} onClick={() => setSelectedClient(c)} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
                       <td>
                         <span className="ref-code">{c.client_id}</span>
                       </td>
-                      <td className="font-semibold">{c.contact_name}</td>
-                      <td className="text-text-muted">{c.company_name ?? '—'}</td>
+                      <td className="font-semibold">
+                        <span
+                          title={c.contact_name}
+                          style={{
+                            maxWidth: 120,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {c.contact_name}
+                        </span>
+                      </td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.company_name ?? undefined}
+                          style={{
+                            maxWidth: 150,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {c.company_name ?? '—'}
+                        </span>
+                      </td>
                       <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
-                      <td className="text-text-muted">{c.location ?? '—'}</td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.location ?? undefined}
+                          style={{
+                            maxWidth: 160,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {c.location ?? '—'}
+                        </span>
+                      </td>
                       <td>
                         <span className="badge gray">
                           {c.payment_mode?.replace(/_/g, ' ') ?? '—'}
@@ -190,7 +229,7 @@ export function CSClientsPage() {
                           {c.is_hotlisted && <span className="badge amber">Hotlisted</span>}
                         </div>
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <RowActionsMenu
                           ariaLabel={`Actions for ${c.contact_name}`}
                           actions={[

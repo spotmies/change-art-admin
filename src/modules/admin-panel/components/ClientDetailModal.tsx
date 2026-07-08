@@ -208,12 +208,12 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const modal = (
     <div
       className="modal-overlay open"
-      onClick={undefined}
+      onClick={onClose}
       role="dialog"
       aria-modal
       aria-label={`Client: ${client.client_name}`}
     >
-      <div className="modal" style={{ maxWidth: 540 }}>
+      <div className="modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="modal-top">

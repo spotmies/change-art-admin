@@ -39,6 +39,8 @@ const FIELD_LABELS: Record<string, string> = {
   payment: 'Payment method',
   description: 'Description',
   notes: 'Notes',
+  note: 'Note',
+  reason: 'Reason',
   mail: 'Client email',
   mail_description: 'Description',
 };
@@ -138,6 +140,19 @@ function normaliseError(err: unknown): ApiClientError {
         message: body.error.message,
         status,
         details: body.error.details,
+      });
+    }
+
+    // Better Auth (used for /api/auth/*) returns a flat { code, message } body
+    // instead of our API's { success, error } envelope — preserve its code/message
+    // rather than collapsing to a generic UNKNOWN_ERROR, so callers (e.g. LoginForm)
+    // can surface the real reason (invalid credentials, unverified email, etc.).
+    const flatBody = body as { code?: unknown; message?: unknown } | undefined;
+    if (flatBody && typeof flatBody === 'object' && typeof flatBody.code === 'string') {
+      return new ApiClientError({
+        code: flatBody.code,
+        message: typeof flatBody.message === 'string' ? flatBody.message : ERROR_MESSAGES.UNKNOWN_ERROR,
+        status,
       });
     }
 

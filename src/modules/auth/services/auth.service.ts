@@ -94,21 +94,20 @@ export const authService = {
       }
       return user;
     } catch (err) {
-      // Re-throw our own typed errors unchanged.
-      if (err instanceof ApiClientError) throw err;
-      // Better Auth returns its own error shape on 4xx — convert to ApiClientError
-      // so LoginForm's catch block can display a proper message instead of
-      // falling through to the generic "An unexpected error occurred."
-      const axiosErr = err as { response?: { status?: number; data?: { code?: string; message?: string } } };
-      const status = axiosErr.response?.status ?? 500;
-      const baCode = axiosErr.response?.data?.code ?? '';
-      if (baCode === 'INVALID_EMAIL_OR_PASSWORD' || status === 401) {
-        throw new ApiClientError({ code: ERROR_CODES.INVALID_CREDENTIALS, message: 'Email or password is incorrect.', status });
+      // Our own typed errors (thrown above, or already normalised by the api-client
+      // interceptor from Better Auth's { code, message } error body) — remap Better
+      // Auth's raw codes onto our ERROR_CODES so LoginForm's branches match, and
+      // re-throw everything else unchanged.
+      if (err instanceof ApiClientError) {
+        if (err.code === 'INVALID_EMAIL_OR_PASSWORD') {
+          throw new ApiClientError({ code: ERROR_CODES.INVALID_CREDENTIALS, message: 'Email or password is incorrect.', status: err.status });
+        }
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          throw new ApiClientError({ code: ERROR_CODES.UNAUTHENTICATED, message: err.message || 'Sign-in failed. Please try again.', status: err.status });
+        }
+        throw err;
       }
-      if (baCode === 'EMAIL_NOT_VERIFIED' || status === 403) {
-        throw new ApiClientError({ code: ERROR_CODES.UNAUTHENTICATED, message: axiosErr.response?.data?.message ?? 'Sign-in failed. Please try again.', status });
-      }
-      throw new ApiClientError({ code: ERROR_CODES.INTERNAL_ERROR, message: 'Sign-in failed. Please try again.', status });
+      throw new ApiClientError({ code: ERROR_CODES.INTERNAL_ERROR, message: 'Sign-in failed. Please try again.', status: 500 });
     }
   },
 

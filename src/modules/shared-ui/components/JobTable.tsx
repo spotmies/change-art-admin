@@ -479,7 +479,14 @@ function TableView({
               </td>
               <td>
                 <span
-                  className="font-bold text-[14px] text-text-main leading-snug block max-w-[260px]"
+                  className="font-bold text-[14px] text-text-main block"
+                  title={j.design}
+                  style={{
+                    maxWidth: 120,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
                 >
                   {j.design}
                 </span>
@@ -591,7 +598,7 @@ function GridView({
                   </span>
                 </div>
               </div>
-              <div className="jc-title">{j.design}</div>
+              <div className="jc-title" title={j.design}>{j.design}</div>
               <div className="jc-desc">{briefText(j.summary)}</div>
               <div className="jc-meta">
                 <span className="jc-id">{j.id}</span>

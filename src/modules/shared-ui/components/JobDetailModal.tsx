@@ -704,7 +704,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <span>{job.ref}</span>
                 <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
               </div>
-              <h2 className="text-[20px] font-extrabold leading-tight line-clamp-2 break-words" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[20px] font-extrabold leading-tight break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -1402,7 +1402,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                             value={noteToClient}
                             readOnly={quoteSent}
                             disabled={quoteSent}
-                            onChange={(e) => setNoteToClient(e.target.value)}
+                            maxLength={500}
+                            onChange={(e) => setNoteToClient(e.target.value.slice(0, 500))}
                             placeholder={quoteSent && !noteToClient ? '— No note sent —' : undefined}
                             style={{
                               width: '100%',
@@ -1421,6 +1422,17 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               cursor: quoteSent ? 'not-allowed' : 'text',
                             }}
                           />
+                          {!quoteSent ? (
+                            <div
+                              style={{
+                                textAlign: 'right', fontSize: 10, marginTop: 3,
+                                color: noteToClient.length >= 500 ? '#B22234' : '#92400E',
+                                opacity: 0.65, fontWeight: 600,
+                              }}
+                            >
+                              {noteToClient.length}/500
+                            </div>
+                          ) : null}
                         </div>
 
                         {/* Info banner — message swaps when the price has
