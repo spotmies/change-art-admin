@@ -157,8 +157,8 @@ function CcAuthorizationFormPanel() {
         title="Delete the CC Authorization Form?"
         description="Admins won't be able to use Send CC Form until a new file is uploaded."
         confirmLabel="Delete"
-        onConfirm={() => {
-          deleteCcForm.mutate(undefined, { onSuccess: () => setDeleteOpen(false) });
+        onConfirm={async () => {
+          await deleteCcForm.mutateAsync(undefined, { onSuccess: () => setDeleteOpen(false) });
         }}
         onCancel={() => setDeleteOpen(false)}
       />

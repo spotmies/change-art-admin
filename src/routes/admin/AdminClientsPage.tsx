@@ -420,7 +420,7 @@ export function AdminClientsPage() {
                             },
                             {
                               key: 'send-cc-form',
-                              label: 'Send CC',
+                              label: 'Send CC Form',
                               icon: <FileText aria-hidden className="w-3.5 h-3.5" />,
                               accent: 'crimson' as const,
                               title: c.cc_form_sent_at
@@ -489,9 +489,9 @@ export function AdminClientsPage() {
           )
         }
         confirmLabel={statusTarget?.is_active ? 'Deactivate' : 'Reactivate'}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!statusTarget) return;
-          setActive.mutate(
+          await setActive.mutateAsync(
             { id: statusTarget.id, is_active: !statusTarget.is_active },
             { onSuccess: () => setStatusTarget(null) },
           );
@@ -520,9 +520,9 @@ export function AdminClientsPage() {
           )
         }
         confirmLabel={hotlistTarget?.is_hotlisted ? 'Remove Hotlist' : 'Mark Hotlisted'}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!hotlistTarget) return;
-          setHotlisted.mutate(
+          await setHotlisted.mutateAsync(
             { id: hotlistTarget.id, hotlisted: !hotlistTarget.is_hotlisted },
             { onSuccess: () => setHotlistTarget(null) },
           );
@@ -547,9 +547,9 @@ export function AdminClientsPage() {
           </>
         }
         confirmLabel="Send"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!sendCcFormTarget) return;
-          sendCcForm.mutate(sendCcFormTarget.id, {
+          await sendCcForm.mutateAsync(sendCcFormTarget.id, {
             onSuccess: () => setSendCcFormTarget(null),
           });
         }}
