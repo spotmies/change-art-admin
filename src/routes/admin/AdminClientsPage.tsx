@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Pencil, Plus, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
-import { PaymentMode } from '@contracts';
 import type { IClient } from '@contracts';
 import { formatDateTime } from '@lib/utils';
 import { useAdminClients, useSendCcForm, useAdminClientById, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
@@ -21,17 +20,7 @@ const PER_PAGE = 20;
 
 type Tab = 'clients' | 'requests' | 'approve';
 
-function formatPaymentMode(mode: PaymentMode | null): string {
-  if (!mode) return '—';
-  const map: Record<PaymentMode, string> = {
-    [PaymentMode.CREDIT_CARD]: 'Credit Card',
-    [PaymentMode.CARD_ON_FILE]: 'Card on File',
-    [PaymentMode.ACH]: 'ACH',
-    [PaymentMode.PAYPAL]: 'PayPal',
-    [PaymentMode.CHECK]: 'Check',
-  };
-  return map[mode] ?? mode;
-}
+
 
 function currentMonthCount(items: { created_at: string }[]): number {
   const now = new Date();
