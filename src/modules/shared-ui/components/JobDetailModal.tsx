@@ -399,6 +399,26 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     return null;
   }, [job, originalJob]);
 
+  const hasAllRequiredFormats = useMemo(() => {
+    if (!allowedFormats || allowedFormats.length === 0) return true;
+    const presentExtensions = new Set<string>();
+    
+    allCompletedFiles.forEach(f => {
+      if (!excludedServerFileIds.has(f.id)) {
+        const name = f.file_name || (f as any).name || '';
+        const dotIdx = name.lastIndexOf('.');
+        if (dotIdx !== -1) presentExtensions.add(name.slice(dotIdx + 1).toLowerCase());
+      }
+    });
+    
+    sendMailFiles.forEach(f => {
+      const dotIdx = f.name.lastIndexOf('.');
+      if (dotIdx !== -1) presentExtensions.add(f.name.slice(dotIdx + 1).toLowerCase());
+    });
+    
+    return allowedFormats.every(ext => presentExtensions.has(ext));
+  }, [allowedFormats, allCompletedFiles, excludedServerFileIds, sendMailFiles]);
+
   if (!job) return null;
 
   // The data source for all detail fields. Toggle switches this between
@@ -702,6 +722,62 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     }
   };
 
+  const generateCopyText = () => {
+    const lines: string[] = [];
+    lines.push(`Design Name: ${displayJob.design || '—'}`);
+    lines.push(`\n--- JOB DETAILS ---`);
+    lines.push(`Client ID: ${displayJob.clientId || '—'}`);
+    lines.push(`Order Type: ${displayJob.order || '—'}`);
+    if (displayJob.specificType) lines.push(`Specific Service: ${displayJob.specificType}`);
+    lines.push(`Complexity: ${displayJob.complexity || '—'}`);
+    if (displayJob.process) lines.push(`Process: ${displayJob.process}`);
+    lines.push(`Colors: ${displayJob.colors != null ? displayJob.colors : '—'}`);
+
+    let outputFormatsStr = '—';
+    if (displayJob.finalFiles?.length) {
+      const text = displayJob.notes || displayJob.summary;
+      const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+      const customFormat = match && match[1] ? match[1].trim() : null;
+      const labels = displayJob.finalFiles.map(f => {
+        if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+          if (customFormat) {
+            if (/^others:\s*/i.test(customFormat)) {
+              return customFormat.replace(/^others:\s*/i, 'Others: ');
+            }
+            return `Others: ${customFormat}`;
+          }
+          return f;
+        }
+        return f;
+      });
+      outputFormatsStr = [...new Set(labels)].join(', ');
+    }
+    lines.push(`Output Formats: ${outputFormatsStr}`);
+    lines.push(`Assigned To: ${displayJob.assignedTo ?? 'Unassigned'}`);
+    if (displayJob.subType) lines.push(`Sub-Type: ${displayJob.subType}`);
+
+    lines.push(`\n--- SPECIFICATIONS ---`);
+    if (displayJob.etaHours) lines.push(`ETA: ${displayJob.etaHours}h`);
+    if (isAcknowledged && etaCountdown) lines.push(`ETA Countdown: ${etaCountdown.display}`);
+    if (displayJob.clientPo) lines.push(`Client PO / Ref: ${displayJob.clientPo}`);
+    if (displayJob.aiScore && aiOverall !== null) {
+      lines.push(`AI QC Score: ${aiOverall}/100 — ${aiPass ? 'Pass' : 'Fail'}`);
+    }
+
+    const clientText = (displayJob.summary ?? '').replace(/\[[^\]]*\]/g, '').trim();
+    if (clientText) {
+      lines.push(`\n--- CLIENT INSTRUCTIONS ---`);
+      lines.push(clientText);
+    }
+
+    if (displayJob.notes) {
+      lines.push(`\n--- NOTES / BRIEF ---`);
+      lines.push(displayJob.notes);
+    }
+
+    return lines.join('\n');
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -809,6 +885,28 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     {unholdBusy ? 'Unholding…' : 'Unhold Project'}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateCopyText()).then(() => {
+                      toast.success('Job details copied to clipboard');
+                    });
+                  }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                  }}
+                  aria-label="Copy job details"
+                  title="Copy job details"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
                 <button
                   type="button"
                   onClick={handleClose}
@@ -959,7 +1057,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   aria-label="Open deliver project panel"
                 >
                   <Send className="w-3.5 h-3.5" aria-hidden />
-                  <span>Deliver Project</span>
+                  <span>Dispatch Project</span>
                 </button>
               ) : null}
             </div>
@@ -973,17 +1071,17 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             style={
               cardExpiryStatus === 'expired'
                 ? {
-                    background: 'rgba(220,38,38,0.16)',
-                    borderBottom: '2px solid #DC2626',
-                    borderLeft: '4px solid #DC2626',
-                    color: '#991B1B',
-                  }
+                  background: 'rgba(220,38,38,0.16)',
+                  borderBottom: '2px solid #DC2626',
+                  borderLeft: '4px solid #DC2626',
+                  color: '#991B1B',
+                }
                 : {
-                    background: 'rgba(220,38,38,0.1)',
-                    borderBottom: '2px solid rgba(220,38,38,0.5)',
-                    borderLeft: '4px solid #DC2626',
-                    color: '#B91C1C',
-                  }
+                  background: 'rgba(220,38,38,0.1)',
+                  borderBottom: '2px solid rgba(220,38,38,0.5)',
+                  borderLeft: '4px solid #DC2626',
+                  color: '#B91C1C',
+                }
             }
           >
             <CreditCard className="w-4 h-4 shrink-0" aria-hidden />
@@ -2137,7 +2235,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               onClick={() => openSendMailModal()}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
-              Deliver Project
+              Dispatch Project
             </button>
           ) : null}
           {normalizedStatus(job) === 'MODIFICATION_REQUESTED' ? (
@@ -2182,7 +2280,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               onClick={() => setShowDispatchConfirm(true)}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
-              Dispatch to Client
+              Dispatch Project
             </button>
           ) : null}
         </div>
@@ -2539,7 +2637,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </div>
               <div className="flex-1 min-w-0">
                 <div style={{ fontSize: 17, fontWeight: 800, color: '#78350F', letterSpacing: '0.01em', marginBottom: 2 }}>
-                  Deliver Project
+                  Dispatch Project
                 </div>
                 <div style={{ fontSize: 12, color: '#92400E', opacity: 0.85 }}>
                   This will notify the client that their order is ready for delivery.
@@ -2849,11 +2947,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   onChange={(e) => setSendMailConfirmText(e.target.value.toUpperCase())}
                   disabled={sendMailPhase !== 'idle'}
                   onKeyDown={(e) => {
+                    const totalFilesCount = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).length + sendMailFiles.length;
                     if (
                       e.key === 'Enter' &&
                       sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' &&
                       sendMailPhase === 'idle' &&
-                      (allCompletedFiles.length + sendMailFiles.length) > 0
+                      totalFilesCount > 0 &&
+                      hasAllRequiredFormats
                     ) {
                       handleSendMailSubmit();
                     }
@@ -2898,7 +2998,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </button>
               {(() => {
                 const totalFilesCount = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).length + sendMailFiles.length;
-                const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0;
+                const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0 && hasAllRequiredFormats;
                 const disabled = !ready || sendMailPhase !== 'idle';
                 return (
                   <button
@@ -2918,7 +3018,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     }}
                   >
                     <Send className="w-3.5 h-3.5" aria-hidden />
-                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Delivering…' : 'Deliver Project'}
+                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Dispatching…' : 'Dispatch Project'}
                   </button>
                 );
               })()}

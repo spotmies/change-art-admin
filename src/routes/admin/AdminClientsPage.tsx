@@ -325,7 +325,6 @@ export function AdminClientsPage() {
                     <th style={{ width: 130 }}>Contact Name</th>
                     <th style={{ width: 'auto' }}>Company</th>
                     <th style={{ width: 120 }}>Phone</th>
-                    <th style={{ width: 100 }}>Email</th>
                     <th style={{ width: 140 }}>Location</th>
                     <th style={{ width: 100 }}>Payment</th>
                     <th style={{ width: 90 }}>Status</th>
@@ -334,7 +333,7 @@ export function AdminClientsPage() {
                 </thead>
                 <tbody>
                   {clients.map((c) => (
-                    <tr key={c.id} onClick={() => openClient(c, 'edit')} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
+                    <tr key={c.id} onClick={() => openClient(c, 'view')} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
                       <td>
                         <span className="ref-code">{c.client_id}</span>
                       </td>
@@ -352,11 +351,40 @@ export function AdminClientsPage() {
                           {c.contact_name}
                         </span>
                       </td>
-                      <td className="text-text-muted">{c.company_name ?? '—'}</td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.company_name ?? undefined}
+                          style={{
+                            maxWidth: 150,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {c.company_name ?? '—'}
+                        </span>
+                      </td>
                       <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
-                      <td className="text-text-muted">••••••••••</td>
-                      <td className="text-text-muted">{c.location ?? '—'}</td>
-                      <td><span className="badge gray">{formatPaymentMode(c.payment_mode)}</span></td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.location ?? undefined}
+                          style={{
+                            maxWidth: 160,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {c.location ?? '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge gray">
+                          {c.payment_mode?.replace(/_/g, ' ') ?? '—'}
+                        </span>
+                      </td>
                       <td>
                         <div className="flex flex-col items-start gap-1">
                           <span className={`badge ${c.is_active ? 'green' : 'red'}`}>
@@ -370,10 +398,10 @@ export function AdminClientsPage() {
                           ariaLabel={`Actions for ${c.contact_name}`}
                           actions={[
                             {
-                              key: 'edit',
-                              label: 'Edit',
+                              key: 'manage',
+                              label: 'Manage',
                               icon: <Pencil aria-hidden className="w-3.5 h-3.5" />,
-                              onSelect: () => openClient(c, 'edit'),
+                              onSelect: () => openClient(c, 'view'),
                             },
                             {
                               key: 'hotlist',
