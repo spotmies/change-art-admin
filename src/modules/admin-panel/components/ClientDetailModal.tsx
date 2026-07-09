@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Pencil, Trash2 } from 'lucide-react';
+import { X, Pencil, Trash2, Star } from 'lucide-react';
 import { ConfirmModal } from '@modules/shared-ui';
-import type { IClient, ICardOnFile } from '@contracts';
+import type { IClient } from '@contracts';
 import { PaymentMode } from '@contracts';
-import { useDeleteClient, useUpdateClient } from '../hooks/use-admin-clients';
+import { useAdminClientPaymentMethods, useDeleteClient, useUpdateClient } from '../hooks/use-admin-clients';
 import type { UpdateClientBody } from '../services/admin.service';
+import { resolveClientCardSummary } from '@lib/card-expiry';
+import { formatPaymentMethodSummary, formatPaymentMethodType } from '@lib/payment-methods';
 
 export type ClientModalMode = 'view' | 'edit';
 
@@ -30,11 +32,21 @@ function formatDate(iso: string): string {
   });
 }
 
-function formatCardOnFile(card: ICardOnFile | null): string {
+/**
+ * `client.card_on_file` (the real tokenized card flow) is never actually set
+ * by any reachable UI — clients only ever set a card through the
+ * self-reported Payment Settings page. `resolveClientCardSummary` already
+ * knows to fall back to that; this just formats whichever it finds.
+ */
+function formatCardOnFile(client: IClient): string {
+  const card = resolveClientCardSummary(client);
   if (!card) return 'No card on file';
   const mm = String(card.exp_month).padStart(2, '0');
   const yy = String(card.exp_year % 100).padStart(2, '0');
-  return `${card.brand} ending in ${card.last4} (Exp ${mm}/${yy})`;
+  const brand = card.brand ? `${card.brand} ` : '';
+  return card.last4
+    ? `${brand}Card ending in ${card.last4} (Exp ${mm}/${yy})`
+    : `${brand}Card on file (Exp ${mm}/${yy})`;
 }
 
 interface ClientDetailModalProps {
@@ -87,6 +99,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const update = useUpdateClient();
   const remove = useDeleteClient();
   const saving = update.isPending;
+  const { data: paymentMethods } = useAdminClientPaymentMethods(client?.id ?? null);
 
   useEffect(() => {
     setForm(initialState(client));
@@ -163,8 +176,6 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
     ['Email', client.email],
     ['Location', client.location ?? '—'],
     ['Address', client.address?.trim() ? client.address : '—'],
-    ['Card on file', formatCardOnFile(client.card_on_file)],
-    ['Payment Mode', formatPaymentMode(client.payment_mode)],
     ['Member Since', formatDate(client.date)],
     ['Record Created', formatDate(client.created_at)],
   ];
@@ -328,6 +339,18 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                     ))}
                   </select>
                 </div>
+                <div className="col-span-2">
+                  <label className="fl">Card on File</label>
+                  {/* Read-only — the client's card is managed entirely from their own
+                      Payment Settings page. Admin/CS can see it here for context while
+                      editing, but never enters or edits raw card data (PCI scope). */}
+                  <div
+                    className="fi"
+                    style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted, #64748B)', cursor: 'default' }}
+                  >
+                    {formatCardOnFile(client)}
+                  </div>
+                </div>
 
                 {error ? (
                   <div
@@ -348,6 +371,35 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   <div className="f-val">{val}</div>
                 </div>
               ))}
+
+              <div className="m-sec-title" style={{ marginTop: 16 }}>Payment Methods</div>
+              {paymentMethods && paymentMethods.length > 0 ? (
+                paymentMethods.map((m) => (
+                  <div key={m.id} className="f-row">
+                    <div className="f-key" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {formatPaymentMethodType(m.type)}
+                      {m.is_default ? (
+                        <span
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 2,
+                            color: '#D97706', fontSize: 9.5, fontWeight: 800,
+                            letterSpacing: '0.04em', textTransform: 'uppercase',
+                          }}
+                        >
+                          <Star className="w-2.5 h-2.5" style={{ fill: '#D97706' }} aria-hidden />
+                          Default
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="f-val">{formatPaymentMethodSummary(m)}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="f-row">
+                  <div className="f-key">On file</div>
+                  <div className="f-val">No payment methods on file</div>
+                </div>
+              )}
             </>
           )}
         </div>

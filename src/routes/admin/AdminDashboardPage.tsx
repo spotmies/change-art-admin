@@ -9,11 +9,12 @@ import {
   SectionHeader,
   StatGrid,
 } from '@modules/shared-ui';
-import { AlertTriangle, CheckCircle2, Send, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CreditCard, Send, Sparkles, Target, TrendingUp } from 'lucide-react';
 import {
   useAdminJobViews,
 } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { getCardExpiryStatus, resolveClientCardExpiry } from '@lib/card-expiry';
 
 export function AdminDashboardPage() {
   const user = useSessionUser();
@@ -22,6 +23,19 @@ export function AdminDashboardPage() {
   const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
   // per_page: 1 — we only need meta.total for the "Total Clients" stat card; no items are used.
   const { data: clientsData } = useAdminClients({ per_page: 1 });
+  // Separate fetch (up to 100 clients) to scan for cards expired/expiring soon —
+  // mirrors the same "fetch a page, compute client-side" pattern used for jobs above.
+  const { data: clientsForExpiryCheck } = useAdminClients({ per_page: 100 });
+  const expiringCards = useMemo(() => {
+    const items = clientsForExpiryCheck?.items ?? [];
+    return items
+      .map((c) => ({ client: c, status: getCardExpiryStatus(resolveClientCardExpiry(c)) }))
+      .filter((c): c is { client: (typeof items)[number]; status: 'expired' | 'expiring_soon' } =>
+        c.status === 'expired' || c.status === 'expiring_soon',
+      );
+  }, [clientsForExpiryCheck]);
+  const expiredCount = expiringCards.filter((c) => c.status === 'expired').length;
+  const expiringSoonCount = expiringCards.filter((c) => c.status === 'expiring_soon').length;
 
   const active = useMemo(
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
@@ -146,6 +160,49 @@ export function AdminDashboardPage() {
           </div>
         }
       />
+
+      {expiringCards.length > 0 && (
+        <div
+          className="flex items-start gap-3 rounded-xl px-4 py-3 mb-4"
+          style={
+            expiredCount > 0
+              ? { background: 'rgba(196,30,58,0.08)', border: '1px solid rgba(196,30,58,0.3)' }
+              : { background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)' }
+          }
+        >
+          <CreditCard
+            className="w-4 h-4 shrink-0 mt-0.5"
+            style={{ color: expiredCount > 0 ? '#ff8a95' : '#fbbf24' }}
+            aria-hidden
+          />
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-semibold" style={{ color: expiredCount > 0 ? '#ff8a95' : '#fbbf24' }}>
+              {expiredCount > 0 && expiringSoonCount > 0
+                ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} expired, ${expiringSoonCount} expiring within 30 days`
+                : expiredCount > 0
+                  ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} already expired`
+                  : `${expiringSoonCount} client card${expiringSoonCount === 1 ? '' : 's'} expiring within 30 days`}
+            </div>
+            <div className="text-[12px] text-text-muted mt-1 flex flex-wrap gap-x-3 gap-y-1">
+              {expiringCards.slice(0, 6).map(({ client, status }) => (
+                <Link
+                  key={client.id}
+                  to="/admin/clients"
+                  className="underline underline-offset-2 hover:text-text-main transition-colors"
+                >
+                  {client.company_name ?? client.client_name}
+                  {status === 'expired' ? ' (expired)' : ' (expiring soon)'}
+                </Link>
+              ))}
+              {expiringCards.length > 6 ? (
+                <Link to="/admin/clients" className="underline underline-offset-2 hover:text-text-main transition-colors">
+                  +{expiringCards.length - 6} more
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Row 1 — Core job volume stats */}
       <StatGrid

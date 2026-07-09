@@ -61,6 +61,8 @@ function mapStatusFilter(display: string): { status?: string; stage?: string; st
       return { stage: 'qc' };
     case 'Ready to Deliver':
       return { status: 'READY_TO_DELIVER' };
+    case 'On Hold':
+      return { status: 'HOLD' };
     case 'Dispatched':
       return { status: 'DELIVERED' };
     case 'Amend':
@@ -109,7 +111,6 @@ export function AdminJobsPage() {
       client_id: clientUuid,
       date_from: filters.dateFrom || undefined,
       date_to: filters.dateTo || undefined,
-      exclude_stage: 'quote',
       ...mappedStatus,
     }),
     [page, debouncedSearch, filters.orderType, filters.priority, clientUuid, filters.dateFrom, filters.dateTo, mappedStatus],

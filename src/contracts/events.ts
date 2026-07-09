@@ -109,6 +109,17 @@ export interface QueryRaisedEvent {
   timestamp: IsoDateTime;
 }
 
+/**
+ * A client's account-level details changed (e.g. payment method / card
+ * expiry). Not job-specific — broadcast tenant-wide so any open job list or
+ * job detail view showing that client's card-expiry warning re-fetches and
+ * recomputes it, instead of showing stale data until the next manual reload.
+ */
+export interface ClientUpdatedEvent {
+  clientId: string;
+  timestamp: IsoDateTime;
+}
+
 // ─── Client → Server events ──────────────────────────────────
 
 export interface JoinJobRoomEvent {
@@ -138,6 +149,7 @@ export const SOCKET_EVENTS = {
   ATTENDANCE_CLOCK: 'attendance-clock',
   JOB_ACKNOWLEDGED: 'job-acknowledged',
   QUERY_RAISED: 'query-raised',
+  CLIENT_UPDATED: 'client-updated',
 
   JOIN_JOB_ROOM: 'join-job-room',
   LEAVE_JOB_ROOM: 'leave-job-room',

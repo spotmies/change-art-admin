@@ -12,6 +12,7 @@ function statusBadgeAccent(status: string): string {
     Sewout: 'purple', Dispatched: 'green', 'Quote Submitted': 'blue',
     'Quote Approved': 'amber', 'Pending Client Confirm': 'amber',
     Cancelled: 'gray', Amend: 'amber', 'In Review': 'purple',
+    'On Hold': 'red',
   };
   return map[status] ?? 'gray';
 }
@@ -111,34 +112,34 @@ export function JobModal({ job, onClose }: JobModalProps) {
     ['Colors', String(job.colors)],
     ...(job.finalFiles?.length
       ? [[
-          'Output Formats',
-          (() => {
-            const text = job.notes || job.summary;
-            const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
-            const customFormat = match && match[1] ? match[1].trim() : null;
-            return job.finalFiles.map(f => {
-              if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
-                if (customFormat) {
-                  if (/^others:\s*/i.test(customFormat)) {
-                    return customFormat.replace(/^others:\s*/i, 'Others: ');
-                  }
-                  return `Others: ${customFormat}`;
+        'Output Formats',
+        (() => {
+          const text = job.notes || job.summary;
+          const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+          const customFormat = match && match[1] ? match[1].trim() : null;
+          return job.finalFiles.map(f => {
+            if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+              if (customFormat) {
+                if (/^others:\s*/i.test(customFormat)) {
+                  return customFormat.replace(/^others:\s*/i, 'Others: ');
                 }
-                return f;
+                return `Others: ${customFormat}`;
               }
               return f;
-            }).join(', ');
-          })()
-        ] as [string, string]]
+            }
+            return f;
+          }).join(', ');
+        })()
+      ] as [string, string]]
       : []),
     ...(job.placement ? [['Placement', job.placement] as [string, string]] : []),
-    ...(job.width    ? [['Width',     `${job.width}"`] as [string, string]] : []),
-    ...(job.height   ? [['Height',    `${job.height}"`] as [string, string]] : []),
-    ...(job.fabric   ? [['Fabric',    job.fabric] as [string, string]] : []),
-    ...(job.stitchCount  ? [['Stitch Count', job.stitchCount.toLocaleString()] as [string, string]] : []),
-    ...(job.clientPrice  ? [['Client Budget', `$${job.clientPrice}`] as [string, string]] : []),
-    ...(job.adminPrice   ? [['Admin Price',   `$${job.adminPrice}`] as [string, string]] : []),
-    ...(job.agreedPrice  ? [['Agreed Price',  `$${job.agreedPrice}`] as [string, string]] : []),
+    ...(job.width ? [['Width', `${job.width}"`] as [string, string]] : []),
+    ...(job.height ? [['Height', `${job.height}"`] as [string, string]] : []),
+    ...(job.fabric ? [['Fabric', job.fabric] as [string, string]] : []),
+    ...(job.stitchCount ? [['Stitch Count', job.stitchCount.toLocaleString()] as [string, string]] : []),
+    ...(job.clientPrice ? [['Client Budget', `$${job.clientPrice}`] as [string, string]] : []),
+    ...(job.adminPrice ? [['Admin Price', `$${job.adminPrice}`] as [string, string]] : []),
+    ...(job.agreedPrice ? [['Agreed Price', `$${job.agreedPrice}`] as [string, string]] : []),
   ];
 
   const modal = (
@@ -234,10 +235,10 @@ export function JobModal({ job, onClose }: JobModalProps) {
             type="button"
             className="btn btn-outline"
             style={{ marginRight: 'auto' }}
-            onClick={() => {}}
+            onClick={() => { }}
           >
             <Download className="w-3.5 h-3.5" aria-hidden />
-            <span>Download Files</span>
+            <span>Source Files</span>
           </button>
           <button type="button" className="btn btn-outline" onClick={onClose}>
             Close

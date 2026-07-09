@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Pencil, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
 import type { IClient } from '@contracts';
-import { useAdminClients, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useAdminClientById, useAdminClients, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { ClientSectionGateModal } from '../../modules/admin-panel/components/ClientSectionGateModal';
 import { ClientDetailModal } from '../../modules/admin-panel/components/ClientDetailModal';
 
@@ -51,12 +51,14 @@ export function CSClientsPage() {
   const [search, setSearch] = useState('');
   const [hotlistedOnly, setHotlistedOnly] = useState(false);
   const debouncedSearch = useDebounced(search, 300);
-  const [selectedClient, setSelectedClient] = useState<IClient | null>(null);
+  // Track only the id, not the clicked row's snapshot — see useAdminClientById.
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [statusTarget, setStatusTarget] = useState<IClient | null>(null);
   const [hotlistTarget, setHotlistTarget] = useState<IClient | null>(null);
 
   const setActive = useSetClientActive();
   const setHotlisted = useSetClientHotlisted();
+  const { data: selectedClient } = useAdminClientById(selectedClientId);
 
   useEffect(() => { setPage(1); }, [debouncedSearch, hotlistedOnly]);
 
@@ -169,7 +171,7 @@ export function CSClientsPage() {
                 </thead>
                 <tbody>
                   {clients.map((c) => (
-                    <tr key={c.id} onClick={() => setSelectedClient(c)} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
+                    <tr key={c.id} onClick={() => setSelectedClientId(c.id)} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
                       <td>
                         <span className="ref-code">{c.client_id}</span>
                       </td>
@@ -237,7 +239,7 @@ export function CSClientsPage() {
                               key: 'manage',
                               label: 'Manage',
                               icon: <Pencil aria-hidden className="w-3.5 h-3.5" />,
-                              onSelect: () => setSelectedClient(c),
+                              onSelect: () => setSelectedClientId(c.id),
                             },
                             {
                               key: 'hotlist',
@@ -286,7 +288,7 @@ export function CSClientsPage() {
       </Panel>
 
       {selectedClient && (
-        <ClientDetailModal client={selectedClient} onClose={() => setSelectedClient(null)} />
+        <ClientDetailModal client={selectedClient} onClose={() => setSelectedClientId(null)} />
       )}
 
       <ConfirmModal

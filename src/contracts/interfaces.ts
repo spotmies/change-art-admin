@@ -83,6 +83,11 @@ export interface IClient {
   country: string | null;
   currency: string | null;
   payment_mode: PaymentMode | null;
+  /** Opaque client-authored JSON blob from the self-reported Payment Settings page —
+   *  the actual source of truth for card expiry, since `card_on_file` below is never
+   *  set by any reachable UI flow. Contains an `expiry` field (MM/YY) when payment_mode
+   *  is CREDIT_CARD/CARD_ON_FILE. */
+  payment_details: string | null;
   card_on_file: ICardOnFile | null;
   user_id: string | null;
   approval_status: ClientApprovalStatus | null;
@@ -96,8 +101,21 @@ export interface IClient {
   is_active: boolean;
   deactivated_at: IsoDateTime | null;
   deactivated_by: string | null;
+  /** When an admin last sent the Credit Card Authorization Form to this client. */
+  cc_form_sent_at: IsoDateTime | null;
+  cc_form_sent_by: string | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
+}
+
+/** The single active Credit Card Authorization Form template for a tenant. */
+export interface ICcAuthorizationForm {
+  id: string;
+  file_name: string;
+  file_type: string;
+  file_size_bytes: number;
+  uploaded_by: string;
+  uploaded_at: IsoDateTime;
 }
 
 /**
@@ -110,6 +128,22 @@ export interface ICardOnFile {
   last4: string;
   exp_month: number;
   exp_year: number;
+}
+
+/**
+ * One saved payment method. A client can have at most one per `type`
+ * (unique (client_id, type)) — saving the same type again upserts it rather
+ * than creating a duplicate. `details` is the same opaque per-type JSON blob
+ * previously stored as the single `clients.payment_details` column.
+ */
+export interface IClientPaymentMethod {
+  id: string;
+  client_id: string;
+  type: PaymentMode;
+  details: string | null;
+  is_default: boolean;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
 }
 
 /**
@@ -172,15 +206,35 @@ export interface IJobCard {
   version: number;
   is_locked: boolean;
   acknowledgement_sent_at: IsoDateTime | null;
+  pre_hold_status: JobStatus | null;
+  held_at: IsoDateTime | null;
+  total_held_ms: number;
   is_admin_copy: boolean;
   parent_job_id: string | null;
   has_admin_copy: boolean;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
   /** Embedded client snapshot — populated by list/findById queries via LEFT JOIN. */
-  client_info?: { client_id: string; client_name: string; company_name: string | null } | null;
+  client_info?: {
+    client_id: string;
+    client_name: string;
+    company_name: string | null;
+    /** Card-on-file expiry (real tokenized card, if ever set — currently unused by any UI). */
+    card_exp_month: number | null;
+    card_exp_year: number | null;
+    /** Self-reported payment mode/details from the client's Payment Settings page — the
+     *  actual source of truth in practice, since card_exp_month/year above is never set by
+     *  any reachable UI flow. `payment_details` is an opaque client-authored JSON blob; when
+     *  payment_mode is CREDIT_CARD/CARD_ON_FILE it contains an `expiry` field (MM/YY). */
+    payment_mode: string | null;
+    payment_details: string | null;
+  } | null;
   /** Notes from the latest client modification request — populated when status is MODIFICATION_REQUESTED. */
   modification_notes?: string | null;
+  /** Timestamp of this client's most recent OTHER order (drafts excluded) — powers the
+   *  Client Inactivity Indicator. Only populated by findById (job-detail), not list queries,
+   *  since a correlated per-row subquery there would not scale. */
+  client_previous_order_at?: IsoDateTime | null;
 }
 
 export interface IFileVersion {

@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService } from '@modules/auth/services';
 import { useAuthStore } from '@modules/auth/stores/auth-store';
@@ -28,6 +29,7 @@ export function LoginForm() {
   const [serverError, setServerError] = useState<string | null>(
     isDeactivated ? 'Your account has been deactivated. Contact an administrator.' : null,
   );
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -96,14 +98,25 @@ export function LoginForm() {
 
       <label className="block mt-3">
         <span className="lbl">Password</span>
-        <input
-          type="password"
-          autoComplete="current-password"
-          className="inp"
-          aria-invalid={errors.password ? 'true' : 'false'}
-          aria-describedby={errors.password ? 'login-pw-error' : undefined}
-          {...register('password')}
-        />
+        <div className="relative">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            className="inp pr-10"
+            aria-invalid={errors.password ? 'true' : 'false'}
+            aria-describedby={errors.password ? 'login-pw-error' : undefined}
+            {...register('password')}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base transition-colors"
+            onClick={() => setShowPassword((v) => !v)}
+            tabIndex={-1}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" aria-hidden /> : <Eye className="w-4 h-4" aria-hidden />}
+          </button>
+        </div>
         {errors.password ? (
           <p id="login-pw-error" className="text-[11px] text-status-red mt-1" role="alert">
             {errors.password.message}

@@ -47,6 +47,7 @@ export const JOB_STATUS_OPTIONS = [
   { value: 'Sewout',           label: 'Sewout' },
   { value: 'In QC',            label: 'In QC' },
   { value: 'Ready to Deliver', label: 'Ready to Dispatch' },
+  { value: 'On Hold',          label: 'On Hold' },
   { value: 'Dispatched',        label: 'Dispatched' },
   { value: 'Amend',            label: 'Amend' },
   { value: 'Cancelled',        label: 'Cancelled' },

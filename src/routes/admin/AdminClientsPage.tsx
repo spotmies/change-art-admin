@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Plus, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
+import { FileText, Pencil, Plus, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
 import { PaymentMode } from '@contracts';
 import type { IClient } from '@contracts';
-import { useAdminClients, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { formatDateTime } from '@lib/utils';
+import { useAdminClients, useSendCcForm, useAdminClientById, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { useProfileChangeRequests } from '../../modules/admin-panel/hooks/use-profile-change-requests';
 import {
   ClientDetailModal,
@@ -86,16 +87,25 @@ export function AdminClientsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [hotlistedOnly, setHotlistedOnly] = useState(false);
-  const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
+  // Track only the id + mode, not the clicked row's snapshot — the snapshot
+  // never updates again once stored. Deriving the live client below from
+  // `useAdminClientById` means the open modal re-fetches and reflects changes
+  // in real time (e.g. the CLIENT_UPDATED socket event firing when the client
+  // edits their own profile/payment details), matching the same fix applied
+  // to job cards.
+  const [selected, setSelected] = useState<{ clientId: string; mode: ClientModalMode } | null>(null);
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<IClient | null>(null);
   const [hotlistTarget, setHotlistTarget] = useState<IClient | null>(null);
+  const [sendCcFormTarget, setSendCcFormTarget] = useState<IClient | null>(null);
 
   const setActive = useSetClientActive();
   const setHotlisted = useSetClientHotlisted();
+  const { data: selectedClient } = useAdminClientById(selected?.clientId ?? null);
+  const sendCcForm = useSendCcForm();
 
   function openClient(client: IClient, mode: ClientModalMode) {
-    setSelected({ client, mode });
+    setSelected({ clientId: client.id, mode });
   }
 
   const debouncedSearch = useDebounced(search, 300);
@@ -391,6 +401,16 @@ export function AdminClientsPage() {
                                 : 'This client has no portal login to activate or deactivate.',
                               onSelect: () => setStatusTarget(c),
                             },
+                            {
+                              key: 'send-cc-form',
+                              label: 'Send CC',
+                              icon: <FileText aria-hidden className="w-3.5 h-3.5" />,
+                              accent: 'crimson' as const,
+                              title: c.cc_form_sent_at
+                                ? `Last sent ${formatDateTime(c.cc_form_sent_at)}`
+                                : 'Not sent yet',
+                              onSelect: () => setSendCcFormTarget(c),
+                            },
                           ]}
                         />
                       </td>
@@ -428,7 +448,7 @@ export function AdminClientsPage() {
       />
 
       <ClientDetailModal
-        client={selected?.client ?? null}
+        client={selectedClient ?? null}
         mode={selected?.mode}
         onClose={() => setSelected(null)}
       />
@@ -491,6 +511,32 @@ export function AdminClientsPage() {
           );
         }}
         onCancel={() => setHotlistTarget(null)}
+      />
+
+      <ConfirmModal
+        open={sendCcFormTarget !== null}
+        title="Send Credit Card Authorization Form?"
+        description={
+          <>
+            The CC Authorization Form will be emailed to{' '}
+            <strong>{sendCcFormTarget?.company_name ?? sendCcFormTarget?.client_name}</strong> at{' '}
+            <strong>{sendCcFormTarget?.email}</strong>.
+            {sendCcFormTarget?.cc_form_sent_at ? (
+              <>
+                {' '}
+                It was last sent on {formatDateTime(sendCcFormTarget.cc_form_sent_at)}.
+              </>
+            ) : null}
+          </>
+        }
+        confirmLabel="Send"
+        onConfirm={() => {
+          if (!sendCcFormTarget) return;
+          sendCcForm.mutate(sendCcFormTarget.id, {
+            onSuccess: () => setSendCcFormTarget(null),
+          });
+        }}
+        onCancel={() => setSendCcFormTarget(null)}
       />
     </div>
   );

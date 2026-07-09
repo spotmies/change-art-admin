@@ -102,6 +102,7 @@ export enum JobStatus {
   MODIFICATION_REQUESTED = 'MODIFICATION_REQUESTED',
   CLOSED = 'CLOSED',
   CANCELLED = 'CANCELLED',
+  HOLD = 'HOLD',
 }
 
 export enum PaymentMode {

@@ -18,6 +18,7 @@ import type {
   JobStatus as JobStatusDisplay,
 } from '@modules/shared-ui';
 import { normalizeRefNumber } from '@lib/utils';
+import { resolveClientCardExpiry } from '@lib/card-expiry';
 
 const ORDER_DISPLAY: Record<OrderType, JobOrderType> = {
   [OrderType.ARTWORK]: 'Artwork',
@@ -100,6 +101,9 @@ const STATUS_MAP: Record<JobStatus, StageDisplay> = {
   [JobStatus.MODIFICATION_REQUESTED]: { status: 'Amend', stage: 'qc' },
   [JobStatus.CLOSED]: { status: 'Dispatched', stage: 'delivered' },
   [JobStatus.CANCELLED]: { status: 'Cancelled', stage: 'quote' },
+  // Fallback only — adaptJobCard overrides `stage` using pre_hold_status so
+  // a held job stays in its original kanban column instead of jumping here.
+  [JobStatus.HOLD]: { status: 'On Hold', stage: 'junior' },
 };
 
 export interface ClientInfo {
@@ -122,6 +126,17 @@ export function adaptJobCard(
       ? 'Pending'
       : mapped.status;
 
+  // A held job keeps the kanban column it was in before the hold, instead of
+  // jumping to HOLD's fallback stage — only the status label/badge changes.
+  const stage: JobStage =
+    card.status === JobStatus.HOLD && card.pre_hold_status
+      ? (STATUS_MAP[card.pre_hold_status]?.stage ?? mapped.stage)
+      : mapped.stage;
+
+  const effectiveAcknowledgedAt = card.acknowledgement_sent_at
+    ? new Date(new Date(card.acknowledgement_sent_at).getTime() + (card.total_held_ms ?? 0)).toISOString()
+    : null;
+
   const assignedUserId =
     card.current_handler_id ??
     card.assigned_senior_id ??
@@ -140,6 +155,16 @@ export function adaptJobCard(
   const clientInfo = card.client_info
     ? { name: card.client_info.company_name ?? card.client_info.client_name, clientId: card.client_info.client_id }
     : clientsMap.get(card.client_id);
+  const cardExpiry = card.client_info
+    ? resolveClientCardExpiry({
+        card_on_file:
+          card.client_info.card_exp_month != null && card.client_info.card_exp_year != null
+            ? { exp_month: card.client_info.card_exp_month, exp_year: card.client_info.card_exp_year }
+            : null,
+        payment_mode: card.client_info.payment_mode,
+        payment_details: card.client_info.payment_details,
+      })
+    : null;
 
   return {
     id: card.job_id,
@@ -160,7 +185,7 @@ export function adaptJobCard(
     etaHours: card.eta_hours,
     status: displayStatus,
     rawStatus: card.status,
-    stage: mapped.stage,
+    stage,
     assignedTo,
     subType,
     specificType: card.specific_type ?? null,
@@ -182,11 +207,19 @@ export function adaptJobCard(
     acknowledgedAt: card.acknowledgement_sent_at
       ? String(card.acknowledgement_sent_at)
       : null,
+    effectiveAcknowledgedAt,
+    preHoldStatus: card.pre_hold_status ?? null,
+    heldAt: card.held_at ?? null,
+    totalHeldMs: card.total_held_ms ?? 0,
     isAdminCopy: card.is_admin_copy ?? false,
     parentJobId: card.parent_job_id ?? null,
     hasAdminCopy: card.has_admin_copy ?? false,
     clientPo: card.client_po ?? null,
     modificationCount: card.modification_count ?? 0,
     modificationNotes: card.modification_notes ?? null,
+    clientCardExpMonth: cardExpiry?.exp_month ?? null,
+    clientCardExpYear: cardExpiry?.exp_year ?? null,
+    clientPaymentMode: card.client_info?.payment_mode ?? null,
+    clientPreviousOrderAt: card.client_previous_order_at ?? null,
   };
 }

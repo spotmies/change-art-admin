@@ -183,7 +183,7 @@ export function JobQueriesSection({ jobId }: JobQueriesSectionProps) {
                 </div>
 
                 {/* Message */}
-                <div style={{ paddingLeft: 36, fontSize: 13, color: INK, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                <div style={{ paddingLeft: 36, fontSize: 13, color: INK, lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                   {q.message}
                 </div>
               </div>

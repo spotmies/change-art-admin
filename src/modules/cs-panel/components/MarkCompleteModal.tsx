@@ -325,10 +325,10 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               gap: 10,
               padding: '16px 20px',
               borderRadius: 12,
-              background: confirmText.toLowerCase() === 'confirm'
+              background: confirmText.trim().toUpperCase() === 'CONFIRM'
                 ? 'rgba(5,150,105,0.06)'
                 : '#F8FAFC',
-              border: `1.5px solid ${confirmText.toLowerCase() === 'confirm' ? 'rgba(5,150,105,0.35)' : '#E2E8F0'}`,
+              border: `1.5px solid ${confirmText.trim().toUpperCase() === 'CONFIRM' ? 'rgba(5,150,105,0.35)' : '#E2E8F0'}`,
               transition: 'all 0.2s',
             }}
           >
@@ -346,19 +346,19 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               id="mc-confirm"
               type="text"
               value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
+              onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
               placeholder="CONFIRM"
               disabled={isPending}
               autoComplete="off"
               style={{
                 width: 160,
-                border: `2px solid ${confirmText.toLowerCase() === 'confirm' ? '#059669' : '#CBD5E1'}`,
+                border: `2px solid ${confirmText.trim().toUpperCase() === 'CONFIRM' ? '#059669' : '#CBD5E1'}`,
                 borderRadius: 8,
                 padding: '9px 14px',
                 fontSize: 14,
                 fontFamily: 'IBM Plex Mono, monospace',
                 fontWeight: 700,
-                color: confirmText.toLowerCase() === 'confirm' ? '#059669' : '#0F172A',
+                color: confirmText.trim().toUpperCase() === 'CONFIRM' ? '#059669' : '#0F172A',
                 background: '#fff',
                 outline: 'none',
                 textAlign: 'center',
@@ -366,7 +366,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
                 transition: 'border-color 0.15s, color 0.15s',
               }}
             />
-            {confirmText.toLowerCase() === 'confirm' && (
+            {confirmText.trim().toUpperCase() === 'CONFIRM' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#059669', fontWeight: 600 }}>
                 <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
                 Ready to send
@@ -424,7 +424,7 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm'}
+            disabled={isPending || files.length === 0 || confirmText.trim().toUpperCase() !== 'CONFIRM'}
             style={{
               flex: 2,
               padding: '9px 0',
@@ -432,17 +432,17 @@ export function MarkCompleteModal({ jobId, jobDesign, orderType, allowedFormats,
               fontWeight: 700,
               borderRadius: 9,
               border: 'none',
-              background: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm'
+              background: isPending || files.length === 0 || confirmText.trim().toUpperCase() !== 'CONFIRM'
                 ? 'linear-gradient(135deg,#9CA3AF,#6B7280)'
                 : 'linear-gradient(135deg,#059669,#047857)',
               color: '#fff',
-              cursor: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 'not-allowed' : 'pointer',
-              opacity: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 0.7 : 1,
+              cursor: isPending || files.length === 0 || confirmText.trim().toUpperCase() !== 'CONFIRM' ? 'not-allowed' : 'pointer',
+              opacity: isPending || files.length === 0 || confirmText.trim().toUpperCase() !== 'CONFIRM' ? 0.7 : 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 7,
-              boxShadow: isPending || files.length === 0 || confirmText.toLowerCase() !== 'confirm' ? 'none' : '0 3px 12px rgba(5,150,105,0.35)',
+              boxShadow: isPending || files.length === 0 || confirmText.trim().toUpperCase() !== 'CONFIRM' ? 'none' : '0 3px 12px rgba(5,150,105,0.35)',
               transition: 'all 0.15s',
             }}
           >

@@ -14,6 +14,7 @@ import {
 } from '@contracts';
 import { cn } from '@lib/utils';
 import { apiClient } from '@lib/api-client';
+import { handleStructuredPaste } from '@lib/paste-html';
 
 export interface ClientBriefData {
   client_id?: string;
@@ -227,7 +228,7 @@ function toNum(v: FormDataEntryValue | null): number | undefined {
 function enforceNoSpaceMaxLength(value: string, max: number): string {
   let nonSpaces = 0;
   for (let i = 0; i < value.length; i++) {
-    if (!/\\s/.test(value[i])) {
+    if (!/\s/.test(value[i])) {
       nonSpaces++;
     }
     if (nonSpaces > max) {
@@ -238,7 +239,7 @@ function enforceNoSpaceMaxLength(value: string, max: number): string {
 }
 
 function getNonSpaceLength(value: string): number {
-  return value.replace(/\\s/g, '').length;
+  return value.replace(/\s/g, '').length;
 }
 
 export function CreateJobForm({ mode, clients = [], clientsLoading = false, clientsError = false, onProvisionClient, onCreateJob, onSendPrice, onSubmit, onSaveDraft, submitting = false, savingDraft = false }: CreateJobFormProps) {
@@ -268,6 +269,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
   const [quotedPrice, setQuotedPrice] = useState('');
   const [quoteCurrency] = useState('USD');
   const [briefCount, setBriefCount] = useState(0);
+  const briefRef = useRef<HTMLTextAreaElement>(null);
   const [formatOtherCount, setFormatOtherCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1791,6 +1793,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                       </span>
                     </label>
                     <textarea
+                      ref={briefRef}
                       id="brief"
                       name="brief"
                       className="fi fi-ta"
@@ -1801,6 +1804,14 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                         setBriefCount(getNonSpaceLength(e.target.value));
                         clearFieldError('brief');
                       }}
+                      onPaste={(e) => handleStructuredPaste(e, (next, _start, end) => {
+                        const truncated = enforceNoSpaceMaxLength(next, 1500);
+                        e.currentTarget.value = truncated;
+                        setBriefCount(getNonSpaceLength(truncated));
+                        clearFieldError('brief');
+                        const caret = Math.min(end, truncated.length);
+                        requestAnimationFrame(() => briefRef.current?.setSelectionRange(caret, caret));
+                      })}
                     />
                   </div>
 
@@ -2088,7 +2099,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                 <input
                   type="text"
                   value={confirmOrderText}
-                  onChange={(e) => setConfirmOrderText(e.target.value)}
+                  onChange={(e) => setConfirmOrderText(e.target.value.toUpperCase())}
                   placeholder="CONFIRM"
                   autoFocus
                   className="w-full rounded-lg px-3 py-2 text-[12.5px] outline-none"

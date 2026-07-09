@@ -379,6 +379,7 @@ function statusBadgeAccent(status: string): string {
     Cancelled: 'gray',
     Amend: 'amber',
     'In Review': 'purple',
+    'On Hold': 'red',
   };
   return map[status] || 'gray';
 }
@@ -498,6 +499,7 @@ function TableView({
                   alt={`${j.design} preview`}
                   loading="lazy"
                   referrerPolicy="no-referrer"
+                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
               </td>
               <td><Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge></td>
@@ -575,6 +577,7 @@ function GridView({
                   alt={j.design}
                   loading="lazy"
                   referrerPolicy="no-referrer"
+                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
               ) : (
                 <div className="w-full h-[160px]" />
@@ -650,6 +653,7 @@ function ListView({
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"
+              onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
             />
           </div>
 

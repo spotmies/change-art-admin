@@ -13,6 +13,32 @@ export function useAdminClients(filters: ClientFilters = {}) {
   });
 }
 
+/**
+ * A single client, kept reactive to the shared `clients` cache — unlike
+ * storing the clicked-row object directly in local state, this re-fetches
+ * whenever the cache is invalidated (e.g. the CLIENT_UPDATED socket event
+ * firing when the client edits their own profile/payment details), so an
+ * already-open detail modal updates live instead of staying stale.
+ */
+export function useAdminClientById(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.clients.byId(id ?? 'none'),
+    queryFn: () => adminService.getClientById(id as string),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Every payment method a client has saved — same real-time cache key family. */
+export function useAdminClientPaymentMethods(clientId: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.clients.byId(clientId ?? 'none'), 'payment-methods'],
+    queryFn: () => adminService.getClientPaymentMethods(clientId as string),
+    enabled: !!clientId,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useCreateClient() {
   const qc = useQueryClient();
   return useMutation({
@@ -81,6 +107,19 @@ export function useSetClientActive() {
           ? `${client.company_name ?? client.client_name} is now Active`
           : `${client.company_name ?? client.client_name} is now Inactive`,
       );
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Admin: send the Credit Card Authorization Form to a client's registered email. */
+export function useSendCcForm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminService.sendCcForm(id),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(`CC Form sent to ${client.company_name ?? client.client_name}`);
     },
     onError: (err) => toastApiError(err),
   });

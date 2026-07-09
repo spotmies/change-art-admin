@@ -33,6 +33,7 @@ const STATUS_PRESENTATION: Record<JobStatusType, { accent: BadgeAccent; label: s
   [JobStatus.MODIFICATION_REQUESTED]: { accent: 'amber', label: 'Mod Requested' },
   [JobStatus.CLOSED]: { accent: 'gray', label: 'Closed' },
   [JobStatus.CANCELLED]: { accent: 'gray', label: 'Cancelled' },
+  [JobStatus.HOLD]: { accent: 'red', label: 'On Hold' },
 };
 
 interface StatusBadgeProps {

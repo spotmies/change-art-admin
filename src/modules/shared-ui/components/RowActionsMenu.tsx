@@ -9,8 +9,13 @@ export interface RowAction {
   label: string;
   icon?: ReactNode;
   onSelect: () => void;
-  /** Renders the item in the crimson danger colour. */
+  /** Renders the item in the crimson danger colour (plain text style). */
   danger?: boolean;
+  /**
+   * Renders the item as a filled crimson CTA button inside the dropdown.
+   * Use for the primary "send" action so it pops visually against plain items.
+   */
+  accent?: 'crimson';
   disabled?: boolean;
   /** Native tooltip — useful to explain why a disabled item can't be used. */
   title?: string;
@@ -80,27 +85,49 @@ export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowAction
                 className="fixed min-w-[184px] glass-heavy rounded-xl z-[60] overflow-hidden py-1 anim-fade-in"
                 style={{ top: pos.top, right: pos.right }}
               >
-                {actions.map((a) => (
-                  <button
-                    key={a.key}
-                    type="button"
-                    role="menuitem"
-                    disabled={a.disabled}
-                    title={a.title}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left transition-colors',
-                      'hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed',
-                      a.danger ? 'text-[var(--crimson)]' : 'text-text-main',
-                    )}
-                    onClick={() => {
-                      setOpen(false);
-                      a.onSelect();
-                    }}
-                  >
-                    {a.icon}
-                    {a.label}
-                  </button>
-                ))}
+                {actions.map((a) =>
+                  a.accent === 'crimson' ? (
+                    /* Accent item — rendered as a full-width crimson button inside the menu */
+                    <div key={a.key} className="px-2.5 py-1.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={a.disabled}
+                        title={a.title}
+                        className={cn(
+                          'btn btn-crimson w-full !py-1.5 !px-3 !text-[12.5px] flex items-center justify-center gap-1.5',
+                        )}
+                        onClick={() => {
+                          setOpen(false);
+                          a.onSelect();
+                        }}
+                      >
+                        {a.icon}
+                        {a.label}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      key={a.key}
+                      type="button"
+                      role="menuitem"
+                      disabled={a.disabled}
+                      title={a.title}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left transition-colors',
+                        'hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed',
+                        a.danger ? 'text-[var(--crimson)]' : 'text-text-main',
+                      )}
+                      onClick={() => {
+                        setOpen(false);
+                        a.onSelect();
+                      }}
+                    >
+                      {a.icon}
+                      {a.label}
+                    </button>
+                  ),
+                )}
               </div>
             </>,
             document.body,

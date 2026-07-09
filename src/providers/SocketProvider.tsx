@@ -14,6 +14,7 @@ import {
   type ModificationRequestedEvent,
   type AttendanceClockEvent,
   type QueryRaisedEvent,
+  type ClientUpdatedEvent,
 } from '@contracts';
 import { useIsAuthenticated, useSessionUser } from '@modules/auth/stores/auth-store';
 import { connectSocket, disconnectSocket, ensureSocketConnected } from '@lib/socket-client';
@@ -177,6 +178,15 @@ export function SocketProvider({ children }: SocketProviderProps) {
       }
     });
 
+    // A client updated their account/payment details (e.g. card expiry) —
+    // not job-specific, so just invalidate every job list/detail and the
+    // clients list so any open card-expiry warning re-fetches and either
+    // clears or updates instead of showing stale data.
+    socket.on(SOCKET_EVENTS.CLIENT_UPDATED, (_event: ClientUpdatedEvent) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all() });
+    });
+
     // Re-attach on tab focus — Chrome/Safari sometimes background-throttle the
     // socket and the auto-reconnect may have given up. This is idempotent.
     const onVisibilityChange = () => {
@@ -205,6 +215,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       socket.off(SOCKET_EVENTS.ATTENDANCE_CLOCK);
       socket.off(SOCKET_EVENTS.JOB_ACKNOWLEDGED);
       socket.off(SOCKET_EVENTS.QUERY_RAISED);
+      socket.off(SOCKET_EVENTS.CLIENT_UPDATED);
     };
   }, [isAuthenticated, user, queryClient]);
 

@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
-import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2, Copy } from 'lucide-react';
+import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2, Copy, CreditCard } from 'lucide-react';
+import { getCardExpiryStatus } from '@lib/card-expiry';
+import { clientActivityAccent, formatClientActivityBucket, getClientActivityBucket } from '@lib/client-activity';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import toast from 'react-hot-toast';
+import { toastApiError } from '@lib/toast-error';
 import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
 import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady } from '@/modules/cs-panel/hooks/use-cs-quote';
@@ -12,7 +15,7 @@ import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById, useAdminJobFiles, useAdminJobImageUrls, isAdminViewableImage } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { adminService } from '@modules/admin-panel/services/admin.service';
-import { FileCategory } from '@contracts';
+import { FileCategory, JobStatus } from '@contracts';
 
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
@@ -30,13 +33,20 @@ function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { displa
   };
 }
 
-function useEtaCountdown(acknowledgedAt: string | null | undefined, etaHours: number | null | undefined) {
-  const active = !!(acknowledgedAt && etaHours != null && etaHours > 0);
+function useEtaCountdown(
+  acknowledgedAt: string | null | undefined,
+  etaHours: number | null | undefined,
+  isHeld = false,
+) {
+  const active = !!(acknowledgedAt && etaHours != null && etaHours > 0) && !isHeld;
   const [state, setState] = useState(() =>
     active ? computeEtaCountdown(acknowledgedAt!, etaHours!) : null,
   );
   useEffect(() => {
-    if (!active) { setState(null); return; }
+    if (!active) {
+      setState(isHeld ? { display: 'On Hold', expired: false } : null);
+      return;
+    }
     setState(computeEtaCountdown(acknowledgedAt!, etaHours!));
     const id = setInterval(() => {
       const next = computeEtaCountdown(acknowledgedAt!, etaHours!);
@@ -44,7 +54,7 @@ function useEtaCountdown(acknowledgedAt: string | null | undefined, etaHours: nu
       if (next.expired) clearInterval(id);
     }, 1000);
     return () => clearInterval(id);
-  }, [active, acknowledgedAt, etaHours]);
+  }, [active, isHeld, acknowledgedAt, etaHours]);
   return state;
 }
 
@@ -66,7 +76,7 @@ interface JobDetailModalProps {
 
 function buildFlowSteps(): { role: string; sub: string }[] {
   return [
-    { role: 'Client Servicing', sub: 'Created' },
+    { role: 'Client Created', sub: '' },
     { role: 'In Production', sub: 'Pending' },
     { role: 'Client Servicing', sub: 'Dispatch' },
   ];
@@ -99,7 +109,7 @@ function statusAccent(status: string): string {
     Sewout: 'purple', 'Ready to Deliver': 'teal', Dispatched: 'green',
     'Quote Submitted': 'blue', 'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber', Cancelled: 'gray',
-    Amend: 'amber', 'In Review': 'purple',
+    Amend: 'amber', 'In Review': 'purple', 'On Hold': 'red',
   };
   return map[status] ?? 'gray';
 }
@@ -225,6 +235,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [showMarkComplete, setShowMarkComplete] = useState(false);
   const [showAckPopover, setShowAckPopover] = useState(false);
   const [amendBusy, setAmendBusy] = useState<'approve' | 'reject' | null>(null);
+  const [unholdBusy, setUnholdBusy] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [ackEtaHours, setAckEtaHours] = useState(() =>
@@ -289,7 +300,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const notifyOrderReady = useNotifyOrderReady();
   const isSubmitting = sendPrice.isPending || rejectQuote.isPending;
 
-  const etaCountdown = useEtaCountdown(job?.acknowledgedAt, job?.etaHours);
+  const etaCountdown = useEtaCountdown(
+    job?.effectiveAcknowledgedAt ?? job?.acknowledgedAt,
+    job?.etaHours,
+    job?.rawStatus === JobStatus.HOLD,
+  );
 
   // Subscribe to the job's room while the modal is open. Use the canonical
   // (non-admin-copy) job ID so query events — which are stored and broadcast
@@ -428,15 +443,23 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     : null;
   const aiPass = aiOverall !== null ? aiOverall >= 80 : null;
 
-  // Quote popup is decided by CONTEXT (the Quotes page passes quoteView),
-  // NOT by job.stage — otherwise quote-stage jobs in the Jobs lists would
-  // wrongly open the quote popup.
-  const isQuote = quoteView && isQuoteStageStatus(job);
+  // Show the pricing card for any Quote Submitted/Approved job regardless of
+  // which list it was opened from (Projects, Jobs, New Quotes, …) — CS needs
+  // to be able to act on a quote wherever they happen to find it, not just
+  // from the New Quotes queue. `quoteView` is still accepted for callers that
+  // pass it, but no longer required to unlock the pricing UI.
+  const isQuote = quoteView || isQuoteStageStatus(job);
   const isReadyToDeliver = isReadyToDeliverStatus(job);
   const isCsApproved = normalizedStatus(job) === 'CS_APPROVED';
   const canAcknowledge = normalizedStatus(job) === 'JOB_PLACED' && !job.acknowledgedAt;
   const isAcknowledged = !!job.acknowledgedAt;
   const isDelivered = normalizedStatus(job) === 'DELIVERED';
+  const cardExpiryStatus = getCardExpiryStatus(
+    job.clientCardExpMonth != null && job.clientCardExpYear != null
+      ? { exp_month: job.clientCardExpMonth, exp_year: job.clientCardExpYear }
+      : null,
+  );
+  const clientActivityBucket = getClientActivityBucket(displayJob.clientPreviousOrderAt);
 
   // Workflow "current" node is blue ONLY on the quote popup; every other
   // popup keeps the original crimson so non-quote popups are unchanged.
@@ -482,6 +505,21 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       toast.error('Failed to reject amendment. Please try again.');
     } finally {
       setAmendBusy(null);
+    }
+  }
+
+  async function handleUnhold() {
+    const id = requireUuid('unhold job');
+    if (!id || !job || job.version === undefined) return;
+    setUnholdBusy(true);
+    try {
+      await adminService.unholdJob(id, job.version);
+      toast.success('Job unheld — production has resumed.');
+      handleClose();
+    } catch {
+      toast.error('Failed to unhold job. Please try again.');
+    } finally {
+      setUnholdBusy(false);
     }
   }
 
@@ -596,6 +634,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       }
     } catch (err) {
       setSendMailPhase('idle');
+      toastApiError(err);
       return;
     }
 
@@ -703,6 +742,27 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               >
                 <span>{job.ref}</span>
                 <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full"
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: 'normal',
+                    padding: '3px 9px',
+                    ...(clientActivityAccent(clientActivityBucket) === 'good'
+                      ? { background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.3)', color: '#059669' }
+                      : clientActivityAccent(clientActivityBucket) === 'warn'
+                        ? { background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.3)', color: '#D97706' }
+                        : clientActivityAccent(clientActivityBucket) === 'stale'
+                          ? { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#DC2626' }
+                          : { background: 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.3)', color: '#64748B' }),
+                  }}
+                  title="Time since this client's previous order"
+                >
+                  <Timer className="w-3 h-3" aria-hidden />
+                  {formatClientActivityBucket(clientActivityBucket)}
+                </span>
               </div>
               <h2 className="text-[20px] font-extrabold leading-tight break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
@@ -730,24 +790,43 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </div>
             </div>
             <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
-              {/* Close button */}
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#475569';
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = '#fff';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
-                }}
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Close button (+ Unhold, when the job is on hold) */}
+              <div className="flex items-center gap-2">
+                {job.rawStatus === JobStatus.HOLD && (
+                  <button
+                    type="button"
+                    className="rounded-full flex items-center justify-center transition-colors font-semibold whitespace-nowrap"
+                    style={{
+                      fontSize: 12,
+                      padding: '7px 14px',
+                      border: '1px solid rgba(225,29,72,0.3)',
+                      color: '#e11d48',
+                      background: 'rgba(225,29,72,0.08)',
+                    }}
+                    onClick={handleUnhold}
+                    disabled={unholdBusy}
+                  >
+                    {unholdBusy ? 'Unholding…' : 'Unhold Project'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                  }}
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
               {/* Trigger button — opens the ack popover. While pending: show spinner chip instead. */}
               {canAcknowledge ? (
@@ -886,6 +965,47 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             </div>
           </div>
         </div>
+
+        {/* ── CLIENT CARD EXPIRY WARNING ── */}
+        {cardExpiryStatus === 'expired' || cardExpiryStatus === 'expiring_soon' ? (
+          <div
+            className="flex-shrink-0 flex items-center gap-2.5 px-6 py-2.5"
+            style={
+              cardExpiryStatus === 'expired'
+                ? {
+                    background: 'rgba(220,38,38,0.16)',
+                    borderBottom: '2px solid #DC2626',
+                    borderLeft: '4px solid #DC2626',
+                    color: '#991B1B',
+                  }
+                : {
+                    background: 'rgba(220,38,38,0.1)',
+                    borderBottom: '2px solid rgba(220,38,38,0.5)',
+                    borderLeft: '4px solid #DC2626',
+                    color: '#B91C1C',
+                  }
+            }
+          >
+            <CreditCard className="w-4 h-4 shrink-0" aria-hidden />
+            <span className="text-[12.5px] font-bold">
+              {(() => {
+                // "Card on file" only applies to a saved/recurring card. A
+                // one-time CREDIT_CARD entry isn't saved anywhere for reuse,
+                // so call it what it is — the client's card details.
+                const isCardOnFile = job.clientPaymentMode === 'CARD_ON_FILE';
+                const noun = isCardOnFile ? 'card on file' : 'card details';
+                const expiryDate =
+                  job.clientCardExpMonth != null && job.clientCardExpYear != null
+                    ? `${String(job.clientCardExpMonth).padStart(2, '0')}/${String(job.clientCardExpYear).slice(-2)}`
+                    : null;
+                if (cardExpiryStatus === 'expired') {
+                  return `This client's ${noun} expired${expiryDate ? ` on ${expiryDate}` : ''}.`;
+                }
+                return `This client's ${noun} expire${expiryDate ? ` ${expiryDate}` : ''} — within the next month.`;
+              })()}
+            </span>
+          </div>
+        ) : null}
 
         {/* ── ACK POPOVER ── */}
         {showAckPopover && canAcknowledge && (() => {
@@ -1479,7 +1599,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               // specifically failed.
                               const priceMsg = priceInvalid
                                 ? (parseFloat(agencyPrice) > MAX_PRICE
-                                  ? `Quoted price must be at most $${MAX_PRICE.toLocaleString()}.`
+                                  ? `Quoted price must be at most $${MAX_PRICE.toLocaleString('en-US')}.`
                                   : 'Please enter a valid quoted price.')
                                 : null;
                               const etaMsg = etaInvalid
@@ -1730,15 +1850,15 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 ) : null}
                 <DetailRow
                   label="Client Budget"
-                  value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString()}` : 'Not provided'}
+                  value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString('en-US')}` : 'Not provided'}
                 />
                 <DetailRow
                   label="Admin Counter"
-                  value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString()}` : 'None'}
+                  value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString('en-US')}` : 'None'}
                 />
                 <DetailRow
                   label="Agreed Price"
-                  value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString()}` : 'Pending'}
+                  value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString('en-US')}` : 'Pending'}
                 />
                 {displayJob.aiScore && aiOverall !== null ? (
                   <DetailRow
@@ -1952,6 +2072,18 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             );
           })()}
 
+          {/* ── HOLD ── job is paused pending a reply to a staff-raised query.
+              The Unhold action itself lives in the header, beside Close. */}
+          {!showCompare && job.rawStatus === JobStatus.HOLD && (
+            <div
+              className="flex items-center gap-2 rounded-[10px] px-4 py-3 mt-4 text-[12.5px] font-semibold"
+              style={{ background: 'rgba(225,29,72,0.08)', border: '1px solid rgba(225,29,72,0.25)', color: '#e11d48' }}
+            >
+              <AlertCircle className="w-4 h-4 shrink-0" aria-hidden />
+              On hold — waiting on the client's reply to a query. The ETA timer is paused.
+            </div>
+          )}
+
           {/* ── QUERIES ── always use the canonical (non-admin-copy) job ID so
               the thread is shared with the client viewing the original job. */}
           {!showCompare && (
@@ -1972,7 +2104,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             onClick={handleDownloadAllFiles}
           >
             <Download className="w-3.5 h-3.5" aria-hidden />
-            Download Files
+            Source Files
           </button>
           <button
             type="button"
@@ -2200,7 +2332,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   the rep typed in a sane number with many digits, or an
                   absurd 30-digit value) don't blow out the dialog. */}
               {(() => {
-                const priceStr = Number(parseFloat(agencyPrice) || 0).toLocaleString();
+                const priceStr = Number(parseFloat(agencyPrice) || 0).toLocaleString('en-US');
                 // Scale the headline price down as it grows so it still fits.
                 const priceFontSize =
                   priceStr.length > 22 ? 18 :
@@ -2281,7 +2413,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <input
                   type="text"
                   value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
+                  onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && confirmText.trim().toUpperCase() === 'CONFIRM' && !sendPrice.isPending) {
                       handleConfirmSubmit();
@@ -2714,7 +2846,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <input
                   type="text"
                   value={sendMailConfirmText}
-                  onChange={(e) => setSendMailConfirmText(e.target.value)}
+                  onChange={(e) => setSendMailConfirmText(e.target.value.toUpperCase())}
                   disabled={sendMailPhase !== 'idle'}
                   onKeyDown={(e) => {
                     if (

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { X, Save, ArrowLeft, Pencil, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@lib/utils';
+import { handleStructuredPaste } from '@lib/paste-html';
 import { DesignComplexity, FinalFileFormat, OrderType, Placement, Priority, ProcessType } from '@contracts';
 import { useUpdateJobCard, useCreateAdminCopy } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { useSendQuotePrice } from '@modules/cs-panel/hooks/use-cs-quote';
@@ -307,6 +308,7 @@ function statusAccent(status: string): string {
     Sewout: 'purple', Dispatched: 'green', 'Quote Submitted': 'blue',
     'Quote Approved': 'amber', 'Pending Client Confirm': 'amber',
     Cancelled: 'gray', Amend: 'amber', 'In Review': 'purple',
+    'On Hold': 'red',
   };
   return map[status] ?? 'gray';
 }
@@ -400,6 +402,7 @@ function PricingRow({ label, value }: { label: string; value: PriceCell }) {
 export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps) {
   const [isIn, setIsIn] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const updateMutation = useUpdateJobCard();
   const createAdminCopyMutation = useCreateAdminCopy();
   const sendPriceMutation = useSendQuotePrice();
@@ -903,10 +906,15 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
               </div>
               <Field label="Notes / Brief">
                 <textarea
+                  ref={notesRef}
                   className={cn(FIELD_CLS, 'resize-y')}
                   style={{ minHeight: 130 }}
                   value={form.notes}
                   onChange={(e) => set('notes', e.target.value)}
+                  onPaste={(e) => handleStructuredPaste(e, (next, _start, end) => {
+                    set('notes', next);
+                    requestAnimationFrame(() => notesRef.current?.setSelectionRange(end, end));
+                  })}
                 />
               </Field>
             </div>

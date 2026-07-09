@@ -30,7 +30,8 @@ export type JobStatus =
   | 'Pending Client Confirm'
   | 'Cancelled'
   | 'Amend'
-  | 'In Review';
+  | 'In Review'
+  | 'On Hold';
 
 export interface AiScore {
   colour: number;
@@ -98,6 +99,14 @@ export interface Job {
   stitchCount?: number;
   /** ISO timestamp when admin sent the acknowledgement. Countdown starts from here. */
   acknowledgedAt?: string | null;
+  /** acknowledgedAt shifted forward by totalHeldMs — use this (not acknowledgedAt) for ETA countdown math so paused time doesn't count against the client. */
+  effectiveAcknowledgedAt?: string | null;
+  /** JobStatus the job was in before being put on HOLD; null unless status === HOLD. */
+  preHoldStatus?: string | null;
+  /** ISO timestamp the current hold began; null unless status === HOLD. */
+  heldAt?: string | null;
+  /** Cumulative hold duration in ms across all past hold periods. */
+  totalHeldMs?: number;
   /** True when this job record is the admin-managed copy (not the original client submission). */
   isAdminCopy?: boolean;
   /** UUID of the original client job this was copied from (present when isAdminCopy = true). */
@@ -110,6 +119,15 @@ export interface Job {
   modificationCount?: number;
   /** The client's description from their latest modification request. */
   modificationNotes?: string | null;
+  /** This client's card-on-file expiry, so CS/Admin can be warned it's expired/expiring soon. */
+  clientCardExpMonth?: number | null;
+  clientCardExpYear?: number | null;
+  /** 'CREDIT_CARD' (one-time card details) vs 'CARD_ON_FILE' (saved card) — controls the
+   *  expiry warning's wording so it doesn't call a one-time card a "card on file". */
+  clientPaymentMode?: string | null;
+  /** ISO timestamp of this client's most recent OTHER order (drafts excluded) — the Client
+   *  Inactivity Indicator. Only populated on the job-detail fetch, not list views. */
+  clientPreviousOrderAt?: string | null;
 }
 
 export const JOBS: Job[] = [

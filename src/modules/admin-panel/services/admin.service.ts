@@ -1,5 +1,5 @@
 import { apiClient } from '@lib/api-client';
-import type { IClient, IFileVersion, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
+import type { IClient, IClientPaymentMethod, IFileVersion, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
 
 // ─── Client profile change requests (admin review queue) ──────────────────
 // Local to this module — not in @contracts because the backend enum mirror
@@ -197,6 +197,13 @@ export const adminService = {
     return apiClient.get<IJobCard>(`/api/v1/job-cards/${id}`);
   },
 
+  unholdJob(jobId: string, version: number): Promise<IJobCard> {
+    return apiClient.post<IJobCard, { version: number }>(
+      `/api/v1/job-cards/${jobId}/unhold`,
+      { version },
+    );
+  },
+
   /**
    * Batch-resolve one presigned thumbnail URL per job in a single round-trip.
    * Keyed by job-card UUID (`IJobCard.id`), NOT the human `job_id`. Returns a
@@ -241,6 +248,15 @@ export const adminService = {
     });
   },
 
+  getClientById(id: string): Promise<IClient> {
+    return apiClient.get<IClient>(`/api/v1/clients/${id}`);
+  },
+
+  /** Every payment method a client has saved (not just their single default). */
+  getClientPaymentMethods(clientId: string): Promise<IClientPaymentMethod[]> {
+    return apiClient.get<IClientPaymentMethod[]>(`/api/v1/clients/${clientId}/payment-methods`);
+  },
+
 
 
   createClient(body: CreateClientBody): Promise<IClient> {
@@ -271,6 +287,11 @@ export const adminService = {
     return apiClient.patch<IClient, { is_active: boolean }>(`/api/v1/clients/${id}/status`, {
       is_active,
     });
+  },
+
+  /** Admin: send the Credit Card Authorization Form to a client's registered email. */
+  sendCcForm(id: string): Promise<IClient> {
+    return apiClient.post<IClient, Record<string, never>>(`/api/v1/clients/${id}/send-cc-form`, {});
   },
 
   /** List self-registered clients awaiting admin approval. */

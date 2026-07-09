@@ -200,6 +200,10 @@ export function useAdminJobViews(filters: JobCardFilters = {}): {
     queryFn: () => adminService.getJobThumbnails(jobUuids),
     enabled: jobUuids.length > 0,
     staleTime: 60 * 1000,
+    // Presigned thumbnail URLs expire after 15 minutes (PRESIGN_TTL_SECONDS on
+    // the backend). Proactively refresh well before that so a list page left
+    // open doesn't end up serving expired URLs that 403 in the <img> tags.
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const jobs = useMemo<Job[]>(() => {
