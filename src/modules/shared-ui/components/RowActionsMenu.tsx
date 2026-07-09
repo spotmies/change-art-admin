@@ -35,12 +35,20 @@ interface RowActionsMenuProps {
 export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
-    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    const right = window.innerWidth - r.right;
+    
+    // Estimate menu height: ~220px. If not enough space below but there is space above, pop upwards.
+    const estimatedHeight = 220;
+    if (r.bottom + estimatedHeight > window.innerHeight && r.top > estimatedHeight) {
+      setPos({ bottom: window.innerHeight - r.top + 4, right });
+    } else {
+      setPos({ top: r.bottom + 4, right });
+    }
   }, [open]);
 
   useEffect(() => {
@@ -83,7 +91,7 @@ export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowAction
               <div
                 role="menu"
                 className="fixed min-w-[184px] glass-heavy rounded-xl z-[60] overflow-hidden py-1 anim-fade-in"
-                style={{ top: pos.top, right: pos.right }}
+                style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
               >
                 {actions.map((a) =>
                   a.accent === 'crimson' ? (
