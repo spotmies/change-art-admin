@@ -2,7 +2,26 @@ import { useMemo, useState, useCallback, useEffect, type ReactNode } from 'react
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
 import { AssignJobModal } from './AssignJobModal';
-import { Inbox, Clock, CheckCircle2, Download, Search, X } from 'lucide-react';
+import {
+  Inbox,
+  Clock,
+  CheckCircle2,
+  Download,
+  Search,
+  X,
+  Mail,
+  MailOpen,
+  Paintbrush,
+  Sparkles,
+  Layers,
+  Scissors,
+  Flag,
+  Settings,
+  Truck,
+  RefreshCw,
+  XCircle,
+  Hash,
+} from 'lucide-react';
 import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 function formatDate(dateStr: string): string {
@@ -385,21 +404,15 @@ function statusBadgeAccent(status: string): string {
 }
 
 function orderBadgeAccent(order: string): string {
-  const map: Record<string, string> = {
-    Artwork: 'navy',
-    Digitizing: 'teal',
-    'Digitizing + Sewout': 'purple',
-    Sewout: 'purple',
-  };
-  return map[order] || 'gray';
+  return order === 'Digitizing' ? 'teal' : 'navy';
 }
 
 /** Accent colour for the project-type badge (Quote / Live / Amend / Live Quote). */
 function projectTypeBadgeAccent(project: string): string {
   const map: Record<string, string> = {
-    Quote: 'blue',
-    'Live Quote': 'teal',
-    Live: 'green',
+    Quote: 'purple',
+    'Live Quote': 'green',
+    Live: 'blue',
     Amend: 'amber',
   };
   return map[project] || 'gray';
@@ -438,6 +451,83 @@ function Badge({ children, accent }: { children: ReactNode; accent: string }) {
 
 function PriorityChip({ priority }: { priority: string }) {
   return <span className={cn('priority-badge', priorityClass(priority))}>{priority}</span>;
+}
+
+const ORDINALS = ['Zeroth', 'First', 'Second', 'Third', 'Fourth', 'Fifth'];
+
+/** Subtitle line under the image explaining how this card entered the pipeline. */
+function sourceSubtitleFor(project: string, modificationCount?: number | null): string {
+  switch (project) {
+    case 'Quote':
+      return 'New Quote';
+    case 'Live Quote':
+      return 'Live Quote (Quote Converted)';
+    case 'Amend': {
+      const n = modificationCount && modificationCount > 0 ? modificationCount : 1;
+      const ordinal = ORDINALS[n] ?? `${n}th`;
+      return `Amend R${n} (${ordinal} Amendment)`;
+    }
+    case 'Live':
+    default:
+      return 'Live Job (Direct)';
+  }
+}
+
+/** Icon for the Department info row, keyed by order/department type. */
+function departmentIconFor(order: string) {
+  const map: Record<string, typeof Paintbrush> = {
+    Artwork: Paintbrush,
+    Digitizing: Sparkles,
+    'Digitizing + Sewout': Layers,
+    Sewout: Scissors,
+  };
+  return map[order] ?? Paintbrush;
+}
+
+/** Icon for the Status info row, keyed by pipeline stage. */
+function statusIconFor(status: string) {
+  const inProduction = new Set(['In Production', 'Senior Review', 'Sewout', 'In QC']);
+  if (status === 'Dispatched' || status === 'Ready to Deliver') return Truck;
+  if (inProduction.has(status)) return Settings;
+  if (status === 'On Hold') return Clock;
+  if (status === 'Cancelled') return XCircle;
+  if (status === 'Amend' || status === 'In Review') return RefreshCw;
+  return Clock;
+}
+
+function ReadBadge({ isRead }: { isRead?: boolean }) {
+  const Icon = isRead ? MailOpen : Mail;
+  return (
+    <span className={cn('jc-read-badge', isRead ? 'is-read' : 'is-unread')}>
+      <Icon className="w-3 h-3" aria-hidden />
+      {isRead ? 'READ' : 'UNREAD'}
+    </span>
+  );
+}
+
+/** Icon-labelled info row (Department / Priority / Status / Job ID) used in the redesigned card. */
+function InfoRow({
+  icon: Icon,
+  label,
+  children,
+  accent,
+}: {
+  icon: typeof Hash;
+  label: string;
+  children: ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div className="jc-info-row">
+      <span className="jc-info-label">
+        <span className={cn('jc-info-icon', accent)}>
+          <Icon className="w-3 h-3" aria-hidden />
+        </span>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
 }
 
 function TableView({
@@ -551,10 +641,13 @@ function GridView({
   className?: string;
 }) {
   return (
-    <div className={cn("grid-view grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 py-2", className)}>
+    <div className={cn("grid-view grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 py-2", className)}>
       {jobs.map((j) => {
         const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
         const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;
+        const DeptIcon = departmentIconFor(j.order);
+        const StatusIcon = statusIconFor(j.status);
+        const category = [j.order, j.process ?? j.complexity].filter(Boolean).join(' • ');
         return (
           <article
             key={j.id}
@@ -569,6 +662,12 @@ function GridView({
               }
             }}
           >
+            <div className="jc-header">
+              <span className={cn('badge whitespace-nowrap', projectTypeBadgeAccent(j.project))}>
+                {projectTypeBadgeLabel(j.project, j.modificationCount)}
+              </span>
+              <ReadBadge isRead={j.isRead} />
+            </div>
             <div className="jc-img">
               {j.images?.length ? (
                 <img
@@ -584,28 +683,25 @@ function GridView({
               )}
             </div>
             <div className="jc-body">
-              {/* Order type + project-type + status badges below the image */}
-              <div className="flex items-center justify-between gap-1 mb-1.5 flex-wrap">
-                <span className={cn('badge whitespace-nowrap', orderBadgeAccent(j.order))}>
-                  {j.order}
-                </span>
-                <div className="flex items-center gap-1 flex-wrap">
-                  <span
-                    className={cn('badge whitespace-nowrap', projectTypeBadgeAccent(j.project))}
-                    title="Order type"
-                  >
-                    {projectTypeBadgeLabel(j.project, j.modificationCount)}
-                  </span>
-                  <span className={cn('badge whitespace-nowrap', statusBadgeAccent(j.status))}>
-                    {statusDisplay(j.status)}
-                  </span>
-                </div>
+              <div className={cn('jc-subtitle', projectTypeBadgeAccent(j.project))}>
+                <span className="jc-subtitle-dot" aria-hidden />
+                {sourceSubtitleFor(j.project, j.modificationCount)}
               </div>
               <div className="jc-title" title={j.design}>{j.design}</div>
-              <div className="jc-desc">{briefText(j.summary)}</div>
-              <div className="jc-meta">
-                <span className="jc-id">{j.id}</span>
-                <PriorityChip priority={j.priority} />
+              {category ? <div className="jc-category">{category}</div> : null}
+              <div className="jc-info-rows">
+                <InfoRow icon={DeptIcon} label="Department" accent={orderBadgeAccent(j.order)}>
+                  <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
+                </InfoRow>
+                <InfoRow icon={Flag} label="Priority">
+                  <PriorityChip priority={j.priority} />
+                </InfoRow>
+                <InfoRow icon={StatusIcon} label="Status">
+                  <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
+                </InfoRow>
+                <InfoRow icon={Hash} label="Job ID">
+                  <span className="jc-id">{j.id}</span>
+                </InfoRow>
               </div>
               {actionRequired ? (
                 <div className="jc-action">
@@ -616,7 +712,20 @@ function GridView({
                   </span>
                 </div>
               ) : null}
-              {renderRowActions ? renderRowActions(j) : null}
+              <div className="jc-footer">
+                {renderRowActions ? renderRowActions(j) : (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen?.(j);
+                    }}
+                  >
+                    View
+                  </button>
+                )}
+              </div>
             </div>
           </article>
         );

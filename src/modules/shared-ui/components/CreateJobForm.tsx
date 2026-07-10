@@ -465,10 +465,14 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  function resolveOrderType(service: string): OrderType {
-    if (service === 'Digitizing Sewout') return OrderType.DIGITIZING_SEWOUT;
-    if (service === 'Digitizing') return OrderType.DIGITIZING;
-    if (service === 'Others') return OrderType.OTHERS;
+  /**
+   * Department is decided by the top-level service-type card, not the specific
+   * sub-service: only "Digitizing Services" (orderType 'digitizing') belongs to the
+   * Digitizing department. Artwork, Embroidery Digitizing Swatches Only, Patches &
+   * Extras, and Others all fall under Artwork.
+   */
+  function resolveOrderType(): OrderType {
+    if (orderType === 'digitizing') return OrderType.DIGITIZING;
     return OrderType.ARTWORK;
   }
 
@@ -505,7 +509,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
     const priorityLabel = String(fd.get('priority') ?? '');
     const cloudLink = String(fd.get('cloud_link') ?? '');
 
-    const order_type = resolveOrderType(selectedService);
+    const order_type = resolveOrderType();
 
     const finalFiles = (() => {
       if (!selectedFormatOption || selectedFormatOption === 'OTHERS') return [FinalFileFormat.OTHERS];
@@ -612,7 +616,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
       if (flips == null || flips < 1) { markFieldError('num_flips', 'Please enter the number of flips.'); return; }
     }
 
-    const order_type = resolveOrderType(selectedService);
+    const order_type = resolveOrderType();
     const cloudLink = String(fd.get('cloud_link') ?? '');
 
     setError(null);

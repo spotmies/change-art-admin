@@ -128,6 +128,8 @@ export interface Job {
   /** ISO timestamp of this client's most recent OTHER order (drafts excluded) — the Client
    *  Inactivity Indicator. Only populated on the job-detail fetch, not list views. */
   clientPreviousOrderAt?: string | null;
+  /** Whether the current viewer has opened this job card (per-viewer, from backend `job_card_reads`). */
+  isRead?: boolean;
 }
 
 export const JOBS: Job[] = [

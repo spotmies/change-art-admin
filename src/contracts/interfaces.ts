@@ -235,6 +235,8 @@ export interface IJobCard {
    *  Client Inactivity Indicator. Only populated by findById (job-detail), not list queries,
    *  since a correlated per-row subquery there would not scale. */
   client_previous_order_at?: IsoDateTime | null;
+  /** Whether the requesting user has viewed this card (per-viewer, via `job_card_reads`). */
+  is_read: boolean;
 }
 
 export interface IFileVersion {

@@ -5,6 +5,8 @@ import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer
 import { getCardExpiryStatus } from '@lib/card-expiry';
 import { clientActivityAccent, formatClientActivityBucket, getClientActivityBucket } from '@lib/client-activity';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@lib/query-keys';
 import toast from 'react-hot-toast';
 import { toastApiError } from '@lib/toast-error';
 import { cn } from '@lib/utils';
@@ -163,6 +165,7 @@ function isPriceAgreed(job: Job): boolean {
 }
 
 export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobDetailModalProps) {
+  const queryClient = useQueryClient();
   const [isIn, setIsIn] = useState(false);
   const [agencyPrice, setAgencyPrice] = useState('');
   const [confirmedEta, setConfirmedEta] = useState('');
@@ -535,7 +538,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     try {
       await adminService.unholdJob(id, job.version);
       toast.success('Job unheld — production has resumed.');
-      handleClose();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.byId(id) });
     } catch {
       toast.error('Failed to unhold job. Please try again.');
     } finally {

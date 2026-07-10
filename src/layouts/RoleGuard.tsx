@@ -30,7 +30,7 @@ export function RoleGuard({ allow, children }: RoleGuardProps) {
   }
 
   if (status === 'unauthenticated' || !user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
   if (!user.is_active) {

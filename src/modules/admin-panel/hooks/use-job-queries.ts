@@ -24,6 +24,7 @@ export function useRaiseQuery(jobCardId: string | null | undefined) {
     onSuccess: () => {
       if (jobCardId) {
         void qc.invalidateQueries({ queryKey: queryKeys.queries.forJob(jobCardId) });
+        void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       }
     },
   });
