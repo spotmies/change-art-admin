@@ -71,6 +71,8 @@ interface JobTableProps {
   onInitialOpenHandled?: () => void;
   /** Compact 5-column table for dashboard widgets — no preview, timer, or date. */
   compact?: boolean;
+  /** Number of columns for large screens in grid view */
+  gridCols?: 3 | 4;
 }
 
 /**
@@ -93,6 +95,7 @@ export function JobTable({
   initialOpenJobId,
   onInitialOpenHandled,
   compact = false,
+  gridCols = 4,
 }: JobTableProps) {
   const [view, setView] = useState<JobView>(defaultView);
   const [query, setQuery] = useState('');
@@ -223,6 +226,7 @@ export function JobTable({
             jobs={filtered}
             onOpen={handleOpen}
             renderRowActions={renderRowActions}
+            gridCols={gridCols}
             className={cn(
               view === 'grid' && "grid",
               view === 'table' && "grid md:hidden",
@@ -634,14 +638,16 @@ function GridView({
   onOpen,
   renderRowActions,
   className,
+  gridCols = 4,
 }: {
   jobs: Job[];
   onOpen?: (job: Job) => void;
   renderRowActions?: (job: Job) => ReactNode;
   className?: string;
+  gridCols?: 3 | 4;
 }) {
   return (
-    <div className={cn("grid-view grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 py-2", className)}>
+    <div className={cn("grid-view grid grid-cols-2 md:grid-cols-3 gap-2.5 py-2", gridCols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4", className)}>
       {jobs.map((j) => {
         const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
         const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;

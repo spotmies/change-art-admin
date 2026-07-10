@@ -47,8 +47,8 @@ export function AdminDashboardPage() {
   const inSewout = useMemo(() => jobs.filter((j) => j.stage === 'sewout'), [jobs]);
   const delivered = useMemo(() => jobs.filter((j) => j.stage === 'delivered'), [jobs]);
 
-  const newJobs = useMemo(() => active.slice(0, 4), [active]);
-  const newQuotes = useMemo(() => jobs.filter((j) => j.stage === 'quote').slice(0, 4), [jobs]);
+  const newJobs = useMemo(() => active.slice(0, 3), [active]);
+  const newQuotes = useMemo(() => jobs.filter((j) => j.stage === 'quote').slice(0, 3), [jobs]);
 
   const totalClients = clientsData?.meta.total ?? 0;
 
@@ -294,7 +294,7 @@ export function AdminDashboardPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
           ) : (
-            <JobTable jobs={newJobs} defaultView="table" showActions />
+            <JobTable jobs={newJobs} defaultView="table" showActions gridCols={3} />
           )}
 
           <div className="mt-7">
@@ -305,7 +305,7 @@ export function AdminDashboardPage() {
             {isLoading ? (
               <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
             ) : (
-              <JobTable jobs={newQuotes} defaultView="table" showActions quoteView />
+              <JobTable jobs={newQuotes} defaultView="table" showActions quoteView gridCols={3} />
             )}
           </div>
         </div>
