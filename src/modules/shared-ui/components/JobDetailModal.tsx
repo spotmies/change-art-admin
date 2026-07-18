@@ -17,7 +17,17 @@ import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById, useAdminJobFiles, useAdminJobImageUrls, isAdminViewableImage } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { adminService } from '@modules/admin-panel/services/admin.service';
-import { FileCategory, JobStatus } from '@contracts';
+import { FileCategory, JobStatus, type IFileVersion } from '@contracts';
+import { FilePreviewModal } from './FilePreviewModal';
+
+function formatBytes(bytes: number, decimals = 2) {
+  if (!bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
 
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
@@ -177,6 +187,9 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [priceInvalid, setPriceInvalid] = useState(false);
   const [etaInvalid, setEtaInvalid] = useState(false);
   const [carPage, setCarPage] = useState(0);
+  const [previewFile, setPreviewFile] = useState<IFileVersion | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
@@ -280,6 +293,17 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   // All COMPLETED files on the admin copy — sent via "Send Mail to Client".
   const allCompletedFiles = useMemo(
     () => (adminJobFiles ?? []).filter((f) => f.file_category === FileCategory.COMPLETED),
+    [adminJobFiles],
+  );
+
+  // Non-image reference files (PDF, AI, DST, ...) uploaded alongside the brief —
+  // images render in the carousel, everything else is listed separately below it.
+  const clientOtherFiles = useMemo(
+    () => (clientJobFiles ?? []).filter((f) => !isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
+    [clientJobFiles],
+  );
+  const adminOtherFiles = useMemo(
+    () => (adminJobFiles ?? []).filter((f) => !isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
     [adminJobFiles],
   );
 
@@ -444,6 +468,27 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       : fallbackImages.length > 0
         ? fallbackImages
         : [jobImage(displayJob, 0, 560, 420)];
+
+  // Same resolution as `images`, but for non-image reference files.
+  const referenceFiles = isClientView
+    ? clientOtherFiles
+    : clientOtherFiles.length > 0
+      ? clientOtherFiles
+      : adminOtherFiles;
+
+  const handlePreviewFile = (file: IFileVersion) => {
+    setPreviewFile(file);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    adminService
+      .getDownloadUrl(file.id)
+      .then((res) => setPreviewUrl(res.url))
+      .catch(() => {
+        toast.error('Could not load preview for this file.');
+        setPreviewFile(null);
+      })
+      .finally(() => setPreviewLoading(false));
+  };
 
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
   const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
@@ -1790,6 +1835,63 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 </div>
               );
             })()}
+
+            {/* REFERENCE FILES — non-image uploads (PDF, AI, DST, ...) */}
+            {referenceFiles.length > 0 && (
+              <div className="mb-5">
+                <SectionLabel>REFERENCE FILES</SectionLabel>
+                <ul
+                  className="flex flex-col gap-1.5 overflow-y-auto pr-1"
+                  style={referenceFiles.length > 3 ? { maxHeight: 190 } : undefined}
+                >
+                  {referenceFiles.map((file) => (
+                    <li
+                      key={file.id}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] cursor-pointer transition"
+                      style={{ background: 'rgba(15,23,42,0.03)', border: '1px solid rgba(15,23,42,0.08)' }}
+                      onClick={() => handlePreviewFile(file)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Preview ${file.file_name}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handlePreviewFile(file);
+                        }
+                      }}
+                    >
+                      <span
+                        className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center"
+                        style={{ background: 'rgba(15,23,42,0.05)', border: '1px solid rgba(15,23,42,0.08)' }}
+                        aria-hidden
+                      >
+                        <FileText className="w-4 h-4" style={{ color: '#64748B' }} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate" style={{ color: '#1E293B' }}>{file.file_name}</div>
+                        <div className="text-[10.5px]" style={{ color: '#94A3B8' }}>
+                          {formatBytes(file.file_size_bytes)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 transition"
+                        style={{ color: '#94A3B8' }}
+                        aria-label={`Download ${file.file_name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          adminService.getDownloadUrl(file.id).then((res) => {
+                            window.open(res.url, '_blank', 'noopener,noreferrer');
+                          });
+                        }}
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* WORKFLOW STEPPER */}
             <div className="mb-5 relative">
@@ -3186,6 +3288,20 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
         </div>
       ) : null}
 
+      <FilePreviewModal
+        source={
+          previewFile
+            ? previewUrl
+              ? { kind: 'remote', url: previewUrl, name: previewFile.file_name, type: previewFile.file_type }
+              : null
+            : null
+        }
+        loading={previewLoading}
+        onClose={() => {
+          setPreviewFile(null);
+          setPreviewUrl(null);
+        }}
+      />
     </div>
   );
 }

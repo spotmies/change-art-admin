@@ -38,6 +38,14 @@ export interface NavItem {
   badge?: number;
   badgeAccent?: NavBadgeAccent;
   subtitle?: string;
+  /**
+   * Skip the "mark as seen while viewing this section" dampening (see
+   * Sidebar.tsx) and always show the live count. Use for items whose badge
+   * reflects a queue of pending items still awaiting action elsewhere (e.g.
+   * approve/reject a client request) — the count should stay visible even
+   * while you're on the page, since merely viewing it doesn't clear it.
+   */
+  persistentBadge?: boolean;
 }
 
 export interface NavSection {
@@ -209,7 +217,7 @@ export const NAV_CONFIG = {
           { id: 'amendments',  label: 'Amendments',      to: '/admin/amendments',  icon: PencilRuler, badgeAccent: 'amber' },
           { id: 'email-inbox', label: 'Email Inbox',     to: '/admin/email-inbox', icon: Mail },
           { id: 'jobs',       label: 'All Jobs',         to: '/admin/jobs',        icon: ClipboardList },
-          { id: 'clients',    label: 'Clients',          to: '/admin/clients',     icon: Users },
+          { id: 'clients',    label: 'Clients',          to: '/admin/clients',     icon: Users, persistentBadge: true },
           { id: 'users',      label: 'User Management',  to: '/admin/users',       icon: ShieldCheck },
           { id: 'notifications', label: 'Notifications', to: '/admin/notifications', icon: Bell },
           { id: 'settings',   label: 'Settings',         to: '/admin/settings',    icon: Settings },

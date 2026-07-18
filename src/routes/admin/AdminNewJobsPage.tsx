@@ -18,6 +18,7 @@ function mapOrderType(ot: string): string | undefined {
   if (ot === 'Artwork') return 'ARTWORK';
   if (ot === 'Digitizing') return 'DIGITIZING';
   if (ot === 'Digitizing + Sewout') return 'DIGITIZING_SEWOUT';
+  if (ot === 'Others') return 'OTHERS';
   return undefined;
 }
 
@@ -79,7 +80,7 @@ export function AdminNewJobsPage() {
     return (
       <div className="page">
         <GreetingHero title="New Jobs" subtitle="Pending orders awaiting acknowledgement." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>

@@ -348,25 +348,25 @@ export function AddClientModal({ open, onClose }: AddClientModalProps) {
             <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 pb-1">
 
               <div>
-                <label className="fl">First Name <span style={{ color: 'var(--crimson)' }}>*</span></label>
+                <label className="fl">First Name <span style={{ color: 'var(--color-crimson)' }}>*</span></label>
                 <input
                   className="fi"
-                  style={errors.firstName ? { borderColor: 'var(--crimson)' } : undefined}
+                  style={errors.firstName ? { borderColor: 'var(--color-crimson)' } : undefined}
                   value={form.firstName}
                   onChange={(e) => set('firstName', e.target.value)}
                 />
-                {errors.firstName && <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>{errors.firstName}</p>}
+                {errors.firstName && <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>{errors.firstName}</p>}
               </div>
               <div>
-                <label className="fl">Email <span style={{ color: 'var(--crimson)' }}>*</span></label>
+                <label className="fl">Email <span style={{ color: 'var(--color-crimson)' }}>*</span></label>
                 <input
                   className="fi"
                   type="email"
-                  style={errors.email ? { borderColor: 'var(--crimson)' } : undefined}
+                  style={errors.email ? { borderColor: 'var(--color-crimson)' } : undefined}
                   value={form.email}
                   onChange={(e) => set('email', e.target.value)}
                 />
-                {errors.email && <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>{errors.email}</p>}
+                {errors.email && <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>{errors.email}</p>}
               </div>
 
               <div>
@@ -374,26 +374,26 @@ export function AddClientModal({ open, onClose }: AddClientModalProps) {
                 <input className="fi" value={form.middleName} onChange={(e) => set('middleName', e.target.value)} />
               </div>
               <div>
-                <label className="fl">Phone Number <span style={{ color: 'var(--crimson)' }}>*</span></label>
+                <label className="fl">Phone Number <span style={{ color: 'var(--color-crimson)' }}>*</span></label>
                 <input
                   className="fi"
                   type="tel"
-                  style={errors.phoneNumber ? { borderColor: 'var(--crimson)' } : undefined}
+                  style={errors.phoneNumber ? { borderColor: 'var(--color-crimson)' } : undefined}
                   value={form.phoneNumber}
                   onChange={(e) => set('phoneNumber', e.target.value)}
                 />
-                {errors.phoneNumber && <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>{errors.phoneNumber}</p>}
+                {errors.phoneNumber && <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>{errors.phoneNumber}</p>}
               </div>
 
               <div>
-                <label className="fl">Last Name <span style={{ color: 'var(--crimson)' }}>*</span></label>
+                <label className="fl">Last Name <span style={{ color: 'var(--color-crimson)' }}>*</span></label>
                 <input
                   className="fi"
-                  style={errors.lastName ? { borderColor: 'var(--crimson)' } : undefined}
+                  style={errors.lastName ? { borderColor: 'var(--color-crimson)' } : undefined}
                   value={form.lastName}
                   onChange={(e) => set('lastName', e.target.value)}
                 />
-                {errors.lastName && <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>{errors.lastName}</p>}
+                {errors.lastName && <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>{errors.lastName}</p>}
               </div>
               <div>
                 <label className="fl">Country</label>

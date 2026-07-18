@@ -123,7 +123,7 @@ export function ProfileChangeRequestsTab({ search }: Props) {
             className={[
               'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
               status === f.id
-                ? 'border-[var(--crimson)] text-[var(--crimson)]'
+                ? 'border-[var(--color-crimson)] text-[var(--color-crimson)]'
                 : 'border-transparent text-text-muted hover:text-text-base',
             ].join(' ')}
           >
@@ -137,7 +137,7 @@ export function ProfileChangeRequestsTab({ search }: Props) {
           Loading requests…
         </div>
       ) : isError ? (
-        <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
           Failed to load profile change requests. Please refresh and try again.
         </div>
       ) : filtered.length === 0 ? (

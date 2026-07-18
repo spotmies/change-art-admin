@@ -80,7 +80,7 @@ export function CSProjectsPage() {
     return (
       <div className="page">
         <GreetingHero title="All Projects" subtitle="All jobs across the Client Servicing pipeline." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load projects. Please refresh and try again.
         </div>
       </div>

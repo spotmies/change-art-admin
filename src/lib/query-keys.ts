@@ -28,6 +28,7 @@ export const queryKeys = {
     pending: () => ['clients', 'pending'] as const,
     approved: () => ['clients', 'approved'] as const,
     rejected: () => ['clients', 'rejected'] as const,
+    stats: () => ['clients', 'stats'] as const,
   },
 
   jobs: {

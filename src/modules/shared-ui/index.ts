@@ -38,6 +38,8 @@ export { BarChart } from './components/BarChart';
 export type { BarChartItem } from './components/BarChart';
 export { CreateJobForm } from './components/CreateJobForm';
 export { ClientBriefForm } from './components/ClientBriefForm';
+export { AdminBriefForm } from './components/AdminBriefForm';
+export type { ClientBriefData } from './components/AdminBriefForm';
 export { JobDetailModal } from './components/JobDetailModal';
 export { EditJobModal } from './components/EditJobModal';
 export type { EditFields } from './components/EditJobModal';

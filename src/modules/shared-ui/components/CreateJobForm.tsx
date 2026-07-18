@@ -15,6 +15,7 @@ import {
 import { cn } from '@lib/utils';
 import { apiClient } from '@lib/api-client';
 import { handleStructuredPaste } from '@lib/paste-html';
+import { FilePreviewModal } from './FilePreviewModal';
 
 export interface ClientBriefData {
   client_id?: string;
@@ -251,6 +252,7 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
   const [serviceError, setServiceError] = useState(false);
   const [selectedFormatOption, setSelectedFormatOption] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);
+  const [previewFileIndex, setPreviewFileIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOrderOpen, setConfirmOrderOpen] = useState(false);
   const [confirmOrderText, setConfirmOrderText] = useState('');
@@ -1964,8 +1966,18 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                       {files.map((f, i) => (
                         <li
                           key={`${f.name}-${i}`}
-                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px]"
+                          className="flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] cursor-pointer hover:brightness-125 transition"
                           style={{ background: 'var(--glass-bg-light)', border: '1px solid var(--glass-border)' }}
+                          onClick={() => setPreviewFileIndex(i)}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Preview ${f.name}`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setPreviewFileIndex(i);
+                            }
+                          }}
                         >
                           {previews[i] ? (
                             <img
@@ -1988,7 +2000,10 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
                             type="button"
                             className="text-text-faint hover:text-crimson transition shrink-0"
                             aria-label={`Remove ${f.name}`}
-                            onClick={() => removeFile(i)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeFile(i);
+                            }}
                           >
                             <X className="w-3.5 h-3.5" aria-hidden />
                           </button>
@@ -2148,6 +2163,15 @@ export function CreateJobForm({ mode, clients = [], clientsLoading = false, clie
           </div>
         </div>
       )}
+
+      <FilePreviewModal
+        source={
+          previewFileIndex !== null && files[previewFileIndex]
+            ? { kind: 'local', file: files[previewFileIndex] }
+            : null
+        }
+        onClose={() => setPreviewFileIndex(null)}
+      />
     </>
   );
 }

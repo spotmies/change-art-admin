@@ -130,7 +130,7 @@ function CcAuthorizationFormPanel() {
           setIsDragging(false);
           if (!isBusy) handleFile(e.dataTransfer.files);
         }}
-        style={isDragging ? { borderColor: 'var(--crimson)' } : undefined}
+        style={isDragging ? { borderColor: 'var(--color-crimson)' } : undefined}
       >
         <div className="qf-upload-icon-wrap">
           {isBusy ? (

@@ -37,7 +37,7 @@ export function CSAmendmentsPage() {
     return (
       <div className="page">
         <GreetingHero title="Amendments" subtitle="Client-requested post-delivery changes." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load amendments. Please refresh and try again.
         </div>
       </div>

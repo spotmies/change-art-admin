@@ -119,6 +119,15 @@ export function SocketProvider({ children }: SocketProviderProps) {
           style: { whiteSpace: 'pre-line', maxWidth: 380 },
         },
       );
+
+      // 4. A new client sign-up or profile-change request just landed —
+      // refresh the Clients page's pending lists so it shows up without the
+      // Admin needing to navigate away and back (they only rely on this
+      // notification, since neither event has its own dedicated socket event).
+      const kind = (n.data as { kind?: string } | null)?.kind;
+      if (kind === 'client_pending_approval' || kind === 'profile_change_submitted') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      }
     });
 
     socket.on(SOCKET_EVENTS.FILE_UPLOAD_COMPLETE, (_event: FileUploadCompleteEvent) => {

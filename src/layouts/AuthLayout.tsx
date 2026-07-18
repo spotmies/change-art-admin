@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStatus, useSessionUser, useAuthStore } from '@modules/auth/stores/auth-store';
+import { FullPageLoader } from '@modules/shared-ui/components/FullPageLoader';
 import { pathForRole } from '@/router';
 import { UserRole } from '@contracts';
 import { authService } from '@modules/auth/services';
@@ -31,7 +32,7 @@ export function AuthLayout() {
   }, [isStuckClient, isDeactivated, reset]);
 
   if (status === 'authenticating' || isStuckClient || isDeactivated) {
-    return null;
+    return <FullPageLoader />;
   }
 
   if (status === 'authenticated' && user) {

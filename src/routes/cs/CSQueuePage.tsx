@@ -43,7 +43,7 @@ export function CSQueuePage() {
     return (
       <div className="page">
         <GreetingHero title="Artwork Order Queue" subtitle="Live production queue for artwork orders." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>

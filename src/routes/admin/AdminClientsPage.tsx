@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { FileText, Pencil, Plus, Search, ShieldAlert, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
+import { FileText, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Star, UserCheck, UserX, X } from 'lucide-react';
 import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
 import type { IClient } from '@contracts';
 import { formatDateTime } from '@lib/utils';
-import { useAdminClients, useSendCcForm, useAdminClientById, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useAdminClients, useAdminClientStats, useSendCcForm, useAdminClientById, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { useProfileChangeRequests } from '../../modules/admin-panel/hooks/use-profile-change-requests';
 import {
   ClientDetailModal,
@@ -21,14 +21,6 @@ const PER_PAGE = 20;
 type Tab = 'clients' | 'requests' | 'approve';
 
 
-
-function currentMonthCount(items: { created_at: string }[]): number {
-  const now = new Date();
-  return items.filter((c) => {
-    const d = new Date(c.created_at);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
-}
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [debounced, setDebounced] = useState(value);
@@ -76,6 +68,7 @@ export function AdminClientsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [hotlistedOnly, setHotlistedOnly] = useState(false);
+  const [inactiveOnly, setInactiveOnly] = useState(false);
   // Track only the id + mode, not the clicked row's snapshot — the snapshot
   // never updates again once stored. Deriving the live client below from
   // `useAdminClientById` means the open modal re-fetches and reflects changes
@@ -117,16 +110,18 @@ export function AdminClientsPage() {
       per_page: PER_PAGE,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
       ...(hotlistedOnly ? { hotlisted: true } : {}),
+      ...(inactiveOnly ? { is_active: false } : {}),
     }),
-    [page, debouncedSearch, hotlistedOnly],
+    [page, debouncedSearch, hotlistedOnly, inactiveOnly],
   );
 
   const { data, isLoading, isError } = useAdminClients(clientsFilters);
+  const { data: stats, isLoading: statsLoading } = useAdminClientStats();
 
-  // Reset to page 1 whenever the active search or hotlist filter changes.
+  // Reset to page 1 whenever the active search or hotlist/active filter changes.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, hotlistedOnly]);
+  }, [debouncedSearch, hotlistedOnly, inactiveOnly]);
 
   // Reset state when switching tabs.
   useEffect(() => {
@@ -156,13 +151,15 @@ export function AdminClientsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'blue', label: 'Active Accounts', value: isLoading ? '…' : total },
-          { accent: 'green', label: 'New (mo.)', value: isLoading ? '…' : currentMonthCount(clients) },
+          { accent: 'blue', label: 'Active Accounts', value: statsLoading ? '…' : (stats?.active_accounts ?? 0) },
+          { accent: 'green', label: 'New (mo.)', value: statsLoading ? '…' : (stats?.new_this_month ?? 0) },
           { accent: 'crimson', label: 'Profile Requests', value: pendingCount },
           {
             accent: 'gold',
             label: 'Top Client',
-            value: isLoading ? '…' : (clients[0]?.company_name ?? clients[0]?.client_name ?? '—'),
+            value: statsLoading
+              ? '…'
+              : (stats?.top_client?.company_name ?? stats?.top_client?.client_name ?? '—'),
           },
         ]}
       />
@@ -176,9 +173,12 @@ export function AdminClientsPage() {
               : 'Pending Client Approvals'
         }
       >
-        {/* Tab toggle + search bar */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border">
+        {/* Tabs + filters on the left, search pinned to the right — never
+            wraps to a second row. No overflow-x here: it would force
+            overflow-y to clip too, cutting off the icon buttons' tooltip
+            (which renders above them via position: absolute). */}
+        <div className="flex flex-nowrap items-center gap-2 mb-3">
+          <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border shrink-0">
             <button
               type="button"
               className={`btn ${tab === 'clients' ? 'btn-crimson' : 'btn-outline'}`}
@@ -196,7 +196,7 @@ export function AdminClientsPage() {
                 <span
                   className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                   style={{
-                    background: 'var(--crimson)',
+                    background: 'var(--color-crimson)',
                     color: 'white',
                     minWidth: 16,
                     height: 16,
@@ -216,7 +216,7 @@ export function AdminClientsPage() {
                 <span
                   className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                   style={{
-                    background: 'var(--crimson)',
+                    background: 'var(--color-crimson)',
                     color: 'white',
                     minWidth: 16,
                     height: 16,
@@ -228,7 +228,44 @@ export function AdminClientsPage() {
             </button>
           </div>
 
-          <div className="relative flex-1 min-w-[200px] max-w-md ml-auto">
+          {tab === 'clients' && <div className="w-px h-6 bg-glass-border shrink-0" aria-hidden />}
+
+          {tab === 'clients' && (
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              <button
+                type="button"
+                className="row-icon-btn row-icon-btn--amber"
+                style={
+                  hotlistedOnly
+                    ? { background: 'rgba(245,158,11,0.32)', borderColor: 'var(--color-amber)' }
+                    : undefined
+                }
+                onClick={() => setHotlistedOnly((v) => !v)}
+                aria-pressed={hotlistedOnly}
+                aria-label="Hotlisted only"
+                data-tooltip="Hotlisted only"
+              >
+                <Star className="w-3.5 h-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="row-icon-btn row-icon-btn--crimson"
+                style={
+                  inactiveOnly
+                    ? { background: 'rgba(196,30,58,0.32)', borderColor: 'var(--color-crimson)' }
+                    : undefined
+                }
+                onClick={() => setInactiveOnly((v) => !v)}
+                aria-pressed={inactiveOnly}
+                aria-label="Inactive only"
+                data-tooltip="Inactive only"
+              >
+                <UserX className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            </div>
+          )}
+
+          <div className="relative w-[200px] shrink-0">
             <Search
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
               aria-hidden
@@ -264,18 +301,7 @@ export function AdminClientsPage() {
           {tab === 'clients' && (
             <button
               type="button"
-              className={`btn ${hotlistedOnly ? 'btn-red' : 'btn-outline'}`}
-              onClick={() => setHotlistedOnly((v) => !v)}
-              aria-pressed={hotlistedOnly}
-            >
-              Hotlisted only
-            </button>
-          )}
-
-          {tab === 'clients' && (
-            <button
-              type="button"
-              className="btn btn-crimson"
+              className="btn btn-crimson shrink-0"
               onClick={() => setAddClientOpen(true)}
             >
               <Plus className="w-3.5 h-3.5" aria-hidden />
@@ -293,7 +319,7 @@ export function AdminClientsPage() {
             Loading clients…
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load clients. Please refresh and try again.
           </div>
         ) : clients.length === 0 ? (

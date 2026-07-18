@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Pencil, UserX } from 'lucide-react';
+import { X, Pencil, UserX, Eye, EyeOff } from 'lucide-react';
 import { ConfirmModal } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
 import type { IUser } from '@contracts';
@@ -16,7 +16,9 @@ interface UserFormModalProps {
 }
 
 // Internal staff roles — CLIENT is intentionally excluded (clients live in the
-// Clients tab, not User Management).
+// Clients tab, not User Management). ADMIN is commented out: Admin accounts
+// are no longer assignable from this dropdown (create or edit) — they can
+// only be provisioned directly, not through the User Management UI.
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: UserRole.CS, label: 'Client Servicing' },
   { value: UserRole.TEAM_LEAD, label: 'Team Lead' },
@@ -24,14 +26,36 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: UserRole.DIGITATOR, label: 'Digitizor' },
   { value: UserRole.SEWOUT, label: 'Sewout' },
   { value: UserRole.QC, label: 'QC Reviewer' },
-  { value: UserRole.ADMIN, label: 'Admin' },
+  // { value: UserRole.ADMIN, label: 'Admin' },
 ];
 
 // Only these roles carry a Junior / Senior sub-type.
 const SUBTYPE_ROLES = new Set<UserRole>([UserRole.DESIGNER, UserRole.DIGITATOR]);
 
+// Mirrors the backend's password policy (change-art-backend/src/modules/auth/password-policy.ts)
+// so weak passwords are caught here instead of round-tripping to the server.
+const PASSWORD_REQUIREMENTS: { label: string; test: (p: string) => boolean }[] = [
+  { label: 'at least 8 characters', test: (p) => p.length >= 8 },
+  { label: 'one uppercase letter', test: (p) => /[A-Z]/.test(p) },
+  { label: 'one lowercase letter', test: (p) => /[a-z]/.test(p) },
+  { label: 'one number', test: (p) => /[0-9]/.test(p) },
+  { label: 'one special character', test: (p) => /[^A-Za-z0-9]/.test(p) },
+];
+
+function passwordStrengthError(password: string): string | null {
+  const failed = PASSWORD_REQUIREMENTS.filter((r) => !r.test(password));
+  if (failed.length === 0) return null;
+  return `Password must include ${failed.map((r) => r.label).join(', ')}.`;
+}
+
+// Labels for roles that may already exist on a user record even though they
+// aren't assignable via ROLE_OPTIONS (e.g. ADMIN).
+const NON_ASSIGNABLE_ROLE_LABELS: Partial<Record<UserRole, string>> = {
+  [UserRole.ADMIN]: 'Admin',
+};
+
 function roleLabel(role: UserRole): string {
-  return ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role;
+  return ROLE_OPTIONS.find((r) => r.value === role)?.label ?? NON_ASSIGNABLE_ROLE_LABELS[role] ?? role;
 }
 
 function subTypeLabel(sub: UserSubType | null): string {
@@ -72,10 +96,11 @@ function initialState(mode: UserModalMode, user: IUser | null): FormState {
 }
 
 export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
-  const [editing, setEditing] = useState(mode !== 'view');
+  const [editing, setEditing] = useState(mode !== 'view' && user?.role !== UserRole.ADMIN);
   const [form, setForm] = useState<FormState>(() => initialState(mode, user));
   const [error, setError] = useState<string | null>(null);
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const sessionUser = useSessionUser();
   const create = useCreateUser();
@@ -87,8 +112,9 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
   // Reset the form whenever the modal target changes.
   useEffect(() => {
     setForm(initialState(mode, user));
-    setEditing(mode !== 'view');
+    setEditing(mode !== 'view' && user?.role !== UserRole.ADMIN);
     setError(null);
+    setShowPassword(false);
   }, [mode, user]);
 
   useEffect(() => {
@@ -101,6 +127,10 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
 
   const isCreate = mode === 'create';
   const showSubType = SUBTYPE_ROLES.has(form.role);
+  // Admin accounts cannot be edited from this modal at all — matches the
+  // User Management table, which already hides the row-level Edit/Reset/
+  // Delete actions for Admin rows.
+  const isAdminTarget = !isCreate && user?.role === UserRole.ADMIN;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -125,7 +155,8 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
     if (isCreate) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
         return setError('A valid email is required.');
-      if (form.password.length < 8) return setError('Password must be at least 8 characters.');
+      const passwordError = passwordStrengthError(form.password);
+      if (passwordError) return setError(passwordError);
       create.mutate(
         {
           email: form.email.trim().toLowerCase(),
@@ -253,13 +284,31 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
               {isCreate ? (
                 <div>
                   <label className="fl">Password</label>
-                  <input
-                    className="fi"
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => set('password', e.target.value)}
-                    placeholder="Min 8 characters"
-                  />
+                  <div className="relative">
+                    <input
+                      className="fi pr-9"
+                      type={showPassword ? 'text' : 'password'}
+                      value={form.password}
+                      onChange={(e) => set('password', e.target.value)}
+                      placeholder="Min 8 characters"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-base transition-colors"
+                      onClick={() => setShowPassword((v) => !v)}
+                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-3.5 h-3.5" aria-hidden />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" aria-hidden />
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                    8+ characters, with uppercase, lowercase, a number, and a special character.
+                  </p>
                 </div>
               ) : null}
 
@@ -349,10 +398,12 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
               <button type="button" className="btn btn-outline" onClick={onClose}>
                 Close
               </button>
-              <button type="button" className="btn btn-crimson" onClick={() => setEditing(true)}>
-                <Pencil className="w-3.5 h-3.5" aria-hidden />
-                Edit
-              </button>
+              {!isAdminTarget ? (
+                <button type="button" className="btn btn-crimson" onClick={() => setEditing(true)}>
+                  <Pencil className="w-3.5 h-3.5" aria-hidden />
+                  Edit
+                </button>
+              ) : null}
             </>
           )}
         </div>

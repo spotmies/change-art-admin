@@ -56,12 +56,15 @@ export interface JobCardFilters {
   pipeline?: string;
   exclude_stage?: string;
   unacknowledged?: boolean;
+  include_ack_placed?: boolean;
 }
 
 export interface ClientFilters {
   search?: string;
   /** When true, only Hotlisted clients are returned. */
   hotlisted?: boolean;
+  /** When set, filters to only Active (true) or only Inactive (false) clients. */
+  is_active?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -246,6 +249,19 @@ export const adminService = {
     return apiClient.getPaginated<IClient>('/api/v1/clients', {
       params: { ...filters } as Record<string, unknown>,
     });
+  },
+
+  /**
+   * Directory-wide summary tiles — independent of any table search/filter,
+   * so narrowing the client table down to a search match never changes
+   * these numbers.
+   */
+  getClientStats(): Promise<{
+    active_accounts: number;
+    new_this_month: number;
+    top_client: { client_name: string; company_name: string | null } | null;
+  }> {
+    return apiClient.get('/api/v1/clients/stats');
   },
 
   getClientById(id: string): Promise<IClient> {

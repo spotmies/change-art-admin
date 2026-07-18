@@ -142,7 +142,7 @@ export function CSClientsPage() {
             Loading clients…
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load clients. Please refresh and try again.
           </div>
         ) : clients.length === 0 ? (

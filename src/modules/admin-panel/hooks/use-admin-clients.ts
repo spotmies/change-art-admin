@@ -13,6 +13,15 @@ export function useAdminClients(filters: ClientFilters = {}) {
   });
 }
 
+/** Directory-wide summary tiles — deliberately not parameterised by search/filters. */
+export function useAdminClientStats() {
+  return useQuery({
+    queryKey: queryKeys.clients.stats(),
+    queryFn: () => adminService.getClientStats(),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
 /**
  * A single client, kept reactive to the shared `clients` cache — unlike
  * storing the clicked-row object directly in local state, this re-fetches

@@ -183,7 +183,7 @@ export function InactivityGuard() {
       <div
         style={{
           background: 'var(--glass-bg)',
-          border: `1px solid ${urgent ? 'var(--crimson)' : 'var(--glass-border)'}`,
+          border: `1px solid ${urgent ? 'var(--color-crimson)' : 'var(--glass-border)'}`,
           borderRadius: 16,
           padding: '36px 28px 28px',
           maxWidth: 400,
@@ -199,7 +199,7 @@ export function InactivityGuard() {
             style={{
               width: 44,
               height: 44,
-              color: urgent ? 'var(--crimson)' : 'var(--color-amber)',
+              color: urgent ? 'var(--color-crimson)' : 'var(--color-amber)',
               transition: 'color 0.3s',
             }}
             aria-hidden
@@ -227,7 +227,7 @@ export function InactivityGuard() {
             fontWeight: 800,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '-0.03em',
-            color: urgent ? 'var(--crimson)' : 'var(--color-amber)',
+            color: urgent ? 'var(--color-crimson)' : 'var(--color-amber)',
             marginBottom: 32,
             transition: 'color 0.3s',
           }}

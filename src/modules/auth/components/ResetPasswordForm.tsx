@@ -3,12 +3,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Check } from 'lucide-react';
 import { authService } from '@modules/auth/services';
+import { PASSWORD_REQUIREMENTS, passwordStrengthError } from '@lib/password-policy';
 
 const ResetSchema = z
   .object({
-    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    newPassword: z.string().superRefine((val, ctx) => {
+      const error = passwordStrengthError(val);
+      if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+    }),
     confirmPassword: z.string(),
   })
   .refine((d) => d.newPassword === d.confirmPassword, {
@@ -32,11 +36,13 @@ export function ResetPasswordForm() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ResetValues>({
     resolver: zodResolver(ResetSchema),
     defaultValues: { newPassword: '', confirmPassword: '' },
   });
+  const watchedNewPassword = watch('newPassword');
 
   if (!token) {
     return (
@@ -123,6 +129,22 @@ export function ResetPasswordForm() {
             {errors.newPassword.message}
           </p>
         ) : null}
+        {watchedNewPassword && (
+          <ul className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5">
+            {PASSWORD_REQUIREMENTS.map((req) => {
+              const met = req.test(watchedNewPassword);
+              return (
+                <li
+                  key={req.key}
+                  className={`flex items-center gap-1 text-[11px] ${met ? 'text-status-green' : 'text-text-muted'}`}
+                >
+                  <Check className="w-3 h-3" style={{ opacity: met ? 1 : 0.3 }} aria-hidden />
+                  {req.label}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </label>
 
       <label className="block mb-5">

@@ -68,10 +68,10 @@ export function RejectClientModal({ client, onClose }: RejectClientModalProps) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. We are unable to verify your business details..."
-            style={note.length > 0 && !isValid ? { borderColor: 'var(--crimson)' } : undefined}
+            style={note.length > 0 && !isValid ? { borderColor: 'var(--color-crimson)' } : undefined}
           />
           {note.length > 0 && !isValid && (
-            <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>
+            <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>
               Please provide a reason (at least 10 characters).
             </p>
           )}

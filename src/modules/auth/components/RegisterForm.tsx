@@ -4,17 +4,22 @@ import { z } from 'zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { Check } from 'lucide-react';
 import { authService } from '@modules/auth/services';
 import { useAuthStore } from '@modules/auth/stores/auth-store';
 import { ApiClientError } from '@lib/api-client';
 import { ERROR_CODES, ERROR_MESSAGES } from '@contracts';
 import { pathForRole } from '@/router';
+import { PASSWORD_REQUIREMENTS, passwordStrengthError } from '@lib/password-policy';
 
 const RegisterSchema = z
   .object({
     name: z.string().min(2, 'Please enter your full name'),
     email: z.string().email('Enter a valid email'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: z.string().superRefine((val, ctx) => {
+      const error = passwordStrengthError(val);
+      if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+    }),
     confirmPassword: z.string().min(8, 'Please re-type your password'),
   })
   .refine((v) => v.password === v.confirmPassword, {
@@ -38,11 +43,13 @@ export function RegisterForm() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<RegisterValues>({
     resolver: zodResolver(RegisterSchema),
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
   });
+  const watchedPassword = watch('password');
 
   async function onSubmit(values: RegisterValues) {
     setServerError(null);
@@ -122,6 +129,22 @@ export function RegisterForm() {
             {errors.password.message}
           </p>
         ) : null}
+        {watchedPassword && (
+          <ul className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5">
+            {PASSWORD_REQUIREMENTS.map((req) => {
+              const met = req.test(watchedPassword);
+              return (
+                <li
+                  key={req.key}
+                  className={`flex items-center gap-1 text-[11px] ${met ? 'text-status-green' : 'text-text-muted'}`}
+                >
+                  <Check className="w-3 h-3" style={{ opacity: met ? 1 : 0.3 }} aria-hidden />
+                  {req.label}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </label>
 
       <label className="block mt-3 mb-5">

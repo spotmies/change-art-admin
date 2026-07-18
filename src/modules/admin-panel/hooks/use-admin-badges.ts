@@ -34,6 +34,17 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
     enabled,
   });
 
+  // Shares its cache key with the Sign Up Requests tab on the Clients page.
+  // The "clients" badge needs BOTH counts — a pending signup is just as
+  // actionable as a pending profile-change request, and counting only the
+  // latter silently hid new signups from the sidebar.
+  const { data: pendingSignups } = useQuery({
+    queryKey: queryKeys.clients.pending(),
+    queryFn: () => adminService.getPendingClients(),
+    staleTime: 30 * 1000,
+    enabled,
+  });
+
   // Shares the same cache entry as the bell icon in the topbar so no extra
   // network request is made — both components read from the same query key.
   const { data: unreadData } = useUnreadCount(enabled);
@@ -45,12 +56,12 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
       badges['new-jobs'] = data['new-jobs'] ?? 0;
       if ((data['amendments'] ?? 0) > 0) badges['amendments'] = data['amendments'] ?? 0;
     }
-    if (pendingChangeRequests) {
-      badges['clients'] = pendingChangeRequests.meta.total;
+    if (pendingChangeRequests || pendingSignups) {
+      badges['clients'] = (pendingChangeRequests?.meta.total ?? 0) + (pendingSignups?.length ?? 0);
     }
     if (unreadData) {
       badges['notifications'] = unreadData.count;
     }
     return badges;
-  }, [data, pendingChangeRequests, unreadData]);
+  }, [data, pendingChangeRequests, pendingSignups, unreadData]);
 }

@@ -24,7 +24,7 @@ export function CSDeliverPage() {
     return (
       <div className="page">
         <GreetingHero title="Ready to Dispatch" subtitle="Jobs cleared QC and ready for release." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>

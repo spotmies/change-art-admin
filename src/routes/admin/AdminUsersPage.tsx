@@ -156,7 +156,7 @@ export function AdminUsersPage() {
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-text-faint text-sm">Loading users…</div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load users. Please refresh and try again.
           </div>
         ) : filtered.length === 0 ? (

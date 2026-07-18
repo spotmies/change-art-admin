@@ -110,7 +110,7 @@ export function ApproveClientModal({ client, onClose }: ApproveClientModalProps)
                 onChange={(e) => setClientId(e.target.value.replace(/\D/g, '').slice(0, 5))}
                 placeholder="e.g. 84291"
                 maxLength={5}
-                style={!isValidFormat || (!isAvailable && clientId.length === 5) ? { borderColor: 'var(--crimson)' } : undefined}
+                style={!isValidFormat || (!isAvailable && clientId.length === 5) ? { borderColor: 'var(--color-crimson)' } : undefined}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 {isChecking ? (
@@ -124,12 +124,12 @@ export function ApproveClientModal({ client, onClose }: ApproveClientModalProps)
             </div>
             
             {clientId.length > 0 && !isValidFormat && (
-              <p className="text-[11px] mt-1" style={{ color: 'var(--crimson)' }}>
+              <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>
                 Client ID must be exactly 5 digits.
               </p>
             )}
             {clientId.length === 5 && !isAvailable && !isChecking && (
-              <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: 'var(--crimson)' }}>
+              <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: 'var(--color-crimson)' }}>
                 <AlertCircle className="w-3 h-3" />
                 This Client ID is already in use.
               </p>

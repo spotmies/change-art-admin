@@ -42,17 +42,34 @@ function mapPriority(display: string): string | undefined {
   }
 }
 
-function mapStatusFilter(display: string): { status?: string; stage?: string; statuses?: string; unacknowledged?: boolean } {
+function mapStatusFilter(display: string): {
+  status?: string;
+  stage?: string;
+  statuses?: string;
+  unacknowledged?: boolean;
+  include_ack_placed?: boolean;
+} {
   switch (display) {
+    case 'In Review':
+      return { status: 'DRAFT' };
+    case 'Quote Submitted':
+      // Quote sent to the client, awaiting their approval/rejection —
+      // JobStatus.QUOTE_SUBMITTED specifically, not the whole 'quote' stage
+      // (which would also pull in DRAFT/'In Review' rows).
+      return { status: 'QUOTE_SUBMITTED' };
     case 'Order Placed':
       return { status: 'JOB_PLACED' };
     case 'Pending':
       // JOB_PLACED jobs that haven't been acknowledged yet (display as "Pending" in the adapter)
       return { status: 'JOB_PLACED', unacknowledged: true };
     case 'In Production':
-      // Statuses that always display as "In Production" — excludes JOB_PLACED which
-      // shows as "Pending" until the CS acknowledgement is sent.
-      return { statuses: 'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED' };
+      // Matches the adapter's "In Production" label: the non-JOB_PLACED junior
+      // stages, PLUS JOB_PLACED rows that HAVE been acknowledged (JOB_PLACED
+      // without acknowledgement displays as "Pending" instead — see below).
+      return {
+        statuses: 'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED',
+        include_ack_placed: true,
+      };
     case 'Senior Review':
       return { stage: 'senior' };
     case 'Sewout':
@@ -87,6 +104,15 @@ export function AdminJobsPage() {
 
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>({ ...EMPTY_FILTERS, status: initialStatus });
+
+  // Keep the filter bar's status in sync if the URL's ?filter= changes —
+  // e.g. navigating here again from a different dashboard stat card while
+  // this route is already mounted, which does not re-run the useState
+  // initializer above.
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, status: initialStatus }));
+    setPage(1);
+  }, [initialStatus]);
 
   const debouncedSearch = useDebounced(filters.search, 300);
   // per_page: 500 — needed to populate the client filter dropdown with all client names.
@@ -126,24 +152,43 @@ export function AdminJobsPage() {
   function handleFiltersChange(next: JobFilters) {
     setFilters(next);
     setPage(1);
+    // Keep the URL's ?filter= in sync with whatever status the user just
+    // picked (not just cleared) — so the resync effect above sees the same
+    // value it's about to be set to (a no-op) instead of snapping back to
+    // empty and undoing the user's selection on the very next render.
+    const currentFilterParam = searchParams.get('filter') ?? '';
+    if (next.status !== currentFilterParam) {
+      const nextParams = new URLSearchParams(searchParams);
+      if (next.status) {
+        nextParams.set('filter', next.status);
+      } else {
+        nextParams.delete('filter');
+      }
+      setSearchParams(nextParams, { replace: true });
+    }
   }
 
   if (isError) {
     return (
       <div className="page">
         <GreetingHero title="All Jobs" subtitle="Every job across the platform." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>
     );
   }
 
+  // Drives the heading off the filter that's actually applied right now
+  // (not just whatever ?filter= the page was seeded with), and uses its
+  // display label so e.g. 'Ready to Deliver' reads as "Ready to Dispatch".
+  const activeStatusLabel = JOB_STATUS_OPTIONS.find((o) => o.value === filters.status)?.label ?? '';
+
   return (
     <div className="page">
       <GreetingHero
-        title={initialStatus ? `${initialStatus} Jobs` : 'All Jobs'}
-        subtitle={`${initialStatus ? `Showing ${initialStatus.toLowerCase()} jobs.` : 'Every job across the platform — search, filter by type, priority, client, or date.'}${total > 0 ? ` ${total} total.` : ''}`}
+        title={activeStatusLabel ? `${activeStatusLabel} Jobs` : 'All Jobs'}
+        subtitle={`${activeStatusLabel ? `Showing ${activeStatusLabel.toLowerCase()} jobs.` : 'Every job across the platform — search, filter by type, priority, client, or date.'}${total > 0 ? ` ${total} total.` : ''}`}
       />
 
       {isFirstLoad ? (

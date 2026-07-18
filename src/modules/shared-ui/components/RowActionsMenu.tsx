@@ -124,7 +124,7 @@ export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowAction
                       className={cn(
                         'w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left transition-colors',
                         'hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed',
-                        a.danger ? 'text-[var(--crimson)]' : 'text-text-main',
+                        a.danger ? 'text-[var(--color-crimson)]' : 'text-text-main',
                       )}
                       onClick={() => {
                         setOpen(false);

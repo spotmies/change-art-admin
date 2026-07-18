@@ -66,7 +66,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
     const items = NAV_CONFIG[UserRole.ADMIN].sections.flatMap((s) => s.items);
     for (const [id, live] of Object.entries(adminBadges)) {
       const item = items.find((it) => it.id === id);
-      if (!item) continue;
+      if (!item || item.persistentBadge) continue;
       const onPage = location.pathname.startsWith(item.to);
       const base = seen[id] ?? 0;
       if (onPage) {
@@ -124,7 +124,11 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
               {section.items.map((item) => {
                 const live = adminBadges[item.id];
                 const dynamicBadge =
-                  live === undefined ? undefined : Math.max(0, live - (seen[item.id] ?? 0));
+                  live === undefined
+                    ? undefined
+                    : item.persistentBadge
+                      ? live
+                      : Math.max(0, live - (seen[item.id] ?? 0));
                 return (
                   <SidebarItem
                     key={item.id}

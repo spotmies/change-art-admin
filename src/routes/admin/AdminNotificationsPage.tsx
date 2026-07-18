@@ -152,7 +152,7 @@ export function AdminNotificationsPage() {
                   <span
                     className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                     style={{
-                      background: 'var(--crimson)',
+                      background: 'var(--color-crimson)',
                       color: 'white',
                       minWidth: 16,
                       height: 16,
@@ -222,7 +222,7 @@ export function AdminNotificationsPage() {
             Loading notifications…
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load notifications. Please refresh and try again.
           </div>
         ) : filtered.length === 0 ? (
@@ -299,7 +299,7 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
       <span
         aria-hidden
         className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: n.is_read ? 'transparent' : 'var(--crimson)' }}
+        style={{ background: n.is_read ? 'transparent' : 'var(--color-crimson)' }}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -313,7 +313,7 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
           <div className="text-[12px] text-text-muted mt-1 whitespace-pre-wrap">{n.body}</div>
         ) : null}
         {path ? (
-          <div className="text-[11px] mt-1" style={{ color: 'var(--crimson)', fontWeight: 600 }}>
+          <div className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)', fontWeight: 600 }}>
             {path.startsWith('/admin/clients') ? 'Click to review request →' : 'Click to open job →'}
           </div>
         ) : null}

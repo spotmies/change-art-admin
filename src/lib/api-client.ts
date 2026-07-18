@@ -68,6 +68,9 @@ function humanizeFieldError(field: string, raw: string): string {
   }
   if (/required/i.test(raw)) return `${label} is required.`;
   if (/invalid email/i.test(raw)) return `${label} must be a valid email address.`;
+  // Some backend messages (e.g. the password-strength policy) already read
+  // naturally on their own — don't prefix those with a redundant field label.
+  if (raw.toLowerCase().startsWith(label.toLowerCase())) return raw;
 
   return `${label}: ${raw}`;
 }

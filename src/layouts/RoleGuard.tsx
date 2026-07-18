@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { UserRole } from '@contracts';
 import { useAuthStatus, useSessionUser } from '@modules/auth/stores/auth-store';
+import { FullPageLoader } from '@modules/shared-ui/components/FullPageLoader';
 import { pathForRole } from '@/router';
 
 interface RoleGuardProps {
@@ -42,17 +43,4 @@ export function RoleGuard({ allow, children }: RoleGuardProps) {
   }
 
   return <>{children}</>;
-}
-
-function FullPageLoader() {
-  return (
-    <div
-      className="fixed inset-0 flex items-center justify-center bg-navy"
-      role="status"
-      aria-busy="true"
-      aria-live="polite"
-    >
-      <div className="glass rounded-2xl px-6 py-4 text-sm text-text-muted">Loading…</div>
-    </div>
-  );
 }

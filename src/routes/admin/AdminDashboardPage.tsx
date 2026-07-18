@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import {
   BarChart,
+  Callout,
+  DonutChart,
   GreetingHero,
   JobTable,
   Panel,
   SectionHeader,
   StatGrid,
 } from '@modules/shared-ui';
-import { AlertTriangle, CheckCircle2, CreditCard, Send, Sparkles, Target, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Cog, Layers, Send, Sparkles } from 'lucide-react';
 import {
   useAdminJobViews,
 } from '../../modules/admin-panel/hooks/use-admin-jobs';
@@ -21,7 +23,7 @@ export function AdminDashboardPage() {
   const firstName = user?.name.split(' ')[0] ?? 'Admin';
 
   const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
-  // per_page: 1 — we only need meta.total for the "Total Clients" stat card; no items are used.
+  // per_page: 1 — we only need meta.total for the "Total Clients" stat; no items are used.
   const { data: clientsData } = useAdminClients({ per_page: 1 });
   // Separate fetch (up to 100 clients) to scan for cards expired/expiring soon —
   // mirrors the same "fetch a page, compute client-side" pattern used for jobs above.
@@ -41,21 +43,25 @@ export function AdminDashboardPage() {
     () => jobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Cancelled'),
     [jobs],
   );
-  // Count only jobs that display as "In Production" (not "Pending") — matches the filter on the jobs page.
-  const inProd = useMemo(() => jobs.filter((j) => j.stage === 'junior' && j.status !== 'Pending'), [jobs]);
+  // "In Production" for the dashboard donut/stat covers every active job that
+  // isn't in QC or Sewout yet — including ones still "Pending" acknowledgement
+  // and ones out for "Senior Review" — so this bucket plus inQc/inSewout always
+  // adds up to the "Active" total shown at the donut's center. (The Jobs page
+  // itself still filters "Pending" and "Senior Review" as their own statuses.)
+  const inProd = useMemo(
+    () => jobs.filter((j) => j.stage === 'junior' || j.stage === 'senior'),
+    [jobs],
+  );
   const inQc = useMemo(() => jobs.filter((j) => j.stage === 'qc'), [jobs]);
   const inSewout = useMemo(() => jobs.filter((j) => j.stage === 'sewout'), [jobs]);
   const delivered = useMemo(() => jobs.filter((j) => j.stage === 'delivered'), [jobs]);
 
-  const newJobs = useMemo(() => active.slice(0, 3), [active]);
-  const newQuotes = useMemo(() => jobs.filter((j) => j.stage === 'quote').slice(0, 3), [jobs]);
+  const newJobs = useMemo(() => active.slice(0, 4), [active]);
+  const newQuotesAll = useMemo(() => jobs.filter((j) => j.stage === 'quote'), [jobs]);
+  const newQuotes = useMemo(() => newQuotesAll.slice(0, 4), [newQuotesAll]);
 
   const totalClients = clientsData?.meta.total ?? 0;
-
   const totalActive = active.length;
-  const prodPct = totalActive ? Math.round((inProd.length / totalActive) * 100) : 0;
-
-  // ── Analytics computations ──────────────────────────────────────────────
 
   // Missed Deadlines: active jobs whose ETA window has already elapsed
   const missedDeadlines = useMemo(() => {
@@ -66,71 +72,40 @@ export function AdminDashboardPage() {
     }).length;
   }, [active]);
 
-  // Achieved Targets: delivered jobs (completed successfully)
-  const achievedTargets = delivered.length;
+  const onTimeRate = totalActive + delivered.length > 0
+    ? Math.round((delivered.length / Math.max(totalActive + delivered.length, 1)) * 100)
+    : null;
 
-  // Weekly Trend: jobs created on each day of the current week (Mon–Sun)
-  const weeklyData = useMemo(() => {
+  // Activity Trend: a rolling 7-day trailing window ending today, so it keeps
+  // scrolling forward day by day instead of dropping back to empty every time
+  // the calendar week turns over (which is what a fixed Mon–Sun window does).
+  const weeklyTrend = useMemo(() => {
     const now = new Date();
-    // Start of this week's Monday
-    const dayOfWeek = now.getDay(); // 0 = Sun
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + mondayOffset);
-    monday.setHours(0, 0, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    const counts = [0, 0, 0, 0, 0, 0, 0];
-    for (const job of jobs) {
-      const created = new Date(job.created);
-      const dayIdx = Math.floor((created.getTime() - monday.getTime()) / 86_400_000);
-      if (dayIdx >= 0 && dayIdx < 7) counts[dayIdx]++;
-    }
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (6 - i));
+      return d;
+    });
+
+    const counts = days.map((day) => {
+      const dayStart = day.getTime();
+      const dayEnd = dayStart + 86_400_000;
+      return jobs.filter((job) => {
+        const created = new Date(job.created).getTime();
+        return created >= dayStart && created < dayEnd;
+      }).length;
+    });
 
     const maxVal = Math.max(...counts, 1);
-    const colors = [
-      'var(--color-teal)',
-      'var(--color-amber)',
-      'var(--color-purple, #a855f7)',
-      'var(--color-blue)',
-      undefined,
-      undefined,
-      undefined,
-    ];
-    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => ({
-      label,
+    return days.map((day, i) => ({
+      label: day.toLocaleDateString('en-US', { weekday: 'short' }),
       value: counts[i],
       height: Math.max(Math.round((counts[i] / maxVal) * 100), 4),
-      color: colors[i],
       highlight: i === 6,
     }));
   }, [jobs]);
-
-  // Production Trends: jobs created each day for the last 7 days
-  const productionTrends = useMemo(() => {
-    const result: { label: string; value: number; height: number; color: string }[] = [];
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const day = new Date(now);
-      day.setDate(day.getDate() - i);
-      day.setHours(0, 0, 0, 0);
-      const nextDay = new Date(day);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const count = jobs.filter((j) => {
-        const d = new Date(j.created);
-        return d >= day && d < nextDay;
-      }).length;
-      result.push({
-        label: day.toLocaleDateString('en', { weekday: 'short' }),
-        value: count,
-        height: 0,
-        color: 'var(--color-blue)',
-      });
-    }
-    const maxVal = Math.max(...result.map((r) => r.value), 1);
-    return result.map((r) => ({ ...r, height: Math.max(Math.round((r.value / maxVal) * 100), 4) }));
-  }, [jobs]);
-
-
 
   const loading = (v: number | string) => (isLoading ? '…' : v);
 
@@ -161,224 +136,128 @@ export function AdminDashboardPage() {
         }
       />
 
-      {expiringCards.length > 0 && (
-        <div
-          className="flex items-start gap-3 rounded-xl px-4 py-3 mb-4"
-          style={
-            expiredCount > 0
-              ? { background: 'rgba(196,30,58,0.08)', border: '1px solid rgba(196,30,58,0.3)' }
-              : { background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.3)' }
-          }
-        >
-          <CreditCard
-            className="w-4 h-4 shrink-0 mt-0.5"
-            style={{ color: expiredCount > 0 ? '#ff8a95' : '#fbbf24' }}
-            aria-hidden
-          />
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold" style={{ color: expiredCount > 0 ? '#ff8a95' : '#fbbf24' }}>
-              {expiredCount > 0 && expiringSoonCount > 0
-                ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} expired, ${expiringSoonCount} expiring within 30 days`
-                : expiredCount > 0
-                  ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} already expired`
-                  : `${expiringSoonCount} client card${expiringSoonCount === 1 ? '' : 's'} expiring within 30 days`}
-            </div>
-            <div className="text-[12px] text-text-muted mt-1 flex flex-wrap gap-x-3 gap-y-1">
-              {expiringCards.slice(0, 6).map(({ client, status }) => (
-                <Link
-                  key={client.id}
-                  to="/admin/clients"
-                  className="underline underline-offset-2 hover:text-text-main transition-colors"
-                >
-                  {client.company_name ?? client.client_name}
-                  {status === 'expired' ? ' (expired)' : ' (expiring soon)'}
-                </Link>
-              ))}
-              {expiringCards.length > 6 ? (
-                <Link to="/admin/clients" className="underline underline-offset-2 hover:text-text-main transition-colors">
-                  +{expiringCards.length - 6} more
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Row 1 — Core job volume stats */}
       <StatGrid
-        className="stats-grid-6"
         stats={[
-          { accent: 'blue', label: 'Open Jobs', value: loading(active.length), href: '/admin/jobs' },
-          { accent: 'amber', label: 'In Production', value: loading(inProd.length), href: '/admin/jobs?filter=In+Production' },
-          { accent: 'teal', label: 'In QC', value: loading(inQc.length), href: '/admin/jobs?filter=In+QC' },
           {
-            accent: 'green',
-            label: 'Sewout',
-            value: loading(inSewout.length),
-            delta: 'Jobs in sewout stage',
+            accent: 'crimson',
+            label: 'Open Jobs',
+            value: loading(totalActive),
+            delta: 'Active pipeline',
             deltaDirection: 'up',
-            icon: <Send aria-hidden />,
-            href: '/admin/jobs?filter=Sewout',
+            icon: <Layers aria-hidden />,
+            href: '/admin/jobs',
           },
           {
-            accent: 'purple',
+            accent: 'amber',
+            label: 'In Production',
+            value: loading(inProd.length),
+            delta: `${inQc.length} in QC`,
+            icon: <Cog aria-hidden />,
+            href: '/admin/jobs?filter=In+Production',
+          },
+          {
+            accent: 'teal',
+            label: 'In QC',
+            value: loading(inQc.length),
+            delta: 'QC approved next',
+            deltaDirection: 'up',
+            icon: <CheckCircle2 aria-hidden />,
+            href: '/admin/jobs?filter=In+QC',
+          },
+          {
+            accent: 'green',
             label: 'Dispatched',
             value: loading(delivered.length),
             delta: 'Completed jobs',
             deltaDirection: 'up',
-            icon: <CheckCircle2 aria-hidden />,
+            icon: <Send aria-hidden />,
             href: '/admin/jobs?filter=Dispatched',
-          },
-          {
-            accent: 'crimson',
-            label: 'Total Clients',
-            value: loading(totalClients),
-            delta: 'Registered accounts',
-            deltaDirection: 'up',
-            href: '/admin/clients',
-          },
-        ]}
-      />
-
-      {/* Row 2 — Analytics metrics */}
-      <StatGrid
-        className="stats-grid-4"
-        stats={[
-          {
-            accent: 'crimson',
-            label: 'Missed Deadlines',
-            value: loading(missedDeadlines),
-            delta: 'Active jobs past ETA',
-            deltaDirection: missedDeadlines > 0 ? 'down' : 'none',
-            icon: <AlertTriangle aria-hidden />,
-            href: '/admin/jobs',
-          },
-          {
-            accent: 'green',
-            label: 'Achieved Targets',
-            value: loading(achievedTargets),
-            delta: 'Jobs delivered',
-            deltaDirection: 'up',
-            icon: <Target aria-hidden />,
-            href: '/admin/jobs?filter=Dispatched',
-          },
-          {
-            accent: 'teal',
-            label: 'This Week',
-            value: loading(weeklyData.reduce((s, d) => s + d.value, 0)),
-            delta: 'Jobs created this week',
-            deltaDirection: 'up',
-            icon: <TrendingUp aria-hidden />,
-          },
-          {
-            accent: 'blue',
-            label: 'On-Time Rate',
-            value: loading(
-              active.length + delivered.length > 0
-                ? `${Math.round((achievedTargets / Math.max(active.length + delivered.length, 1)) * 100)}%`
-                : '—',
-            ),
-            delta: 'Dispatched vs total jobs',
-            deltaDirection: 'up',
           },
         ]}
       />
 
       <div className="two-col">
-        {/* Left — job tables */}
         <div>
           <SectionHeader
-            title={<span style={{ color: '#0D9488' }}>New Jobs</span>}
-            action={<Link to="/admin/new-jobs" className="sec-action-link">View All →</Link>}
+            title={<span style={{ color: '#5eead4' }}>New Jobs</span>}
+            action={<Link to="/admin/new-jobs">View All →</Link>}
           />
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
           ) : (
-            <JobTable jobs={newJobs} defaultView="table" showActions gridCols={3} />
+            <JobTable jobs={newJobs} defaultView="grid" showActions minimalColumns />
           )}
 
-          <div className="mt-7">
+          <div className="mt-6">
             <SectionHeader
-              title={<span style={{ color: '#D97706' }}>New Quote Requests</span>}
-              action={<Link to="/admin/new-quotes" className="sec-action-link">View All →</Link>}
+              title={<span style={{ color: '#ff8a95' }}>New Quote Requests</span>}
+              action={<Link to="/admin/new-quotes">View All →</Link>}
             />
             {isLoading ? (
               <div className="flex items-center justify-center py-8 text-text-faint text-sm">Loading…</div>
             ) : (
-              <JobTable jobs={newQuotes} defaultView="table" showActions quoteView gridCols={3} />
+              <JobTable jobs={newQuotes} defaultView="grid" showActions quoteView minimalColumns />
             )}
           </div>
         </div>
 
-        {/* Right — analytics panels */}
         <div className="flex flex-col gap-3">
+          <Panel title="Job Split">
+            <DonutChart
+              centerValue={loading(totalActive)}
+              centerLabel="Active"
+              showCount
+              slices={[
+                { label: 'In Production', value: inProd.length, color: 'var(--color-amber)' },
+                { label: 'In QC', value: inQc.length, color: 'var(--color-teal)' },
+                { label: 'Sewout', value: inSewout.length, color: 'var(--color-purple, #a855f7)' },
+              ]}
+            />
+          </Panel>
 
-          {/* Jobs Status donut */}
-          <Panel>
-            <div className="flex items-center gap-5">
-              <div
-                role="img"
-                aria-label="Jobs status donut"
-                style={{
-                  width: 90, height: 90, borderRadius: '50%', flexShrink: 0,
-                  background: totalActive
-                    ? `conic-gradient(var(--color-teal) 0% ${prodPct}%, var(--color-amber) ${prodPct}% 100%)`
-                    : 'var(--glass-border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                }}
-              >
-                <div style={{
-                  width: 62, height: 62, borderRadius: '50%',
-                  background: 'var(--glass-bg)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.15)',
-                }}>
-                  <span style={{ fontFamily: 'Plus Jakarta Sans', fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--text-main)' }}>
-                    {isLoading ? '…' : totalActive}
-                  </span>
-                  <span style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>
-                    Active
-                  </span>
-                </div>
-              </div>
+          <Panel title="Activity Trend">
+            <BarChart items={weeklyTrend} />
+          </Panel>
 
-              <div className="flex-1">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2.5">
-                  Jobs Status
-                </div>
-                <div className="flex flex-col gap-2">
-                  {(
-                    [
-                      { label: 'In Production', count: inProd.length, color: 'var(--color-teal)', filter: 'In+Production' },
-                      { label: 'In QC', count: inQc.length, color: 'var(--color-amber)', filter: 'In+QC' },
-                      { label: 'Sewout', count: inSewout.length, color: 'var(--color-purple, #a855f7)', filter: 'Sewout' },
-                    ] as const
-                  ).map(({ label, count, color, filter }) => (
-                    <Link key={label} to={`/admin/jobs?filter=${filter}`} className="flex items-center gap-2 group">
-                      <div className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: color }} />
-                      <span className="text-[12px] text-text-muted font-medium flex-1 group-hover:text-text-main transition-colors">{label}</span>
-                      <span className="text-[12px] font-bold text-text-main">{isLoading ? '…' : count}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
+          <Panel title="Overview">
+            <div className="flex flex-col gap-2">
+              {[
+                { label: 'Total Clients', value: loading(totalClients), to: '/admin/clients' },
+                { label: 'Missed Deadlines', value: loading(missedDeadlines), to: '/admin/jobs' },
+                {
+                  label: 'On-Time Rate',
+                  value: onTimeRate === null ? '—' : loading(`${onTimeRate}%`),
+                  to: '/admin/jobs?filter=Dispatched',
+                },
+              ].map((row) => (
+                <Link key={row.label} to={row.to} className="flex items-center justify-between group">
+                  <span className="text-[12px] text-text-muted font-medium group-hover:text-text-main transition-colors">
+                    {row.label}
+                  </span>
+                  <span className="text-[13px] font-bold text-text-main">{row.value}</span>
+                </Link>
+              ))}
             </div>
           </Panel>
 
-          {/* Weekly Trend (dynamic) */}
-          <Panel title="Weekly Trend">
-            <BarChart items={weeklyData} />
-          </Panel>
-
-          {/* Production Trends — last 7 days */}
-          <Panel title="Production Trends" className="panel-blue">
-            <BarChart items={productionTrends} />
-          </Panel>
-
+          {expiringCards.length > 0 ? (
+            <Callout tone={expiredCount > 0 ? 'crimson' : 'amber'}>
+              {expiredCount > 0 && expiringSoonCount > 0
+                ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} expired, ${expiringSoonCount} expiring within 30 days. `
+                : expiredCount > 0
+                  ? `${expiredCount} client card${expiredCount === 1 ? '' : 's'} already expired. `
+                  : `${expiringSoonCount} client card${expiringSoonCount === 1 ? '' : 's'} expiring within 30 days. `}
+              <Link to="/admin/clients" className="underline underline-offset-2">
+                Review clients →
+              </Link>
+            </Callout>
+          ) : newQuotesAll.length > 0 ? (
+            <Callout tone="info">
+              {newQuotesAll.length} quote request{newQuotesAll.length === 1 ? '' : 's'} awaiting review.
+            </Callout>
+          ) : null}
         </div>
       </div>
-
     </div>
   );
 }
