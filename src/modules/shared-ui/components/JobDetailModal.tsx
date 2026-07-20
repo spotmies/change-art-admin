@@ -1156,10 +1156,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
 
         {/* ── ACK POPOVER ── */}
         {showAckPopover && canAcknowledge && (() => {
-          // Quote flow only: ETA was already communicated to the client in the
-          // price email, so lock it. For regular order flow the admin can always
-          // edit the ETA here even if it was pre-set via the Edit modal.
-          const etaIsLocked = (isQuote || job?.project === 'Quote') && job != null && job.etaHours != null && job.etaHours > 0;
+          // ETA was already communicated to the client alongside the price
+          // (send-price sets both together, and the backend now rejects
+          // further edits to eta_hours once the client has confirmed) — lock
+          // it whenever a price was actually sent, regardless of project
+          // type or current status. Only jobs that skipped pricing entirely
+          // (no admin_price ever set) get a free-form ETA input here.
+          const etaIsLocked = job != null && job.adminPrice != null && job.etaHours != null && job.etaHours > 0;
           const etaParsed = ackEtaHours ? parseFloat(ackEtaHours) : NaN;
           const etaValid = etaIsLocked || (!isNaN(etaParsed) && etaParsed > 0);
           const isDisabled = acknowledgeJob.isPending || !etaValid;
