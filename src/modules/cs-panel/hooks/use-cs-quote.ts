@@ -1,16 +1,18 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
+import { ApiClientError } from '@lib/api-client';
 import { toastApiError, ValidationError } from '@lib/toast-error';
 import {
   csQuoteService,
   type SendQuotePriceBody,
+  type ApproveJobBody,
   type RejectQuoteBody,
   type DispatchJobBody,
   type MarkCompleteBody,
 } from '../services/cs-quote.service';
 
-export type { SendQuotePriceBody, RejectQuoteBody, DispatchJobBody, MarkCompleteBody };
+export type { SendQuotePriceBody, ApproveJobBody, RejectQuoteBody, DispatchJobBody, MarkCompleteBody };
 
 export function useSendQuotePrice() {
   const qc = useQueryClient();
@@ -26,7 +28,40 @@ export function useSendQuotePrice() {
       void qc.invalidateQueries({ queryKey: queryKeys.quotes.all() });
       toast.success('Price sent to client for confirmation.');
     },
-    onError: (err) => toastApiError(err),
+    onError: (err, { jobId }) => {
+      // Someone else (another CS rep, or Admin) won the race and already sent
+      // a price for this job — refetch so the modal drops the stale "send
+      // price" form and shows what actually happened instead of leaving the
+      // user staring at an outdated view they could resubmit into again.
+      if (err instanceof ApiClientError && err.code === 'JOB_CARD_VERSION_MISMATCH') {
+        void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(jobId) });
+        void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      }
+      toastApiError(err);
+    },
+  });
+}
+
+export function useApproveJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ jobId, body }: { jobId: string; body: ApproveJobBody }) => {
+      if (!jobId?.trim()) throw new ValidationError('Job ID is required.');
+      if (!Number.isFinite(body.etaHours) || body.etaHours <= 0) throw new ValidationError('ETA must be a positive number of hours.');
+      return csQuoteService.approveJob(jobId, body);
+    },
+    onSuccess: (job) => {
+      qc.setQueryData(queryKeys.jobs.byId(job.id), job);
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      toast.success('Job approved — ready for assignment.');
+    },
+    onError: (err, { jobId }) => {
+      if (err instanceof ApiClientError && err.code === 'JOB_CARD_VERSION_MISMATCH') {
+        void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(jobId) });
+        void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+      }
+      toastApiError(err);
+    },
   });
 }
 
@@ -79,6 +114,29 @@ export function useNotifyOrderReady() {
       void qc.invalidateQueries({ queryKey: queryKeys.jobs.byId(variables.jobId) });
       void qc.invalidateQueries({ queryKey: queryKeys.jobs.all() });
       toast.success(`Order ready email sent to ${data.to}`);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+const BYPASS_SETTING_QUERY_KEY = ['cs-panel', 'bypass-setting'];
+
+/** Whether "Mark Complete & Notify Ready" (cs_complete) is currently enabled — PRD §1.6/§4 item 5. */
+export function useBypassSetting(enabled = true) {
+  return useQuery({
+    queryKey: BYPASS_SETTING_QUERY_KEY,
+    queryFn: () => csQuoteService.getBypassSetting(),
+    enabled,
+  });
+}
+
+export function useSetBypassSetting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => csQuoteService.setBypassSetting(enabled),
+    onSuccess: (data) => {
+      qc.setQueryData(BYPASS_SETTING_QUERY_KEY, data);
+      toast.success(data.enabled ? 'CS bypass enabled.' : 'CS bypass disabled.');
     },
     onError: (err) => toastApiError(err),
   });

@@ -11,7 +11,7 @@ export function CSDeliverPage() {
   const [page, setPage] = useState(1);
 
   const readyJobs      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
-  const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Delivered'), [allData]);
+  const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Dispatched'), [allData]);
   const deliveredToday = useMemo(() => delivered.filter((j) => isToday(j.created)), [delivered]);
 
   const totalPages = Math.max(1, Math.ceil(readyJobs.length / PER_PAGE));
@@ -23,8 +23,8 @@ export function CSDeliverPage() {
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="Ready to Deliver" subtitle="Jobs cleared QC and ready for release." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <GreetingHero title="Ready to Dispatch" subtitle="Jobs cleared QC and ready for release." />
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>
@@ -34,7 +34,7 @@ export function CSDeliverPage() {
   return (
     <div className="page">
       <GreetingHero
-        title="Ready to Deliver"
+        title="Ready to Dispatch"
         subtitle="Jobs that have cleared QC and are ready to release to the client."
       />
 
@@ -42,8 +42,8 @@ export function CSDeliverPage() {
         stats={[
           { accent: 'teal',  label: 'Ready Now',       value: isLoading ? '…' : readyJobs.length,     delta: 'QC approved'  },
           { accent: 'amber', label: 'Awaiting Files',  value: 0                                                              },
-          { accent: 'green', label: 'Delivered Today', value: isLoading ? '…' : deliveredToday.length                       },
-          { accent: 'blue',  label: 'Delivered (mo.)', value: isLoading ? '…' : delivered.length                            },
+          { accent: 'green', label: 'Dispatched Today', value: isLoading ? '…' : deliveredToday.length                       },
+          { accent: 'blue',  label: 'Dispatched (mo.)', value: isLoading ? '…' : delivered.length                            },
         ]}
       />
 
@@ -57,11 +57,11 @@ export function CSDeliverPage() {
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">Loading…</div>
         ) : readyJobs.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
-            Nothing ready to deliver right now.
+            Nothing ready to dispatch right now.
           </div>
         ) : (
           <>
-            <JobTable jobs={pageItems} showActions defaultView="grid" emptyLabel="Nothing ready to deliver" />
+            <JobTable jobs={pageItems} showActions defaultView="grid" emptyLabel="Nothing ready to dispatch" />
             <Pagination
               page={page}
               totalPages={totalPages}

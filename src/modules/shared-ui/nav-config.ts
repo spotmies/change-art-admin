@@ -9,6 +9,7 @@ import {
   PencilRuler,
   ScrollText,
   Send,
+  Settings,
   ShieldCheck,
   Sparkles,
   Truck,
@@ -37,6 +38,14 @@ export interface NavItem {
   badge?: number;
   badgeAccent?: NavBadgeAccent;
   subtitle?: string;
+  /**
+   * Skip the "mark as seen while viewing this section" dampening (see
+   * Sidebar.tsx) and always show the live count. Use for items whose badge
+   * reflects a queue of pending items still awaiting action elsewhere (e.g.
+   * approve/reject a client request) — the count should stay visible even
+   * while you're on the page, since merely viewing it doesn't clear it.
+   */
+  persistentBadge?: boolean;
 }
 
 export interface NavSection {
@@ -64,8 +73,9 @@ export const NAV_CONFIG = {
           { id: 'new-quotes', label: 'New Quotes', to: '/cs/new-quotes', icon: Inbox },
           { id: 'new-jobs', label: 'New Jobs', to: '/cs/new-jobs', icon: ScrollText },
           { id: 'projects', label: 'All Projects', to: '/cs/projects', icon: ClipboardList },
+          { id: 'email-inbox', label: 'Email Inbox', to: '/cs/email-inbox', icon: Mail },
           { id: 'queue', label: 'Job Queue', to: '/cs/queue', icon: Gauge },
-          { id: 'deliver', label: 'Ready to Deliver', to: '/cs/deliver', icon: Truck },
+          { id: 'deliver', label: 'Ready to Dispatch', to: '/cs/deliver', icon: Truck },
           { id: 'amend', label: 'Amendments', to: '/cs/amendments', icon: PencilRuler },
         ],
       },
@@ -144,6 +154,7 @@ export const NAV_CONFIG = {
         label: 'Main',
         items: [
           { id: 'tasks', label: 'My Tasks', to: '/digitator', icon: ClipboardList },
+          { id: 'review', label: 'Senior Review', to: '/digitator/review', icon: FileCheck },
           { id: 'submitted', label: 'Submitted', to: '/digitator/submitted', icon: ScrollText },
           { id: 'analytics', label: 'My Analytics', to: '/digitator/analytics', icon: Gauge },
         ],
@@ -151,6 +162,7 @@ export const NAV_CONFIG = {
     ],
     mobile: [
       { id: 'tasks', label: 'Tasks', to: '/digitator', icon: ClipboardList },
+      { id: 'review', label: 'Review', to: '/digitator/review', icon: FileCheck },
       { id: 'submitted', label: 'Done', to: '/digitator/submitted', icon: ScrollText },
       { id: 'analytics', label: 'Stats', to: '/digitator/analytics', icon: Gauge },
     ],
@@ -207,9 +219,15 @@ export const NAV_CONFIG = {
           { id: 'amendments',  label: 'Amendments',      to: '/admin/amendments',  icon: PencilRuler, badgeAccent: 'amber' },
           { id: 'email-inbox', label: 'Email Inbox',     to: '/admin/email-inbox', icon: Mail },
           { id: 'jobs',       label: 'All Jobs',         to: '/admin/jobs',        icon: ClipboardList },
-          { id: 'clients',    label: 'Clients',          to: '/admin/clients',     icon: Users },
+          // Quick-nav shortcuts pre-applying AdminJobsPage's own ?filter= mapping
+          // (mapStatusFilter) — no new route/page, just a preset query param so
+          // Admin doesn't have to remember it. See Implementation Plan Phase 2.
+          { id: 'queue',      label: 'Job Queue',        to: '/admin/jobs?filter=In Production', icon: Gauge },
+          { id: 'deliver',    label: 'Ready to Dispatch', to: '/admin/jobs?filter=Ready to Deliver', icon: Truck },
+          { id: 'clients',    label: 'Clients',          to: '/admin/clients',     icon: Users, persistentBadge: true },
           { id: 'users',      label: 'User Management',  to: '/admin/users',       icon: ShieldCheck },
           { id: 'notifications', label: 'Notifications', to: '/admin/notifications', icon: Bell },
+          { id: 'settings',   label: 'Settings',         to: '/admin/settings',    icon: Settings },
           // { id: 'reports',    label: 'Reports',          to: '/admin/reports',     icon: Gauge },
         ],
       },

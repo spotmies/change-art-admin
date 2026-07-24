@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
 import { toastApiError, ValidationError } from '@lib/toast-error';
+import { truncate } from '@lib/utils';
 import { adminService, type ClientFilters, type CreateClientBody, type CreateJobCardBody, type ProvisionClientBody, type SendQuotePriceBody, type UpdateClientBody } from '../services/admin.service';
 
 export function useAdminClients(filters: ClientFilters = {}) {
@@ -12,13 +13,48 @@ export function useAdminClients(filters: ClientFilters = {}) {
   });
 }
 
+/** Directory-wide summary tiles — deliberately not parameterised by search/filters. */
+export function useAdminClientStats() {
+  return useQuery({
+    queryKey: queryKeys.clients.stats(),
+    queryFn: () => adminService.getClientStats(),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * A single client, kept reactive to the shared `clients` cache — unlike
+ * storing the clicked-row object directly in local state, this re-fetches
+ * whenever the cache is invalidated (e.g. the CLIENT_UPDATED socket event
+ * firing when the client edits their own profile/payment details), so an
+ * already-open detail modal updates live instead of staying stale.
+ */
+export function useAdminClientById(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.clients.byId(id ?? 'none'),
+    queryFn: () => adminService.getClientById(id as string),
+    enabled: !!id,
+    staleTime: 30 * 1000,
+  });
+}
+
+/** Every payment method a client has saved — same real-time cache key family. */
+export function useAdminClientPaymentMethods(clientId: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.clients.byId(clientId ?? 'none'), 'payment-methods'],
+    queryFn: () => adminService.getClientPaymentMethods(clientId as string),
+    enabled: !!clientId,
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useCreateClient() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateClientBody) => adminService.createClient(body),
     onSuccess: (client) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
-      toast.success(`${client.company_name ?? client.client_name} added`);
+      toast.success(`${truncate(client.company_name ?? client.client_name)} added`);
     },
     onError: (err) => toastApiError(err),
   });
@@ -30,7 +66,7 @@ export function useProvisionClient() {
     mutationFn: (body: ProvisionClientBody) => adminService.provisionClient(body),
     onSuccess: (client) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
-      toast.success(`${client.company_name ?? client.client_name} provisioned`);
+      toast.success(`${truncate(client.company_name ?? client.client_name)} provisioned`);
     },
     onError: (err) => toastApiError(err),
   });
@@ -44,6 +80,55 @@ export function useUpdateClient() {
     onSuccess: (client) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
       toast.success(`${client.company_name ?? client.client_name} updated`);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Admin-only: mark or unmark a client as Hotlisted. */
+export function useSetClientHotlisted() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hotlisted }: { id: string; hotlisted: boolean }) =>
+      adminService.setClientHotlisted(id, hotlisted),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(
+        client.is_hotlisted
+          ? `${client.company_name ?? client.client_name} is now Hotlisted`
+          : `${client.company_name ?? client.client_name} is no longer Hotlisted`,
+      );
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Admin/CS: activate or deactivate a client's portal account. */
+export function useSetClientActive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      adminService.setClientActive(id, is_active),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(
+        client.is_active
+          ? `${client.company_name ?? client.client_name} is now Active`
+          : `${client.company_name ?? client.client_name} is now Inactive`,
+      );
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
+/** Admin: send the Credit Card Authorization Form to a client's registered email. */
+export function useSendCcForm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => adminService.sendCcForm(id),
+    onSuccess: (client) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(`CC Form sent to ${client.company_name ?? client.client_name}`);
     },
     onError: (err) => toastApiError(err),
   });

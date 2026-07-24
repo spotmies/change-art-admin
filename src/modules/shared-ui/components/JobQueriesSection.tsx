@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, Loader2, AlertCircle, User, Users } from 'lucide-react';
+import { MessageSquare, Send, Loader2, AlertCircle, User, Users, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useJobQueries, useRaiseQuery } from '@modules/admin-panel/hooks/use-job-queries';
 import { useJobRoom } from '@lib/use-job-room';
+import { useSessionUser } from '@modules/auth/stores/auth-store';
+import { UserRole } from '@contracts';
 
 const CRIMSON = '#B22234';
 const BORDER = '#E2E8F0';
@@ -31,13 +33,20 @@ export function JobQueriesSection({ jobId }: JobQueriesSectionProps) {
   const { data: queries, isLoading } = useJobQueries(jobId);
   const raiseQuery = useRaiseQuery(jobId);
   const threadRef = useRef<HTMLDivElement>(null);
+  const viewer = useSessionUser();
+  // Only CS/Admin message the client — Team Lead, QC, Designer, Digitator,
+  // Sewout can read the thread for context but can't send new messages.
+  const canMessageClient = viewer?.role === UserRole.CS || viewer?.role === UserRole.ADMIN;
 
   const handleSubmit = () => {
     const msg = text.trim();
     if (!msg || !jobId || raiseQuery.isPending) return;
+    
+    // Optimistically clear the text box instantly
+    setText('');
+    
     raiseQuery.mutate(msg, {
       onSuccess: () => {
-        setText('');
         toast.success('Query sent to client.');
         setShowAll(true);
         setTimeout(() => {
@@ -46,7 +55,11 @@ export function JobQueriesSection({ jobId }: JobQueriesSectionProps) {
           }
         }, 100);
       },
-      onError: () => toast.error('Failed to send query. Please try again.'),
+      onError: () => {
+        // Revert on error
+        setText(msg);
+        toast.error('Failed to send query. Please try again.');
+      },
     });
   };
 
@@ -183,7 +196,7 @@ export function JobQueriesSection({ jobId }: JobQueriesSectionProps) {
                 </div>
 
                 {/* Message */}
-                <div style={{ paddingLeft: 36, fontSize: 13, color: INK, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                <div style={{ paddingLeft: 36, fontSize: 13, color: INK, lineHeight: 1.7, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
                   {q.message}
                 </div>
               </div>
@@ -193,65 +206,79 @@ export function JobQueriesSection({ jobId }: JobQueriesSectionProps) {
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: MUTED, fontSize: 12, marginBottom: 16, padding: '10px 0' }}>
           <AlertCircle style={{ width: 13, height: 13, flexShrink: 0 }} aria-hidden />
-          No queries yet. Use the form below to send a question to the client.
+          {canMessageClient ? 'No queries yet. Use the form below to send a question to the client.' : 'No queries yet.'}
         </div>
       )}
 
-      {/* Compose */}
-      <div style={{ background: '#F8FAFC', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '12px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
-          Send a question to the client
-        </div>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={3}
-          placeholder="Describe your question clearly so the client can respond…"
-          disabled={raiseQuery.isPending}
-          style={{
-            width: '100%',
-            boxSizing: 'border-box',
-            padding: '9px 12px',
-            fontSize: 13,
-            color: INK,
-            background: '#fff',
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            resize: 'vertical',
-            outline: 'none',
-            fontFamily: 'inherit',
-            lineHeight: 1.6,
-            transition: 'border-color 0.15s',
-          }}
-          onFocus={(e) => { e.currentTarget.style.borderColor = BLUE; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = BORDER; }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSubmit();
-          }}
-        />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-          <span style={{ fontSize: 11, color: MUTED }}>Ctrl+Enter to send</span>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!text.trim() || raiseQuery.isPending}
+      {/* Compose — CS/Admin only. Other roles can read the thread above for
+          context but don't message the client directly. */}
+      {canMessageClient ? (
+        <div style={{ background: '#F8FAFC', border: `1px solid ${BORDER}`, borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Send a question to the client
+          </div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+            placeholder="Describe your question clearly so the client can respond…"
+            disabled={raiseQuery.isPending}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '8px 20px', fontSize: 12.5, fontWeight: 700, color: '#fff',
-              background: text.trim() && !raiseQuery.isPending
-                ? `linear-gradient(135deg,${CRIMSON},#8B1A28)` : '#CBD5E1',
-              border: 'none', borderRadius: 8,
-              cursor: text.trim() && !raiseQuery.isPending ? 'pointer' : 'not-allowed',
-              transition: 'all 0.15s', letterSpacing: '0.02em',
+              width: '100%',
+              boxSizing: 'border-box',
+              padding: '9px 12px',
+              fontSize: 13,
+              color: INK,
+              background: '#fff',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 8,
+              resize: 'vertical',
+              outline: 'none',
+              fontFamily: 'inherit',
+              lineHeight: 1.6,
+              transition: 'border-color 0.15s',
             }}
-          >
-            {raiseQuery.isPending
-              ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
-              : <Send style={{ width: 13, height: 13 }} />}
-            {raiseQuery.isPending ? 'Sending…' : 'Send to Client'}
-          </button>
+            onFocus={(e) => { e.currentTarget.style.borderColor = BLUE; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = BORDER; }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSubmit();
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <span style={{ fontSize: 11, color: MUTED }}>Ctrl+Enter to send</span>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!text.trim() || raiseQuery.isPending}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '8px 20px', fontSize: 12.5, fontWeight: 700, color: '#fff',
+                background: text.trim() && !raiseQuery.isPending
+                  ? `linear-gradient(135deg,${CRIMSON},#8B1A28)` : '#CBD5E1',
+                border: 'none', borderRadius: 8,
+                cursor: text.trim() && !raiseQuery.isPending ? 'pointer' : 'not-allowed',
+                transition: 'all 0.15s', letterSpacing: '0.02em',
+              }}
+            >
+              {raiseQuery.isPending
+                ? <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
+                : <Send style={{ width: 13, height: 13 }} />}
+              {raiseQuery.isPending ? 'Sending…' : 'Send to Client'}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: '#F8FAFC', border: `1px solid ${BORDER}`, borderRadius: 10,
+            padding: '10px 14px', fontSize: 12, color: MUTED,
+          }}
+        >
+          <Lock style={{ width: 13, height: 13, flexShrink: 0 }} aria-hidden />
+          Only Client Servicing and Admin can message the client.
+        </div>
+      )}
     </div>
   );
 }

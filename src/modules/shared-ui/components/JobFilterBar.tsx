@@ -38,20 +38,24 @@ const PRIORITY_OPTIONS = [
 ];
 
 export const JOB_STATUS_OPTIONS = [
+  { value: 'In Review',        label: 'In Review' },
+  { value: 'Quote Submitted',  label: 'Quote Submitted' },
   { value: 'Order Placed',     label: 'Order Placed' },
+  { value: 'Pending',          label: 'Pending' },
   { value: 'In Production',    label: 'In Production' },
-  { value: 'Senior Review',    label: 'Senior Review' },
+  { value: 'TL Review',    label: 'TL Review' },
   { value: 'Sewout',           label: 'Sewout' },
   { value: 'In QC',            label: 'In QC' },
-  { value: 'Ready to Deliver', label: 'Ready to Deliver' },
-  { value: 'Delivered',        label: 'Delivered' },
+  { value: 'Ready to Deliver', label: 'Ready to Dispatch' },
+  { value: 'On Hold',          label: 'On Hold' },
+  { value: 'Dispatched',        label: 'Dispatched' },
   { value: 'Amend',            label: 'Amend' },
   { value: 'Cancelled',        label: 'Cancelled' },
 ];
 
 export const QUOTE_STATUS_OPTIONS = [
   { value: 'Quote Submitted', label: 'Quote Submitted' },
-  { value: 'Quote Approved',  label: 'Quote Approved' },
+  { value: 'Quote Approved',  label: 'Quote Sent' },
 ];
 
 export function isFiltersEmpty(f: JobFilters): boolean {
@@ -135,6 +139,7 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
             className="fjb-search"
             placeholder="Search jobs, clients, designs…"
             value={filters.search}
+            maxLength={500}
             onChange={(e) => onChange({ ...filters, search: e.target.value })}
           />
           {filters.search && (

@@ -19,6 +19,9 @@ const STATUS_PRESENTATION: Record<JobStatusType, { accent: BadgeAccent; label: s
   [JobStatus.CS_APPROVED]: { accent: 'blue', label: 'Client Servicing Approved' },
   [JobStatus.ASSIGNED]: { accent: 'blue', label: 'Assigned' },
   [JobStatus.IN_PROGRESS]: { accent: 'amber', label: 'In Progress' },
+  [JobStatus.SUBMITTED_TO_TEAM_LEAD]: { accent: 'purple', label: 'To Team Lead' },
+  [JobStatus.TEAM_LEAD_REVIEW]: { accent: 'purple', label: 'Team Lead Review' },
+  [JobStatus.TEAM_LEAD_REJECTED]: { accent: 'red', label: 'Team Lead Rejected' },
   [JobStatus.SUBMITTED_TO_SENIOR]: { accent: 'purple', label: 'To Senior' },
   [JobStatus.SENIOR_REVIEW]: { accent: 'purple', label: 'Senior Review' },
   [JobStatus.SENIOR_REJECTED]: { accent: 'red', label: 'Senior Rejected' },
@@ -29,10 +32,11 @@ const STATUS_PRESENTATION: Record<JobStatusType, { accent: BadgeAccent; label: s
   [JobStatus.QC_APPROVED]: { accent: 'green', label: 'QC Passed' },
   [JobStatus.QC_REJECTED]: { accent: 'red', label: 'QC Rejected' },
   [JobStatus.READY_TO_DELIVER]: { accent: 'teal', label: 'Ready' },
-  [JobStatus.DELIVERED]: { accent: 'teal', label: 'Delivered' },
+  [JobStatus.DELIVERED]: { accent: 'teal', label: 'Dispatched' },
   [JobStatus.MODIFICATION_REQUESTED]: { accent: 'amber', label: 'Mod Requested' },
   [JobStatus.CLOSED]: { accent: 'gray', label: 'Closed' },
   [JobStatus.CANCELLED]: { accent: 'gray', label: 'Cancelled' },
+  [JobStatus.HOLD]: { accent: 'red', label: 'On Hold' },
 };
 
 interface StatusBadgeProps {

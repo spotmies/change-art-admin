@@ -5,6 +5,7 @@ import { QueryProvider } from './providers/QueryProvider';
 import { AuthProvider } from './providers/AuthProvider';
 import { SocketProvider } from './providers/SocketProvider';
 import { ThemeProvider } from './providers/ThemeProvider';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 /**
  * Root component. Wires global providers (theme, auth, query cache,
@@ -13,6 +14,7 @@ import { ThemeProvider } from './providers/ThemeProvider';
  */
 export function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider>
       <QueryProvider>
         <AuthProvider>
@@ -29,6 +31,9 @@ export function App() {
                   border: '1px solid var(--glass-border)',
                   backdropFilter: 'blur(20px)',
                   fontSize: '13px',
+                  maxWidth: '420px',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'break-word',
                 },
               }}
             >
@@ -70,5 +75,6 @@ export function App() {
         </AuthProvider>
       </QueryProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }

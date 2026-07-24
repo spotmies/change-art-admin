@@ -66,7 +66,7 @@ function confidencePct(raw: string | null): number | null {
   return Math.round(parseFloat(raw) * 100);
 }
 
-export function AdminEmailInboxPage() {
+export function AdminEmailInboxPage({ jobsPath = '/admin/jobs' }: { jobsPath?: string }) {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
@@ -147,14 +147,25 @@ export function AdminEmailInboxPage() {
                 aria-hidden
               />
               <input
-                type="search"
+                type="text"
                 className="fi"
-                style={{ paddingLeft: 28 }}
+                style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
                 placeholder="Search sender or subject…"
                 value={search}
+                maxLength={500}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 aria-label="Search emails"
               />
+              {search && (
+                <button
+                  type="button"
+                  className="fjb-search-x"
+                  onClick={() => { setSearch(''); setPage(1); }}
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" aria-hidden />
+                </button>
+              )}
             </div>
           </div>
 
@@ -164,7 +175,7 @@ export function AdminEmailInboxPage() {
               Loading emails…
             </div>
           ) : isError ? (
-            <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+            <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
               Failed to load emails. Please refresh and try again.
             </div>
           ) : filtered.length === 0 ? (
@@ -182,7 +193,7 @@ export function AdminEmailInboxPage() {
                     email={email}
                     selected={selectedId === email.id}
                     onClick={() => handleRowClick(email.id)}
-                    onViewJob={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+                    onViewJob={(jobId) => navigate(`${jobsPath}?open=${jobId}`)}
                   />
                 ))}
               </ul>
@@ -204,7 +215,7 @@ export function AdminEmailInboxPage() {
         <DetailPanel
           id={selectedId}
           onClose={() => setSelectedId(null)}
-          onViewJob={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+          onViewJob={(jobId) => navigate(`${jobsPath}?open=${jobId}`)}
           activatedJobIds={activatedJobIds}
           onActivated={markActivated}
         />
@@ -229,7 +240,7 @@ function EmailRow({ email, selected, onClick, onViewJob }: EmailRowProps) {
     <li
       className="flex items-start gap-3 px-3 py-2.5 rounded-md border transition-colors cursor-pointer"
       style={{
-        borderColor: selected ? 'var(--crimson)' : 'var(--glass-border)',
+        borderColor: selected ? 'var(--color-crimson)' : 'var(--glass-border)',
         background: selected ? 'rgba(220,38,38,0.04)' : 'transparent',
       }}
       onClick={onClick}
@@ -327,7 +338,7 @@ function DetailPanel({ id, onClose, onViewJob, activatedJobIds, onActivated }: D
       {isLoading ? (
         <div className="text-text-faint text-sm py-8 text-center">Loading…</div>
       ) : !email ? (
-        <div className="text-[var(--crimson)] text-sm py-8 text-center">Failed to load.</div>
+        <div className="text-[var(--color-crimson)] text-sm py-8 text-center">Failed to load.</div>
       ) : (
         <EmailDetail
           email={email}
@@ -547,7 +558,7 @@ function EmailDetail({
                       rel="noopener noreferrer"
                       {...(att.type === 'other' ? { download: att.filename } : {})}
                       className="truncate hover:underline"
-                      style={{ color: 'var(--crimson)' }}
+                      style={{ color: 'var(--color-crimson)' }}
                     >
                       {att.type === 'pdf' ? 'Open PDF — ' : att.type === 'image' ? 'View — ' : 'Download — '}
                       {att.filename}

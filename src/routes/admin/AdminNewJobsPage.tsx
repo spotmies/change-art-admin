@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GreetingHero,
   JobFilterBar,
@@ -18,6 +18,7 @@ function mapOrderType(ot: string): string | undefined {
   if (ot === 'Artwork') return 'ARTWORK';
   if (ot === 'Digitizing') return 'DIGITIZING';
   if (ot === 'Digitizing + Sewout') return 'DIGITIZING_SEWOUT';
+  if (ot === 'Others') return 'OTHERS';
   return undefined;
 }
 
@@ -42,14 +43,18 @@ export function AdminNewJobsPage() {
     return clients.find((c) => c.client_id === filters.clientId)?.id;
   }, [filters.clientId, clients]);
 
-  // Hardcoded to JOB_PLACED + unacknowledged — New Jobs shows only freshly
-  // placed orders that are still awaiting acknowledgement (truly "Pending").
-  // JOB_PLACED jobs that have already been acknowledged show as "In Production"
-  // and belong on the All Jobs view, not here.
+  // Show both pending orders (JOB_PLACED, unacknowledged) and quotes the CS
+  // team has already priced (QUOTE_APPROVED — admin_price set, awaiting the
+  // client's confirmation). QUOTE_SUBMITTED (client requested a quote but no
+  // price has been set yet) intentionally excluded — that's not "submitted by
+  // admin" and belongs on the Quotes queue instead.
+  // unacknowledged is safe to apply globally: acknowledgement_sent_at is only
+  // ever set on JOB_PLACED jobs (see cs-panel.service.ts#acknowledge), so it
+  // never excludes QUOTE_APPROVED rows.
   const queryFilters = useMemo(() => ({
     page,
     per_page: PER_PAGE,
-    status: 'JOB_PLACED',
+    statuses: 'JOB_PLACED,QUOTE_APPROVED',
     unacknowledged: true,
     search: debouncedSearch.trim() || undefined,
     order_type: mapOrderType(filters.orderType),
@@ -60,8 +65,11 @@ export function AdminNewJobsPage() {
   }), [page, debouncedSearch, filters.orderType, filters.priority, clientUuid, filters.dateFrom, filters.dateTo]);
 
   const { jobs, total, isLoading, isError } = useAdminJobViews(queryFilters);
-
   const totalPages = Math.ceil(total / PER_PAGE);
+
+  const hasLoadedOnce = useRef(false);
+  useEffect(() => { if (!isLoading) hasLoadedOnce.current = true; }, [isLoading]);
+  const isFirstLoad = isLoading && !hasLoadedOnce.current;
 
   function handleFiltersChange(next: JobFilters) {
     setFilters(next);
@@ -72,7 +80,7 @@ export function AdminNewJobsPage() {
     return (
       <div className="page">
         <GreetingHero title="New Jobs" subtitle="Pending orders awaiting acknowledgement." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>
@@ -83,18 +91,18 @@ export function AdminNewJobsPage() {
     <div className="page">
       <GreetingHero
         title="New Jobs"
-        subtitle="Pending orders placed by clients — awaiting acknowledgement and assignment."
+        subtitle="Pending orders awaiting acknowledgement, plus quotes you've priced and sent to the client."
       />
 
       <StatGrid
         stats={[
-          { accent: 'teal', label: 'Pending Jobs', value: isLoading ? '…' : total },
+          { accent: 'teal', label: 'Active Jobs', value: isLoading ? '…' : total },
           { accent: 'amber', label: 'This Page', value: isLoading ? '…' : jobs.length },
           { accent: 'blue', label: 'Page', value: isLoading ? '…' : `${page} / ${totalPages || 1}` },
         ]}
       />
 
-      {isLoading ? (
+      {isFirstLoad ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
           Loading jobs…
         </div>

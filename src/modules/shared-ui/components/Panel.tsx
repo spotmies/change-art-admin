@@ -17,8 +17,8 @@ export function Panel({ title, action, className, children }: PanelProps) {
   return (
     <section className={cn('panel', className)}>
       {title ? (
-        <header className="panel-title flex items-center justify-between gap-2">
-          <span>{title}</span>
+        <header className="panel-title flex items-center gap-2">
+          <span className="flex-1 min-w-0 truncate">{title}</span>
           {action ? <div className="shrink-0">{action}</div> : null}
         </header>
       ) : null}

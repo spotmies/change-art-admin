@@ -1,9 +1,30 @@
-import { useMemo, useState, useCallback, type ReactNode } from 'react';
+import { useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
 import { AssignJobModal } from './AssignJobModal';
-import { Inbox, Clock, CheckCircle2, Download, Search } from 'lucide-react';
+import {
+  Inbox,
+  Clock,
+  CheckCircle2,
+  Download,
+  Search,
+  X,
+  Mail,
+  MailOpen,
+  Paintbrush,
+  Sparkles,
+  Layers,
+  Scissors,
+  Flag,
+  Settings,
+  Truck,
+  RefreshCw,
+  XCircle,
+  Hash,
+} from 'lucide-react';
 import { useAdminJobById } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useSessionUser } from '@modules/auth/stores/auth-store';
+import { UserRole } from '@contracts';
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', {
@@ -16,7 +37,7 @@ import { cn, briefText } from '@lib/utils';
 import { jobImage, type Job } from '../mocks/jobs';
 
 function statusDisplay(status: string): string {
-  if (status === 'Pending Client Confirm' || status === 'Quote Approved') return 'Action Required';
+  if (status === 'Pending Client Confirm' || status === 'Quote Approved') return 'Awaiting Client';
   return status;
 }
 
@@ -46,6 +67,16 @@ interface JobTableProps {
   toolbarSlot?: ReactNode;
   /** Open the quote popup (Review & Set Price) from this table's View button. */
   quoteView?: boolean;
+  /** Job UUID/id to auto-open on mount (e.g. deep-linked from a notification). */
+  initialOpenJobId?: string | null;
+  /** Called once the initialOpenJobId has been consumed (e.g. to clear a URL param). */
+  onInitialOpenHandled?: () => void;
+  /** Compact 5-column table for dashboard widgets — no preview, timer, or date. */
+  compact?: boolean;
+  /** Number of columns for large screens in grid view */
+  gridCols?: 3 | 4;
+  /** Table view only: hide the Job ref, Created date, and Action columns — dashboard widgets only. */
+  minimalColumns?: boolean;
 }
 
 /**
@@ -65,7 +96,18 @@ export function JobTable({
   controlsExtra,
   toolbarSlot,
   quoteView = false,
+  initialOpenJobId,
+  onInitialOpenHandled,
+  compact = false,
+  gridCols = 4,
+  minimalColumns = false,
 }: JobTableProps) {
+  const viewer = useSessionUser();
+  // Only Team Lead/CS/Admin assign or reassign jobs — Designer, Digitator,
+  // Sewout, and QC only ever view job details, so the fallback modal below
+  // must not offer them an Assign Job action just because it happens to
+  // reuse the same shared JobDetailModal as everyone else.
+  const canAssignJobs = viewer?.role === UserRole.TEAM_LEAD || viewer?.role === UserRole.CS || viewer?.role === UserRole.ADMIN;
   const [view, setView] = useState<JobView>(defaultView);
   const [query, setQuery] = useState('');
   // Store only the identifier. The modal uses a live detail fetch (useAdminJobById)
@@ -73,6 +115,14 @@ export function JobTable({
   // the list endpoint doesn't return. Falls back to the list-derived copy while
   // the detail fetch is in-flight so the modal opens instantly.
   const [viewJobId, setViewJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialOpenJobId) {
+      setViewJobId(initialOpenJobId);
+      onInitialOpenHandled?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenJobId]);
   const listJob = useMemo(
     () => (viewJobId ? (jobs.find((j) => (j.uuid ?? j.id) === viewJobId) ?? null) : null),
     [viewJobId, jobs],
@@ -127,11 +177,23 @@ export function JobTable({
                 <input
                   type="text"
                   className="tbl-search"
+                  style={{ paddingRight: query ? 28 : undefined }}
                   placeholder="Search jobs, clients, designs..."
                   value={query}
+                  maxLength={500}
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search jobs"
                 />
+                {query && (
+                  <button
+                    type="button"
+                    className="fjb-search-x"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" aria-hidden />
+                  </button>
+                )}
               </div>
             ) : null}
             {/* Right: view toggle */}
@@ -159,6 +221,8 @@ export function JobTable({
 
       {filtered.length === 0 ? (
         <EmptyState label={emptyLabel} />
+      ) : compact ? (
+        <CompactTableView jobs={filtered} onOpen={handleOpen} renderRowActions={renderRowActions} />
       ) : variant === 'delivered' ? (
         <DeliveredView jobs={filtered} renderRowActions={renderRowActions} />
       ) : (
@@ -168,11 +232,13 @@ export function JobTable({
             onOpen={handleOpen}
             renderRowActions={renderRowActions}
             className={cn(view === 'table' ? 'hidden md:block' : 'hidden')}
+            minimalColumns={minimalColumns}
           />
           <GridView
             jobs={filtered}
             onOpen={handleOpen}
             renderRowActions={renderRowActions}
+            gridCols={gridCols}
             className={cn(
               view === 'grid' && "grid",
               view === 'table' && "grid md:hidden",
@@ -192,7 +258,7 @@ export function JobTable({
           job={viewJob}
           onClose={() => setViewJobId(null)}
           onEdit={(j) => { setViewJobId(null); setEditJob(j); }}
-          onAssign={(j) => { setViewJobId(null); setAssignJob(j); }}
+          onAssign={canAssignJobs ? (j) => { setViewJobId(null); setAssignJob(j); } : undefined}
           quoteView={quoteView}
         />
       )}
@@ -213,6 +279,58 @@ export function JobTable({
   );
 }
 
+function CompactTableView({
+  jobs,
+  onOpen,
+  renderRowActions,
+}: {
+  jobs: Job[];
+  onOpen?: (job: Job) => void;
+  renderRowActions?: (job: Job) => ReactNode;
+}) {
+  return (
+    <div className="compact-table-wrap">
+      <table className="compact-table">
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Design</th>
+            <th>Order</th>
+            <th>Type</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <tr key={j.id} onClick={() => onOpen?.(j)}>
+              <td><span className="compact-ref">{j.ref || j.id}</span></td>
+              <td><span className="compact-design">{j.design}</span></td>
+              <td><span className={cn('badge', orderBadgeAccent(j.order))}>{j.order}</span></td>
+              <td><span className={cn('badge', projectTypeBadgeAccent(j.project))}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</span></td>
+              <td><PriorityChip priority={j.priority} /></td>
+              <td><span className={cn('badge', statusBadgeAccent(j.status))}>{statusDisplay(j.status)}</span></td>
+              <td onClick={(e) => e.stopPropagation()}>
+                {renderRowActions ? renderRowActions(j) : (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ fontSize: 11, padding: '4px 10px' }}
+                    onClick={() => onOpen?.(j)}
+                  >
+                    View
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function DeliveredView({
   jobs,
   renderRowActions,
@@ -228,6 +346,7 @@ function DeliveredView({
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <span className="jc-id">{job.id}</span>
+                {/* Order/project type badge commented out per user request:
                 {job.project === 'Amend' ? (
                   <>
                     <Badge accent="crimson">
@@ -240,9 +359,13 @@ function DeliveredView({
                 ) : (
                   <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
                 )}
-                <PriorityChip priority={job.priority} />
+                <Badge accent={projectTypeBadgeAccent(job.project)}>
+                  {job.project.toUpperCase()}
+                </Badge>
+                */}
+                <Badge accent={statusBadgeAccent(job.status)}>{statusDisplay(job.status)}</Badge>
               </div>
-              <div className="text-[15px] font-bold text-text-main">{job.design}</div>
+              <div className="text-[15px] font-bold text-text-main line-clamp-2 break-words">{job.design}</div>
               <div className="text-[12px] text-text-muted mt-0.5">
                 Order Type: {job.order} &middot; Assigned: {job.assignedTo || 'Unassigned'}
               </div>
@@ -281,29 +404,44 @@ function statusBadgeAccent(status: string): string {
     'In QC': 'teal',
     'In Production': 'amber',
     Pending: 'blue',
-    'Senior Review': 'purple',
+    'TL Review': 'purple',
     Sewout: 'purple',
     'Ready to Deliver': 'teal',
-    Delivered: 'green',
+    Dispatched: 'green',
     'Quote Submitted': 'blue',
     'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber',
     Cancelled: 'gray',
     Amend: 'amber',
     'In Review': 'purple',
+    'On Hold': 'red',
   };
   return map[status] || 'gray';
 }
 
 function orderBadgeAccent(order: string): string {
-  const map: Record<string, string> = {
-    Artwork: 'navy',
-    Digitizing: 'teal',
-    'Digitizing + Sewout': 'purple',
-    Sewout: 'purple',
-  };
-  return map[order] || 'gray';
+  return order === 'Digitizing' ? 'teal' : 'navy';
 }
+
+/** Accent colour for the project-type badge (Quote / Live / Amend / Live Quote). */
+function projectTypeBadgeAccent(project: string): string {
+  const map: Record<string, string> = {
+    Quote: 'purple',
+    'Live Quote': 'green',
+    Live: 'blue',
+    Amend: 'amber',
+  };
+  return map[project] || 'gray';
+}
+
+/** Display label for the project-type badge — shows revision number for Amend jobs. */
+function projectTypeBadgeLabel(project: string, modificationCount?: number | null): string {
+  if (project === 'Amend' && modificationCount && modificationCount > 0) {
+    return `Amend R${modificationCount}`;
+  }
+  return project;
+}
+
 
 function priorityClass(priority: string): string {
   const map: Record<string, string> = {
@@ -331,30 +469,111 @@ function PriorityChip({ priority }: { priority: string }) {
   return <span className={cn('priority-badge', priorityClass(priority))}>{priority}</span>;
 }
 
+const ORDINALS = ['Zeroth', 'First', 'Second', 'Third', 'Fourth', 'Fifth'];
+
+/** Subtitle line under the image explaining how this card entered the pipeline. */
+function sourceSubtitleFor(project: string, modificationCount?: number | null): string {
+  switch (project) {
+    case 'Quote':
+      return 'New Quote';
+    case 'Live Quote':
+      return 'Live Quote (Quote Converted)';
+    case 'Amend': {
+      const n = modificationCount && modificationCount > 0 ? modificationCount : 1;
+      const ordinal = ORDINALS[n] ?? `${n}th`;
+      return `Amend R${n} (${ordinal} Amendment)`;
+    }
+    case 'Live':
+    default:
+      return 'Live Job (Direct)';
+  }
+}
+
+/** Icon for the Department info row, keyed by order/department type. */
+function departmentIconFor(order: string) {
+  const map: Record<string, typeof Paintbrush> = {
+    Artwork: Paintbrush,
+    Digitizing: Sparkles,
+    'Digitizing + Sewout': Layers,
+    Sewout: Scissors,
+  };
+  return map[order] ?? Paintbrush;
+}
+
+/** Icon for the Status info row, keyed by pipeline stage. */
+function statusIconFor(status: string) {
+  const inProduction = new Set(['In Production', 'TL Review', 'Sewout', 'In QC']);
+  if (status === 'Dispatched' || status === 'Ready to Deliver') return Truck;
+  if (inProduction.has(status)) return Settings;
+  if (status === 'On Hold') return Clock;
+  if (status === 'Cancelled') return XCircle;
+  if (status === 'Amend' || status === 'In Review') return RefreshCw;
+  return Clock;
+}
+
+function ReadBadge({ isRead }: { isRead?: boolean }) {
+  const Icon = isRead ? MailOpen : Mail;
+  return (
+    <span className={cn('jc-read-badge', isRead ? 'is-read' : 'is-unread')}>
+      <Icon className="w-3 h-3" aria-hidden />
+      {isRead ? 'READ' : 'UNREAD'}
+    </span>
+  );
+}
+
+/** Icon-labelled info row (Department / Priority / Status / Job ID) used in the redesigned card. */
+function InfoRow({
+  icon: Icon,
+  label,
+  children,
+  accent,
+}: {
+  icon: typeof Hash;
+  label: string;
+  children: ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div className="jc-info-row">
+      <span className="jc-info-label">
+        <span className={cn('jc-info-icon', accent)}>
+          <Icon className="w-3 h-3" aria-hidden />
+        </span>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function TableView({
   jobs,
   onOpen,
   renderRowActions,
   className,
+  minimalColumns = false,
 }: {
   jobs: Job[];
   onOpen?: (job: Job) => void;
   renderRowActions?: (job: Job) => ReactNode;
   className?: string;
+  /** Hide the Job ref, Created date, and Action columns — dashboard widgets only. */
+  minimalColumns?: boolean;
 }) {
   return (
-    <div className={cn("table-view", className)}>
+    <div className={cn("table-view", minimalColumns && "minimal-columns", className)}>
       <table className="data-table">
         <thead>
           <tr>
             <th>Job</th>
             <th>Design Name</th>
-            <th>Preview</th>
+            {/* <th>Preview</th> */}
             <th>Order</th>
-            <th>Priority</th>
+            <th>Type</th>
+            <th>Priority</th> 
             <th>Status</th>
-            <th>Created</th>
-            <th>Action</th>
+            {!minimalColumns && <th>Created</th>}
+            {!minimalColumns && <th>Action</th>}
           </tr>
         </thead>
         <tbody>
@@ -363,55 +582,67 @@ function TableView({
               <td>
                 <div className="job-cell">
                   <div>
-                    <span className="ref-code">{j.id}</span>
-                    <div className="text-[10.5px] text-text-muted font-medium mt-0.5">{j.ref}</div>
+                    <span className="ref-code">{j.ref}</span>
                   </div>
                 </div>
               </td>
               <td>
                 <span
-                  className="font-bold text-[14px] text-text-main leading-snug block max-w-[260px]"
+                  className="font-bold text-[14px] text-text-main block"
+                  title={j.design}
+                  style={{
+                    maxWidth: 120,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
                 >
                   {j.design}
                 </span>
               </td>
-              <td>
+              {/* <td>
                 <img
                   className="table-preview"
                   src={jobImage(j, 0, 220, 160)}
                   alt={`${j.design} preview`}
                   loading="lazy"
                   referrerPolicy="no-referrer"
+                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
-              </td>
+              </td> */}
               <td><Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge></td>
+              <td><Badge accent={projectTypeBadgeAccent(j.project)}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</Badge></td>
               <td><PriorityChip priority={j.priority} /></td>
               <td><Badge accent={statusBadgeAccent(j.status)}>{j.status}</Badge></td>
-              <td className="text-[12px] text-text-muted whitespace-nowrap">{formatDate(j.created)}</td>
-              <td onClick={(e) => e.stopPropagation()}>
-                {renderRowActions ? renderRowActions(j) : (
-                  j.stage === 'delivered' ? (
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      style={{ fontSize: 12, padding: '5px 12px', gap: 5 }}
-                      onClick={() => onOpen?.(j)}
-                    >
-                      <Download className="w-3.5 h-3.5" aria-hidden />
-                      Download
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      style={{ fontSize: 12, padding: '5px 12px' }}
-                      onClick={() => onOpen?.(j)}
-                    >
-                      View
-                    </button>
-                  )
-                )}
-              </td>
+              {!minimalColumns && (
+                <td className="text-[12px] text-text-muted whitespace-nowrap">{formatDate(j.created)}</td>
+              )}
+              {!minimalColumns && (
+                <td onClick={(e) => e.stopPropagation()}>
+                  {renderRowActions ? renderRowActions(j) : (
+                    j.stage === 'delivered' ? (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ fontSize: 12, padding: '5px 12px', gap: 5 }}
+                        onClick={() => onOpen?.(j)}
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden />
+                        Download
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ fontSize: 12, padding: '5px 12px' }}
+                        onClick={() => onOpen?.(j)}
+                      >
+                        View
+                      </button>
+                    )
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -425,21 +656,26 @@ function GridView({
   onOpen,
   renderRowActions,
   className,
+  gridCols = 4,
 }: {
   jobs: Job[];
   onOpen?: (job: Job) => void;
   renderRowActions?: (job: Job) => ReactNode;
   className?: string;
+  gridCols?: 3 | 4;
 }) {
   return (
-    <div className={cn("grid-view grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 py-2", className)}>
+    <div className={cn("grid-view grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 py-2 min-w-0", gridCols === 3 ? "2xl:grid-cols-3" : "2xl:grid-cols-4", className)}>
       {jobs.map((j) => {
         const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
         const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;
+        const DeptIcon = departmentIconFor(j.order);
+        const StatusIcon = statusIconFor(j.status);
+        const category = [j.order, j.process ?? j.complexity].filter(Boolean).join(' • ');
         return (
           <article
             key={j.id}
-            className={cn('job-card', priorityCardClass(j.priority), actionRequired && 'job-card-attention')}
+            className={cn('job-card min-w-0', priorityCardClass(j.priority), actionRequired && 'job-card-attention')}
             onClick={() => onOpen?.(j)}
             role="button"
             tabIndex={0}
@@ -450,6 +686,12 @@ function GridView({
               }
             }}
           >
+            <div className="jc-header">
+              <span className={cn('badge whitespace-nowrap', projectTypeBadgeAccent(j.project))}>
+                {projectTypeBadgeLabel(j.project, j.modificationCount)}
+              </span>
+              <ReadBadge isRead={j.isRead} />
+            </div>
             <div className="jc-img">
               {j.images?.length ? (
                 <img
@@ -458,36 +700,56 @@ function GridView({
                   alt={j.design}
                   loading="lazy"
                   referrerPolicy="no-referrer"
+                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
               ) : (
                 <div className="w-full h-[160px]" />
               )}
-              {/* Order type badge — top-left */}
-              <span className={cn('badge absolute top-[10px] left-[10px] z-[1] whitespace-nowrap', orderBadgeAccent(j.order))}>
-                {j.order}
-              </span>
-              {/* Status badge — top-right */}
-              <span className={cn('jc-status-overlay badge', statusBadgeAccent(j.status))}>
-                {statusDisplay(j.status)}
-              </span>
             </div>
-            <div className="jc-body">
-              <div className="jc-title">{j.design}</div>
-              <div className="jc-desc">{briefText(j.summary)}</div>
-              <div className="jc-meta">
-                <span className="jc-id">{j.id}</span>
-                <PriorityChip priority={j.priority} />
+            <div className="jc-body flex flex-col flex-1">
+              <div className={cn('jc-subtitle', projectTypeBadgeAccent(j.project))}>
+                <span className="jc-subtitle-dot" aria-hidden />
+                {sourceSubtitleFor(j.project, j.modificationCount)}
+              </div>
+              <div className="jc-title" title={j.design}>{j.design}</div>
+              {category ? <div className="jc-category">{category}</div> : null}
+              <div className="jc-info-rows mt-auto">
+                <InfoRow icon={DeptIcon} label="Department" accent={orderBadgeAccent(j.order)}>
+                  <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
+                </InfoRow>
+                <InfoRow icon={Flag} label="Priority">
+                  <PriorityChip priority={j.priority} />
+                </InfoRow>
+                <InfoRow icon={StatusIcon} label="Status">
+                  <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
+                </InfoRow>
+                <InfoRow icon={Hash} label="Job ID">
+                  <span className="jc-id">{j.id}</span>
+                </InfoRow>
               </div>
               {actionRequired ? (
                 <div className="jc-action">
                   <CheckCircle2 aria-hidden className="w-3.5 h-3.5 mt-px shrink-0" />
                   <span>
-                    Quoted price ready{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
-                    <strong>Tap to confirm &amp; start production</strong>
+                    Quote sent{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
+                    <strong>Awaiting client confirmation</strong>
                   </span>
                 </div>
               ) : null}
-              {renderRowActions ? renderRowActions(j) : null}
+              <div className="jc-footer">
+                {renderRowActions ? renderRowActions(j) : (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpen?.(j);
+                    }}
+                  >
+                    View
+                  </button>
+                )}
+              </div>
             </div>
           </article>
         );
@@ -524,6 +786,7 @@ function ListView({
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"
+              onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
             />
           </div>
 
@@ -534,19 +797,17 @@ function ListView({
               <span className="list-title">{j.design}</span>
               <div className="list-badges">
                 <Badge accent={orderBadgeAccent(j.order)}>{j.order}</Badge>
+                <Badge accent={projectTypeBadgeAccent(j.project)}>{projectTypeBadgeLabel(j.project, j.modificationCount)}</Badge>
                 <Badge accent={statusBadgeAccent(j.status)}>{statusDisplay(j.status)}</Badge>
-                {j.priority !== 'Normal' && <PriorityChip priority={j.priority} />}
               </div>
             </div>
 
-            {/* Ref */}
-            <div className="flex items-center gap-2">
+            {/* Ref + Priority */}
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="list-ref">{j.ref || j.id}</span>
+              <PriorityChip priority={j.priority} />
               {j.specificType && (
-                <>
-                  <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>·</span>
-                  <span className="list-meta">{j.specificType}</span>
-                </>
+                <Badge accent={orderBadgeAccent(j.order)}>{j.specificType}</Badge>
               )}
             </div>
 

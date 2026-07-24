@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { UserRole, FileScanStatus, type IFileVersion } from '@contracts';
 import { queryKeys } from '@lib/query-keys';
 import type { Job } from '@modules/shared-ui';
@@ -32,6 +32,12 @@ export function useDeleteUser() {
   });
 }
 
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: (id: string) => adminService.resetUserPassword(id),
+  });
+}
+
 export function useAdminJobCards(filters: JobCardFilters = {}) {
   return useQuery({
     queryKey: queryKeys.jobs.list(filters as Record<string, unknown>),
@@ -58,12 +64,25 @@ export function useUpdateJobCard() {
 }
 
 export function useAdminJobById(id: string) {
+  const qc = useQueryClient();
   const jobQuery = useQuery({
     queryKey: queryKeys.jobs.byId(id),
     queryFn: () => adminService.getJobCard(id),
     enabled: !!id,
     staleTime: 30 * 1000,
   });
+
+  // Opening a card's detail view marks it READ server-side (CS/Admin only —
+  // `is_read` stays false for every other role). The grid's list query has
+  // its own 30s-stale cache and nothing else refetches it on modal close, so
+  // without this the card would keep showing UNREAD until the list happened
+  // to refetch on its own. Scoped to the 'list' key (not 'jobs' broadly) so
+  // it doesn't also invalidate — and infinitely re-trigger — this same byId query.
+  useEffect(() => {
+    if (jobQuery.data?.is_read) {
+      void qc.invalidateQueries({ queryKey: ['jobs', 'list'] });
+    }
+  }, [jobQuery.data?.id, jobQuery.data?.is_read, qc]);
 
   const job = useMemo(() => {
     if (!jobQuery.data) return null;
@@ -194,6 +213,10 @@ export function useAdminJobViews(filters: JobCardFilters = {}): {
     queryFn: () => adminService.getJobThumbnails(jobUuids),
     enabled: jobUuids.length > 0,
     staleTime: 60 * 1000,
+    // Presigned thumbnail URLs expire after 15 minutes (PRESIGN_TTL_SECONDS on
+    // the backend). Proactively refresh well before that so a list page left
+    // open doesn't end up serving expired URLs that 403 in the <img> tags.
+    refetchInterval: 5 * 60 * 1000,
   });
 
   const jobs = useMemo<Job[]>(() => {

@@ -28,6 +28,7 @@ export const queryKeys = {
     pending: () => ['clients', 'pending'] as const,
     approved: () => ['clients', 'approved'] as const,
     rejected: () => ['clients', 'rejected'] as const,
+    stats: () => ['clients', 'stats'] as const,
   },
 
   jobs: {
@@ -92,5 +93,9 @@ export const queryKeys = {
 
   queries: {
     forJob: (jobId: string) => ['queries', 'forJob', jobId] as const,
+  },
+
+  settings: {
+    ccForm: () => ['settings', 'cc-form'] as const,
   },
 } as const;

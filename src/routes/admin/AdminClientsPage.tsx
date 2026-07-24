@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Pencil, Plus, Search } from 'lucide-react';
-import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
-import { PaymentMode } from '@contracts';
+import { FileText, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Star, UserCheck, UserX, X } from 'lucide-react';
+import { ConfirmModal, GreetingHero, Pagination, Panel, RowActionsMenu, StatGrid } from '@modules/shared-ui';
 import type { IClient } from '@contracts';
-import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { formatDateTime } from '@lib/utils';
+import { useAdminClients, useAdminClientStats, useSendCcForm, useAdminClientById, useSetClientActive, useSetClientHotlisted } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { useProfileChangeRequests } from '../../modules/admin-panel/hooks/use-profile-change-requests';
 import {
   ClientDetailModal,
@@ -20,25 +20,7 @@ const PER_PAGE = 20;
 
 type Tab = 'clients' | 'requests' | 'approve';
 
-function formatPaymentMode(mode: PaymentMode | null): string {
-  if (!mode) return '—';
-  const map: Record<PaymentMode, string> = {
-    [PaymentMode.CREDIT_CARD]: 'Credit Card',
-    [PaymentMode.CARD_ON_FILE]: 'Card on File',
-    [PaymentMode.ACH]: 'ACH',
-    [PaymentMode.PAYPAL]: 'PayPal',
-    [PaymentMode.CHECK]: 'Check',
-  };
-  return map[mode] ?? mode;
-}
 
-function currentMonthCount(items: { created_at: string }[]): number {
-  const now = new Date();
-  return items.filter((c) => {
-    const d = new Date(c.created_at);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
-}
 
 function useDebounced<T>(value: T, ms = 300): T {
   const [debounced, setDebounced] = useState(value);
@@ -85,11 +67,27 @@ export function AdminClientsPage() {
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<{ client: IClient; mode: ClientModalMode } | null>(null);
+  const [hotlistedOnly, setHotlistedOnly] = useState(false);
+  const [inactiveOnly, setInactiveOnly] = useState(false);
+  // Track only the id + mode, not the clicked row's snapshot — the snapshot
+  // never updates again once stored. Deriving the live client below from
+  // `useAdminClientById` means the open modal re-fetches and reflects changes
+  // in real time (e.g. the CLIENT_UPDATED socket event firing when the client
+  // edits their own profile/payment details), matching the same fix applied
+  // to job cards.
+  const [selected, setSelected] = useState<{ clientId: string; mode: ClientModalMode } | null>(null);
   const [addClientOpen, setAddClientOpen] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<IClient | null>(null);
+  const [hotlistTarget, setHotlistTarget] = useState<IClient | null>(null);
+  const [sendCcFormTarget, setSendCcFormTarget] = useState<IClient | null>(null);
+
+  const setActive = useSetClientActive();
+  const setHotlisted = useSetClientHotlisted();
+  const { data: selectedClient } = useAdminClientById(selected?.clientId ?? null);
+  const sendCcForm = useSendCcForm();
 
   function openClient(client: IClient, mode: ClientModalMode) {
-    setSelected({ client, mode });
+    setSelected({ clientId: client.id, mode });
   }
 
   const debouncedSearch = useDebounced(search, 300);
@@ -111,16 +109,19 @@ export function AdminClientsPage() {
       page,
       per_page: PER_PAGE,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+      ...(hotlistedOnly ? { hotlisted: true } : {}),
+      ...(inactiveOnly ? { is_active: false } : {}),
     }),
-    [page, debouncedSearch],
+    [page, debouncedSearch, hotlistedOnly, inactiveOnly],
   );
 
   const { data, isLoading, isError } = useAdminClients(clientsFilters);
+  const { data: stats, isLoading: statsLoading } = useAdminClientStats();
 
-  // Reset to page 1 whenever the active search changes.
+  // Reset to page 1 whenever the active search or hotlist/active filter changes.
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, hotlistedOnly, inactiveOnly]);
 
   // Reset state when switching tabs.
   useEffect(() => {
@@ -150,13 +151,15 @@ export function AdminClientsPage() {
 
       <StatGrid
         stats={[
-          { accent: 'blue', label: 'Active Accounts', value: isLoading ? '…' : total },
-          { accent: 'green', label: 'New (mo.)', value: isLoading ? '…' : currentMonthCount(clients) },
+          { accent: 'blue', label: 'Active Accounts', value: statsLoading ? '…' : (stats?.active_accounts ?? 0) },
+          { accent: 'green', label: 'New (mo.)', value: statsLoading ? '…' : (stats?.new_this_month ?? 0) },
           { accent: 'crimson', label: 'Profile Requests', value: pendingCount },
           {
             accent: 'gold',
             label: 'Top Client',
-            value: isLoading ? '…' : (clients[0]?.company_name ?? clients[0]?.client_name ?? '—'),
+            value: statsLoading
+              ? '…'
+              : (stats?.top_client?.company_name ?? stats?.top_client?.client_name ?? '—'),
           },
         ]}
       />
@@ -170,9 +173,12 @@ export function AdminClientsPage() {
               : 'Pending Client Approvals'
         }
       >
-        {/* Tab toggle + search bar */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border">
+        {/* Tabs + filters on the left, search pinned to the right — never
+            wraps to a second row. No overflow-x here: it would force
+            overflow-y to clip too, cutting off the icon buttons' tooltip
+            (which renders above them via position: absolute). */}
+        <div className="flex flex-nowrap items-center gap-2 mb-3">
+          <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border shrink-0">
             <button
               type="button"
               className={`btn ${tab === 'clients' ? 'btn-crimson' : 'btn-outline'}`}
@@ -185,12 +191,12 @@ export function AdminClientsPage() {
               className={`btn ${tab === 'approve' ? 'btn-crimson' : 'btn-outline'}`}
               onClick={() => setTab('approve')}
             >
-              Client Approve
+              Sign Up Requests
               {pendingApprovalsCount > 0 ? (
                 <span
                   className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                   style={{
-                    background: 'var(--crimson)',
+                    background: 'var(--color-crimson)',
                     color: 'white',
                     minWidth: 16,
                     height: 16,
@@ -210,7 +216,7 @@ export function AdminClientsPage() {
                 <span
                   className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                   style={{
-                    background: 'var(--crimson)',
+                    background: 'var(--color-crimson)',
                     color: 'white',
                     minWidth: 16,
                     height: 16,
@@ -222,15 +228,52 @@ export function AdminClientsPage() {
             </button>
           </div>
 
-          <div className="relative flex-1 min-w-[200px] max-w-md ml-auto">
+          {tab === 'clients' && <div className="w-px h-6 bg-glass-border shrink-0" aria-hidden />}
+
+          {tab === 'clients' && (
+            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+              <button
+                type="button"
+                className="row-icon-btn row-icon-btn--amber"
+                style={
+                  hotlistedOnly
+                    ? { background: 'rgba(245,158,11,0.32)', borderColor: 'var(--color-amber)' }
+                    : undefined
+                }
+                onClick={() => setHotlistedOnly((v) => !v)}
+                aria-pressed={hotlistedOnly}
+                aria-label="Hotlisted only"
+                data-tooltip="Hotlisted only"
+              >
+                <Star className="w-3.5 h-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="row-icon-btn row-icon-btn--crimson"
+                style={
+                  inactiveOnly
+                    ? { background: 'rgba(196,30,58,0.32)', borderColor: 'var(--color-crimson)' }
+                    : undefined
+                }
+                onClick={() => setInactiveOnly((v) => !v)}
+                aria-pressed={inactiveOnly}
+                aria-label="Inactive only"
+                data-tooltip="Inactive only"
+              >
+                <UserX className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            </div>
+          )}
+
+          <div className="relative w-[200px] shrink-0">
             <Search
               className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
               aria-hidden
             />
             <input
-              type="search"
+              type="text"
               className="fi"
-              style={{ paddingLeft: 28 }}
+              style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
               placeholder={
                 tab === 'clients'
                   ? 'Search by name, company, email, or client ID…'
@@ -239,15 +282,26 @@ export function AdminClientsPage() {
                     : 'Search by client name, email, or ID…'
               }
               value={search}
+              maxLength={500}
               onChange={(e) => setSearch(e.target.value)}
               aria-label="Search"
             />
+            {search && (
+              <button
+                type="button"
+                className="fjb-search-x"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
           </div>
 
           {tab === 'clients' && (
             <button
               type="button"
-              className="btn btn-crimson"
+              className="btn btn-crimson shrink-0"
               onClick={() => setAddClientOpen(true)}
             >
               <Plus className="w-3.5 h-3.5" aria-hidden />
@@ -265,12 +319,16 @@ export function AdminClientsPage() {
             Loading clients…
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load clients. Please refresh and try again.
           </div>
         ) : clients.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-text-faint text-sm">
-            {debouncedSearch.trim() ? 'No clients match your search.' : 'No clients found.'}
+            {hotlistedOnly
+              ? 'No Hotlisted clients.'
+              : debouncedSearch.trim()
+                ? 'No clients match your search.'
+                : 'No clients found.'}
           </div>
         ) : (
           <>
@@ -278,36 +336,126 @@ export function AdminClientsPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Client ID</th>
-                    <th>Contact Name</th>
-                    <th>Company</th>
-                    <th>Phone</th>
-                    <th>Email</th>
-                    <th>Location</th>
-                    <th>Payment</th>
-                    <th></th>
+                    <th style={{ width: 80 }}>Client ID</th>
+                    <th style={{ width: 130 }}>Contact Name</th>
+                    <th style={{ width: 'auto' }}>Company</th>
+                    <th style={{ width: 120 }}>Phone</th>
+                    <th style={{ width: 140 }}>Location</th>
+                    <th style={{ width: 100 }}>Payment</th>
+                    <th style={{ width: 90 }}>Status</th>
+                    <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {clients.map((c) => (
-                    <tr key={c.id}>
-                      <td><span className="ref-code">{c.client_id}</span></td>
-                      <td className="font-semibold">{c.contact_name}</td>
-                      <td className="text-text-muted">{c.company_name ?? '—'}</td>
-                      <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
-                      <td className="text-text-muted">••••••••••</td>
-                      <td className="text-text-muted">{c.location ?? '—'}</td>
-                      <td><span className="badge gray">{formatPaymentMode(c.payment_mode)}</span></td>
+                    <tr key={c.id} onClick={() => openClient(c, 'view')} className="cursor-pointer hover:bg-[rgba(255,255,255,0.02)]">
                       <td>
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          aria-label={`Edit ${c.contact_name}`}
-                          onClick={() => openClient(c, 'edit')}
+                        <span className="ref-code">{c.client_id}</span>
+                      </td>
+                      <td className="font-semibold">
+                        <span
+                          title={c.contact_name}
+                          style={{
+                            maxWidth: 120,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
                         >
-                          <Pencil aria-hidden className="w-3.5 h-3.5" />
-                          Edit
-                        </button>
+                          {c.contact_name}
+                        </span>
+                      </td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.company_name ?? undefined}
+                          style={{
+                            maxWidth: 150,
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {c.company_name ?? '—'}
+                        </span>
+                      </td>
+                      <td className="font-mono text-[11.5px] text-text-muted">{c.contact_number}</td>
+                      <td className="text-text-muted">
+                        <span
+                          title={c.location ?? undefined}
+                          style={{
+                            maxWidth: 160,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {c.location ?? '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge gray">
+                          {c.payment_mode?.replace(/_/g, ' ') ?? '—'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`badge ${c.is_active ? 'green' : 'red'}`}>
+                            {c.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                          {c.is_hotlisted && <span className="badge amber">Hotlisted</span>}
+                        </div>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <RowActionsMenu
+                          ariaLabel={`Actions for ${c.contact_name}`}
+                          actions={[
+                            {
+                              key: 'manage',
+                              label: 'Manage',
+                              icon: <Pencil aria-hidden className="w-3.5 h-3.5" />,
+                              onSelect: () => openClient(c, 'view'),
+                            },
+                            {
+                              key: 'hotlist',
+                              label: c.is_hotlisted ? 'Remove Hotlist' : 'Mark Hotlisted',
+                              icon: c.is_hotlisted ? (
+                                <ShieldCheck aria-hidden className="w-3.5 h-3.5" />
+                              ) : (
+                                <ShieldAlert aria-hidden className="w-3.5 h-3.5" />
+                              ),
+                              danger: !c.is_hotlisted,
+                              onSelect: () => setHotlistTarget(c),
+                            },
+                            {
+                              key: 'status',
+                              label: c.is_active ? 'Deactivate' : 'Activate',
+                              icon: c.is_active ? (
+                                <UserX aria-hidden className="w-3.5 h-3.5" />
+                              ) : (
+                                <UserCheck aria-hidden className="w-3.5 h-3.5" />
+                              ),
+                              danger: c.is_active,
+                              disabled: !c.user_id,
+                              title: c.user_id
+                                ? undefined
+                                : 'This client has no portal login to activate or deactivate.',
+                              onSelect: () => setStatusTarget(c),
+                            },
+                            {
+                              key: 'send-cc-form',
+                              label: 'Send CC Form',
+                              icon: <FileText aria-hidden className="w-3.5 h-3.5" />,
+                              accent: 'crimson' as const,
+                              title: c.cc_form_sent_at
+                                ? `Last sent ${formatDateTime(c.cc_form_sent_at)}`
+                                : 'Not sent yet',
+                              onSelect: () => setSendCcFormTarget(c),
+                            },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -343,9 +491,95 @@ export function AdminClientsPage() {
       />
 
       <ClientDetailModal
-        client={selected?.client ?? null}
+        client={selectedClient ?? null}
         mode={selected?.mode}
         onClose={() => setSelected(null)}
+      />
+
+      <ConfirmModal
+        open={statusTarget !== null}
+        tone={statusTarget?.is_active ? 'destructive' : undefined}
+        title={statusTarget?.is_active ? 'Deactivate client account?' : 'Reactivate client account?'}
+        description={
+          statusTarget?.is_active ? (
+            <>
+              <strong>{statusTarget.company_name ?? statusTarget.client_name}</strong> (
+              {statusTarget.client_id}) will be signed out immediately and blocked from logging in
+              until you reactivate them.
+            </>
+          ) : (
+            <>
+              <strong>{statusTarget?.company_name ?? statusTarget?.client_name}</strong> (
+              {statusTarget?.client_id}) will regain the ability to log in and use the portal.
+            </>
+          )
+        }
+        confirmLabel={statusTarget?.is_active ? 'Deactivate' : 'Reactivate'}
+        onConfirm={async () => {
+          if (!statusTarget) return;
+          await setActive.mutateAsync(
+            { id: statusTarget.id, is_active: !statusTarget.is_active },
+            { onSuccess: () => setStatusTarget(null) },
+          );
+        }}
+        onCancel={() => setStatusTarget(null)}
+      />
+
+      <ConfirmModal
+        open={hotlistTarget !== null}
+        tone={hotlistTarget?.is_hotlisted ? undefined : 'destructive'}
+        title={hotlistTarget?.is_hotlisted ? 'Remove Hotlist status?' : 'Mark client as Hotlisted?'}
+        description={
+          hotlistTarget?.is_hotlisted ? (
+            <>
+              <strong>{hotlistTarget.company_name ?? hotlistTarget.client_name}</strong> (
+              {hotlistTarget.client_id}) will regain the ability to submit new quote requests and
+              orders.
+            </>
+          ) : (
+            <>
+              <strong>{hotlistTarget?.company_name ?? hotlistTarget?.client_name}</strong> (
+              {hotlistTarget?.client_id}) will be blocked from submitting new quote requests or
+              orders until you remove this status. Existing orders and account history stay
+              accessible to them.
+            </>
+          )
+        }
+        confirmLabel={hotlistTarget?.is_hotlisted ? 'Remove Hotlist' : 'Mark Hotlisted'}
+        onConfirm={async () => {
+          if (!hotlistTarget) return;
+          await setHotlisted.mutateAsync(
+            { id: hotlistTarget.id, hotlisted: !hotlistTarget.is_hotlisted },
+            { onSuccess: () => setHotlistTarget(null) },
+          );
+        }}
+        onCancel={() => setHotlistTarget(null)}
+      />
+
+      <ConfirmModal
+        open={sendCcFormTarget !== null}
+        title="Send Credit Card Authorization Form?"
+        description={
+          <>
+            The CC Authorization Form will be emailed to{' '}
+            <strong>{sendCcFormTarget?.company_name ?? sendCcFormTarget?.client_name}</strong> at{' '}
+            <strong>{sendCcFormTarget?.email}</strong>.
+            {sendCcFormTarget?.cc_form_sent_at ? (
+              <>
+                {' '}
+                It was last sent on {formatDateTime(sendCcFormTarget.cc_form_sent_at)}.
+              </>
+            ) : null}
+          </>
+        }
+        confirmLabel="Send"
+        onConfirm={async () => {
+          if (!sendCcFormTarget) return;
+          await sendCcForm.mutateAsync(sendCcFormTarget.id, {
+            onSuccess: () => setSendCcFormTarget(null),
+          });
+        }}
+        onCancel={() => setSendCcFormTarget(null)}
       />
     </div>
   );

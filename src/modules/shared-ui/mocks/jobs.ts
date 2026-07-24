@@ -11,7 +11,7 @@ export type JobStage = 'quote' | 'junior' | 'senior' | 'sewout' | 'qc' | 'delive
 
 export type JobOrderType = 'Artwork' | 'Digitizing' | 'Digitizing + Sewout' | 'Sewout' | 'Other';
 
-export type JobProject = 'Live' | 'Quote' | 'Amend';
+export type JobProject = 'Live' | 'Quote' | 'Amend' | 'Live Quote';
 
 export type JobPriority = 'Normal' | 'Rush' | 'Super Rush';
 
@@ -21,16 +21,18 @@ export type JobStatus =
   | 'In QC'
   | 'In Production'
   | 'Pending'
+  | 'TL Review'
   | 'Senior Review'
   | 'Sewout'
   | 'Ready to Deliver'
-  | 'Delivered'
+  | 'Dispatched'
   | 'Quote Submitted'
   | 'Quote Approved'
   | 'Pending Client Confirm'
   | 'Cancelled'
   | 'Amend'
-  | 'In Review';
+  | 'In Review'
+  | 'On Hold';
 
 export interface AiScore {
   colour: number;
@@ -78,6 +80,9 @@ export interface Job {
   stage: JobStage;
   assignedTo: string | null;
   subType: 'Senior' | 'Junior' | null;
+  /** True once QC has approved (IJobCard.is_locked). A DELIVERED/READY_TO_DELIVER
+   *  job that's still false reached delivery via the CS bypass, not real QC. */
+  isLocked?: boolean;
   notes: string;
   colors: number;
   created: string;
@@ -98,6 +103,14 @@ export interface Job {
   stitchCount?: number;
   /** ISO timestamp when admin sent the acknowledgement. Countdown starts from here. */
   acknowledgedAt?: string | null;
+  /** acknowledgedAt shifted forward by totalHeldMs — use this (not acknowledgedAt) for ETA countdown math so paused time doesn't count against the client. */
+  effectiveAcknowledgedAt?: string | null;
+  /** JobStatus the job was in before being put on HOLD; null unless status === HOLD. */
+  preHoldStatus?: string | null;
+  /** ISO timestamp the current hold began; null unless status === HOLD. */
+  heldAt?: string | null;
+  /** Cumulative hold duration in ms across all past hold periods. */
+  totalHeldMs?: number;
   /** True when this job record is the admin-managed copy (not the original client submission). */
   isAdminCopy?: boolean;
   /** UUID of the original client job this was copied from (present when isAdminCopy = true). */
@@ -110,6 +123,17 @@ export interface Job {
   modificationCount?: number;
   /** The client's description from their latest modification request. */
   modificationNotes?: string | null;
+  /** This client's card-on-file expiry, so CS/Admin can be warned it's expired/expiring soon. */
+  clientCardExpMonth?: number | null;
+  clientCardExpYear?: number | null;
+  /** 'CREDIT_CARD' (one-time card details) vs 'CARD_ON_FILE' (saved card) — controls the
+   *  expiry warning's wording so it doesn't call a one-time card a "card on file". */
+  clientPaymentMode?: string | null;
+  /** ISO timestamp of this client's most recent OTHER order (drafts excluded) — the Client
+   *  Inactivity Indicator. Only populated on the job-detail fetch, not list views. */
+  clientPreviousOrderAt?: string | null;
+  /** Whether the current viewer has opened this job card (per-viewer, from backend `job_card_reads`). */
+  isRead?: boolean;
 }
 
 export const JOBS: Job[] = [
@@ -150,7 +174,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Super Rush',
     etaHours: 6,
-    status: 'Senior Review',
+    status: 'TL Review',
     stage: 'senior',
     assignedTo: 'Arjun Patel',
     subType: 'Junior',
@@ -226,7 +250,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 5,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -277,7 +301,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 10,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Meena Das',
     subType: 'Senior',
@@ -404,7 +428,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 9,
-    status: 'Senior Review',
+    status: 'TL Review',
     stage: 'senior',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -482,7 +506,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 7,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -510,7 +534,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 11,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -686,7 +710,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 10,
-    status: 'Senior Review',
+    status: 'TL Review',
     stage: 'senior',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -713,7 +737,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 8,
-    status: 'Senior Review',
+    status: 'TL Review',
     stage: 'senior',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -842,7 +866,7 @@ export const JOBS: Job[] = [
     process: 'Offset Printing',
     priority: 'Normal',
     etaHours: 7,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -865,7 +889,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Rush',
     etaHours: 13,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Arjun Patel',
     subType: 'Senior',
@@ -893,7 +917,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 9,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Kavya Reddy',
     subType: 'Senior',
@@ -921,7 +945,7 @@ export const JOBS: Job[] = [
     process: null,
     priority: 'Normal',
     etaHours: 3,
-    status: 'Delivered',
+    status: 'Dispatched',
     stage: 'delivered',
     assignedTo: 'Rahul Nair',
     subType: 'Junior',

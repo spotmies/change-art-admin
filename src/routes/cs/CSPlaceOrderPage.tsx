@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CreateJobForm, GreetingHero } from '@modules/shared-ui';
+import { AdminBriefForm, GreetingHero } from '@modules/shared-ui';
 import { useAdminClients, useCreateJobCard, useProvisionClient } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 export function CSPlaceOrderPage() {
@@ -13,7 +13,7 @@ export function CSPlaceOrderPage() {
         title="Place Order on Behalf of Client"
         subtitle="Submit a confirmed order directly into the production pipeline."
       />
-      <CreateJobForm
+      <AdminBriefForm
         mode="order"
         clients={data?.items ?? []}
         clientsLoading={isLoading}

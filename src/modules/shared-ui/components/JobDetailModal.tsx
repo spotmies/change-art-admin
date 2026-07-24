@@ -1,18 +1,35 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
-import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, PackageCheck, FileText, Upload, Loader2 } from 'lucide-react';
+import { X, Download, Edit2, Send, AlertCircle, ChevronLeft, ChevronRight, Timer, CheckCircle2, FileText, Upload, Loader2, Copy, CreditCard } from 'lucide-react';
+import { getCardExpiryStatus } from '@lib/card-expiry';
+import { clientActivityAccent, formatClientActivityBucket, getClientActivityBucket } from '@lib/client-activity';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@lib/query-keys';
 import toast from 'react-hot-toast';
+import { toastApiError } from '@lib/toast-error';
 import { cn } from '@lib/utils';
 import { type Job, jobImage } from '../mocks/jobs';
-import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady } from '@/modules/cs-panel/hooks/use-cs-quote';
+import { useSendQuotePrice, useRejectQuote, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady, useApproveJob } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service';
 
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById, useAdminJobFiles, useAdminJobImageUrls, isAdminViewableImage } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { adminService } from '@modules/admin-panel/services/admin.service';
-import { FileCategory } from '@contracts';
+import { FileCategory, JobStatus, UserRole, UserSubType, type IFileVersion } from '@contracts';
+import { useSessionUser } from '@modules/auth/stores/auth-store';
+import { FilePreviewModal } from './FilePreviewModal';
+import { FileGrid } from '@modules/producer-workspace/components/FileGrid';
+
+function formatBytes(bytes: number, decimals = 2) {
+  if (!bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
 
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
@@ -30,13 +47,20 @@ function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { displa
   };
 }
 
-function useEtaCountdown(acknowledgedAt: string | null | undefined, etaHours: number | null | undefined) {
-  const active = !!(acknowledgedAt && etaHours != null && etaHours > 0);
+function useEtaCountdown(
+  acknowledgedAt: string | null | undefined,
+  etaHours: number | null | undefined,
+  isHeld = false,
+) {
+  const active = !!(acknowledgedAt && etaHours != null && etaHours > 0) && !isHeld;
   const [state, setState] = useState(() =>
     active ? computeEtaCountdown(acknowledgedAt!, etaHours!) : null,
   );
   useEffect(() => {
-    if (!active) { setState(null); return; }
+    if (!active) {
+      setState(isHeld ? { display: 'On Hold', expired: false } : null);
+      return;
+    }
     setState(computeEtaCountdown(acknowledgedAt!, etaHours!));
     const id = setInterval(() => {
       const next = computeEtaCountdown(acknowledgedAt!, etaHours!);
@@ -44,7 +68,7 @@ function useEtaCountdown(acknowledgedAt: string | null | undefined, etaHours: nu
       if (next.expired) clearInterval(id);
     }, 1000);
     return () => clearInterval(id);
-  }, [active, acknowledgedAt, etaHours]);
+  }, [active, isHeld, acknowledgedAt, etaHours]);
   return state;
 }
 
@@ -66,7 +90,7 @@ interface JobDetailModalProps {
 
 function buildFlowSteps(): { role: string; sub: string }[] {
   return [
-    { role: 'Client Servicing', sub: 'Created' },
+    { role: 'Client Created', sub: '' },
     { role: 'In Production', sub: 'Pending' },
     { role: 'Client Servicing', sub: 'Dispatch' },
   ];
@@ -88,13 +112,19 @@ function orderAccent(order: string): string {
   return map[order] ?? 'gray';
 }
 
+function displayStatus(status: string): string {
+  if (status === 'Quote Approved') return 'Quote Sent';
+  return status;
+}
+
 function statusAccent(status: string): string {
   const map: Record<string, string> = {
-    'In QC': 'teal', 'In Production': 'amber', Pending: 'blue', 'Senior Review': 'purple',
-    Sewout: 'purple', 'Ready to Deliver': 'teal', Delivered: 'green',
+    'In QC': 'teal', 'In Production': 'amber', Pending: 'blue', 'TL Review': 'purple',
+    'Senior Review': 'purple',
+    Sewout: 'purple', 'Ready to Deliver': 'teal', Dispatched: 'green',
     'Quote Submitted': 'blue', 'Quote Approved': 'amber',
     'Pending Client Confirm': 'amber', Cancelled: 'gray',
-    Amend: 'amber', 'In Review': 'purple',
+    Amend: 'amber', 'In Review': 'purple', 'On Hold': 'red',
   };
   return map[status] ?? 'gray';
 }
@@ -135,7 +165,30 @@ function isReadyToDeliverStatus(job: Job): boolean {
   return normalizedStatus(job) === 'READY_TO_DELIVER';
 }
 
-export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobDetailModalProps) {
+const QUOTE_UNRESOLVED_STATUSES = new Set([
+  'DRAFT', 'QUOTE_SUBMITTED', 'QUOTE_APPROVED', 'QUOTE_REJECTED', 'CANCELLED',
+]);
+
+const QC_REJECTION_REASONS = [
+  { value: 'COLOUR', label: 'Colour' },
+  { value: 'ALIGNMENT', label: 'Alignment' },
+  { value: 'RESOLUTION', label: 'Resolution' },
+  { value: 'STITCH_ERROR', label: 'Stitch Error' },
+  { value: 'INCORRECT_BRIEF', label: 'Incorrect Brief' },
+  { value: 'FILE_FORMAT', label: 'File Format' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+// The price is only truly "agreed" once the client has confirmed the quote
+// (action: place_job), moving the job out of the quote stage into JOB_PLACED+.
+// QUOTE_APPROVED only means CS has sent a price — the client hasn't acted yet.
+function isPriceAgreed(job: Job): boolean {
+  const s = normalizedStatus(job);
+  return !!s && !QUOTE_UNRESOLVED_STATUSES.has(s);
+}
+
+export function JobDetailModal({ job, onClose, onEdit, onAssign, quoteView = false }: JobDetailModalProps) {
+  const queryClient = useQueryClient();
   const [isIn, setIsIn] = useState(false);
   const [agencyPrice, setAgencyPrice] = useState('');
   const [confirmedEta, setConfirmedEta] = useState('');
@@ -147,9 +200,13 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [priceInvalid, setPriceInvalid] = useState(false);
   const [etaInvalid, setEtaInvalid] = useState(false);
   const [carPage, setCarPage] = useState(0);
+  const [previewFile, setPreviewFile] = useState<IFileVersion | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
+  const [showQcWarning, setShowQcWarning] = useState(false);
   const [showSendMailModal, setShowSendMailModal] = useState(false);
   const [sendMailConfirmText, setSendMailConfirmText] = useState('');
   const [sendMailFiles, setSendMailFiles] = useState<File[]>([]);
@@ -208,8 +265,25 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const [showMarkComplete, setShowMarkComplete] = useState(false);
   const [showAckPopover, setShowAckPopover] = useState(false);
   const [amendBusy, setAmendBusy] = useState<'approve' | 'reject' | null>(null);
+  const [unholdBusy, setUnholdBusy] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [tlReviewBusy, setTlReviewBusy] = useState<'approve' | 'reject' | null>(null);
+  const [showTlRejectDialog, setShowTlRejectDialog] = useState(false);
+  const [tlRejectReason, setTlRejectReason] = useState('');
+  const [showTlApproveConfirm, setShowTlApproveConfirm] = useState(false);
+  const [tlApproveConfirmText, setTlApproveConfirmText] = useState('');
+  const [srReviewBusy, setSrReviewBusy] = useState<'approve' | 'reject' | null>(null);
+  const [showSrRejectDialog, setShowSrRejectDialog] = useState(false);
+  const [srRejectReason, setSrRejectReason] = useState('');
+  const [showSrApproveConfirm, setShowSrApproveConfirm] = useState(false);
+  const [srApproveConfirmText, setSrApproveConfirmText] = useState('');
+  const [qcReviewBusy, setQcReviewBusy] = useState<'approve' | 'reject' | null>(null);
+  const [showQcRejectDialog, setShowQcRejectDialog] = useState(false);
+  const [qcRejectReason, setQcRejectReason] = useState('OTHER');
+  const [qcRejectFeedback, setQcRejectFeedback] = useState('');
+  const [showQcApproveConfirm, setShowQcApproveConfirm] = useState(false);
+  const [qcApproveConfirmText, setQcApproveConfirmText] = useState('');
   const [ackEtaHours, setAckEtaHours] = useState(() =>
     job?.etaHours != null ? String(job.etaHours) : '',
   );
@@ -251,6 +325,22 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     () => (adminJobFiles ?? []).filter((f) => f.file_category === FileCategory.COMPLETED),
     [adminJobFiles],
   );
+  // Compare panel — original brief vs the finished work, split the same way
+  // the carousel splits ORIGINAL files (images vs everything else).
+  const completedImageFiles = useMemo(() => allCompletedFiles.filter(isAdminViewableImage), [allCompletedFiles]);
+  const completedOtherFiles = useMemo(() => allCompletedFiles.filter((f) => !isAdminViewableImage(f)), [allCompletedFiles]);
+  const { data: completedImageUrls } = useAdminJobImageUrls(job?.uuid, completedImageFiles);
+
+  // Non-image reference files (PDF, AI, DST, ...) uploaded alongside the brief —
+  // images render in the carousel, everything else is listed separately below it.
+  const clientOtherFiles = useMemo(
+    () => (clientJobFiles ?? []).filter((f) => !isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
+    [clientJobFiles],
+  );
+  const adminOtherFiles = useMemo(
+    () => (adminJobFiles ?? []).filter((f) => !isAdminViewableImage(f) && f.file_category !== FileCategory.COMPLETED),
+    [adminJobFiles],
+  );
 
   const { data: clientImageUrls } = useAdminJobImageUrls(originalParentId, clientImageFiles);
   const { data: adminImageUrls } = useAdminJobImageUrls(job?.uuid, adminImageFiles);
@@ -270,9 +360,28 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
   const dispatchJob = useDispatchJob();
   const acknowledgeJob = useAcknowledgeJob();
   const notifyOrderReady = useNotifyOrderReady();
+  const approveJob = useApproveJob();
+  const viewer = useSessionUser();
+  const isCsOrAdmin = viewer?.role === UserRole.CS || viewer?.role === UserRole.ADMIN;
+  // Team Lead review decision (team_lead_approve/reject) is Team Lead/Admin
+  // only per state-machine.ts — CS never touches this step.
+  const canReviewAsTeamLead = viewer?.role === UserRole.TEAM_LEAD || viewer?.role === UserRole.ADMIN;
+  // Senior review decision (senior_approve/reject) is Senior Digitator/Admin
+  // only per state-machine.ts — Junior Digitators never touch this step.
+  const canReviewAsSenior =
+    (viewer?.role === UserRole.DIGITATOR && viewer?.sub_type === UserSubType.SENIOR) ||
+    viewer?.role === UserRole.ADMIN;
+  // QC decision (qc_approve/qc_reject) is QC/Admin only per state-machine.ts.
+  const canReviewAsQc = viewer?.role === UserRole.QC || viewer?.role === UserRole.ADMIN;
+  // const { data: bypassSetting } = useBypassSetting(isCsOrAdmin);
+  // const bypassDisabled = bypassSetting?.enabled === false;
   const isSubmitting = sendPrice.isPending || rejectQuote.isPending;
 
-  const etaCountdown = useEtaCountdown(job?.acknowledgedAt, job?.etaHours);
+  const etaCountdown = useEtaCountdown(
+    job?.effectiveAcknowledgedAt ?? job?.acknowledgedAt,
+    job?.etaHours,
+    job?.rawStatus === JobStatus.HOLD,
+  );
 
   // Subscribe to the job's room while the modal is open. Use the canonical
   // (non-admin-copy) job ID so query events — which are stored and broadcast
@@ -367,6 +476,26 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     return null;
   }, [job, originalJob]);
 
+  const hasAllRequiredFormats = useMemo(() => {
+    if (!allowedFormats || allowedFormats.length === 0) return true;
+    const presentExtensions = new Set<string>();
+
+    allCompletedFiles.forEach(f => {
+      if (!excludedServerFileIds.has(f.id)) {
+        const name = f.file_name || (f as any).name || '';
+        const dotIdx = name.lastIndexOf('.');
+        if (dotIdx !== -1) presentExtensions.add(name.slice(dotIdx + 1).toLowerCase());
+      }
+    });
+
+    sendMailFiles.forEach(f => {
+      const dotIdx = f.name.lastIndexOf('.');
+      if (dotIdx !== -1) presentExtensions.add(f.name.slice(dotIdx + 1).toLowerCase());
+    });
+
+    return allowedFormats.every(ext => presentExtensions.has(ext));
+  }, [allowedFormats, allCompletedFiles, excludedServerFileIds, sendMailFiles]);
+
   if (!job) return null;
 
   // The data source for all detail fields. Toggle switches this between
@@ -390,9 +519,58 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
         ? fallbackImages
         : [jobImage(displayJob, 0, 560, 420)];
 
+  // Same resolution as `images`, but for non-image reference files.
+  const referenceFiles = isClientView
+    ? clientOtherFiles
+    : clientOtherFiles.length > 0
+      ? clientOtherFiles
+      : adminOtherFiles;
+
+  const handlePreviewFile = (file: IFileVersion) => {
+    setPreviewFile(file);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    adminService
+      .getDownloadUrl(file.id)
+      .then((res) => setPreviewUrl(res.url))
+      .catch(() => {
+        toast.error('Could not load preview for this file.');
+        setPreviewFile(null);
+      })
+      .finally(() => setPreviewLoading(false));
+  };
+
+  /** Compare panel's FileGrid instances hand back (url, name) on click —
+   *  resolve `name` to the real file object so it can reuse the same
+   *  preview modal as everywhere else in this component. */
+  const makeCompareGridPreview = (files: IFileVersion[]) => (_url: string, name: string) => {
+    const file = files.find((f) => f.file_name === name);
+    if (file) handlePreviewFile(file);
+  };
+
+  const handleDownloadOneFile = async (id: string, name: string) => {
+    try {
+      const res = await adminService.getDownloadUrl(id);
+      const link = document.createElement('a');
+      link.href = res.url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      toast.error(`Failed to download ${name}.`);
+    }
+  };
+
   const clientBudget = displayJob.negotiation?.clientOffer ?? displayJob.clientPrice ?? null;
   const adminCounter = displayJob.negotiation?.agencyOffer ?? displayJob.adminPrice ?? null;
-  const agreedPrice = displayJob.negotiation?.finalPrice ?? displayJob.agreedPrice ?? null;
+  // Once the client has confirmed the quote (job moved past the quote stage),
+  // the CS-submitted price IS the agreed price — there's no separate stored
+  // "agreed_price" field on the job card, so fall back to adminCounter.
+  const agreedPrice =
+    displayJob.negotiation?.finalPrice ??
+    displayJob.agreedPrice ??
+    (isPriceAgreed(displayJob) ? adminCounter : null);
 
   // Whether the quote has already been priced & sent (status QUOTE_APPROVED).
   // Drives readonly fields and swaps the action buttons for a clear
@@ -405,15 +583,36 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     : null;
   const aiPass = aiOverall !== null ? aiOverall >= 80 : null;
 
-  // Quote popup is decided by CONTEXT (the Quotes page passes quoteView),
-  // NOT by job.stage — otherwise quote-stage jobs in the Jobs lists would
-  // wrongly open the quote popup.
-  const isQuote = quoteView && isQuoteStageStatus(job);
+  // Show the pricing card for any Quote Submitted/Approved job regardless of
+  // which list it was opened from (Projects, Jobs, New Quotes, …) — CS needs
+  // to be able to act on a quote wherever they happen to find it, not just
+  // from the New Quotes queue. `quoteView` is still accepted for callers that
+  // pass it, but no longer required to unlock the pricing UI.
+  const isQuote = quoteView || isQuoteStageStatus(job);
   const isReadyToDeliver = isReadyToDeliverStatus(job);
-  const isCsApproved = normalizedStatus(job) === 'CS_APPROVED';
-  const canAcknowledge = normalizedStatus(job) === 'JOB_PLACED' && !job.acknowledgedAt;
+  // const isCsApproved = normalizedStatus(job) === 'CS_APPROVED';
+  const isJobPlaced = normalizedStatus(job) === 'JOB_PLACED';
+  const canAcknowledge = isJobPlaced && !job.acknowledgedAt;
   const isAcknowledged = !!job.acknowledgedAt;
   const isDelivered = normalizedStatus(job) === 'DELIVERED';
+  // CS/Admin and Team Leads can assign or reassign a job until it is QC Approved
+  // (which transitions the job to READY_TO_DELIVER). Prevent reassigning while it's actively under review.
+  const isReviewStatus = [
+    'SUBMITTED_TO_TEAM_LEAD',
+    'TEAM_LEAD_REVIEW',
+    'SUBMITTED_TO_QC',
+    'QC_REVIEW'
+  ].includes(normalizedStatus(job) || '');
+  const canAssign = isAcknowledged && !isReadyToDeliver && !isDelivered && normalizedStatus(job) !== 'CANCELLED' && !isReviewStatus;
+  const isTeamLeadReviewStatus = normalizedStatus(job) === 'SUBMITTED_TO_TEAM_LEAD' || normalizedStatus(job) === 'TEAM_LEAD_REVIEW';
+  const isSeniorReviewStatus = normalizedStatus(job) === 'SUBMITTED_TO_SENIOR' || normalizedStatus(job) === 'SENIOR_REVIEW';
+  const isQcReviewStatus = normalizedStatus(job) === 'SUBMITTED_TO_QC' || normalizedStatus(job) === 'QC_REVIEW';
+  const cardExpiryStatus = getCardExpiryStatus(
+    job.clientCardExpMonth != null && job.clientCardExpYear != null
+      ? { exp_month: job.clientCardExpMonth, exp_year: job.clientCardExpYear }
+      : null,
+  );
+  const clientActivityBucket = getClientActivityBucket(displayJob.clientPreviousOrderAt);
 
   // Workflow "current" node is blue ONLY on the quote popup; every other
   // popup keeps the original crimson so non-quote popups are unchanged.
@@ -459,6 +658,164 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       toast.error('Failed to reject amendment. Please try again.');
     } finally {
       setAmendBusy(null);
+    }
+  }
+
+  /** Job may still be SUBMITTED_TO_TEAM_LEAD (not yet opened) when acted on
+   *  from outside the Junior Review queue — open it first so the decision
+   *  transition below has the right `from` status and version. */
+  async function ensureTlReviewOpened(id: string, version: number): Promise<number> {
+    if (normalizedStatus(job!) === 'SUBMITTED_TO_TEAM_LEAD') {
+      const updated = await adminService.transitionJob(id, 'team_lead_open_review', version);
+      return updated.version;
+    }
+    return version;
+  }
+
+  async function handleApproveTeamLeadReview() {
+    const id = requireUuid('approve submission');
+    if (!id || !job || job.version === undefined) return;
+    setTlReviewBusy('approve');
+    try {
+      const nextVersion = await ensureTlReviewOpened(id, job.version);
+      const action = job.order === 'Digitizing + Sewout' ? 'team_lead_approve_to_sewout' : 'team_lead_approve';
+      await adminService.transitionJob(id, action, nextVersion);
+      toast.success(action === 'team_lead_approve_to_sewout' ? 'Approved — routed to Sewout.' : 'Approved — forwarded to QC.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setTlReviewBusy(null);
+    }
+  }
+
+  async function handleRejectTeamLeadReview() {
+    const id = requireUuid('reject submission');
+    if (!id || !job || job.version === undefined) return;
+    setTlReviewBusy('reject');
+    try {
+      const nextVersion = await ensureTlReviewOpened(id, job.version);
+      await adminService.transitionJob(id, 'team_lead_reject', nextVersion, undefined, tlRejectReason.trim());
+      toast.success('Returned to junior with feedback.');
+      setShowTlRejectDialog(false);
+      setTlRejectReason('');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setTlReviewBusy(null);
+    }
+  }
+
+  /** Job may still be SUBMITTED_TO_SENIOR (not yet opened) when acted on
+   *  from outside the Senior Review queue — open it first so the decision
+   *  transition below has the right `from` status and version. */
+  async function ensureSrReviewOpened(id: string, version: number): Promise<number> {
+    if (normalizedStatus(job!) === 'SUBMITTED_TO_SENIOR') {
+      const updated = await adminService.transitionJob(id, 'senior_open_review', version);
+      return updated.version;
+    }
+    return version;
+  }
+
+  async function handleApproveSeniorReview() {
+    const id = requireUuid('approve submission');
+    if (!id || !job || job.version === undefined) return;
+    setSrReviewBusy('approve');
+    try {
+      const nextVersion = await ensureSrReviewOpened(id, job.version);
+      const action = job.order === 'Digitizing + Sewout' ? 'senior_approve_to_sewout' : 'senior_approve';
+      await adminService.transitionJob(id, action, nextVersion);
+      toast.success(action === 'senior_approve_to_sewout' ? 'Approved — routed to Sewout.' : 'Approved — forwarded to QC.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setSrReviewBusy(null);
+    }
+  }
+
+  async function handleRejectSeniorReview() {
+    const id = requireUuid('reject submission');
+    if (!id || !job || job.version === undefined) return;
+    setSrReviewBusy('reject');
+    try {
+      const nextVersion = await ensureSrReviewOpened(id, job.version);
+      await adminService.transitionJob(id, 'senior_reject', nextVersion, undefined, srRejectReason.trim());
+      toast.success('Returned to junior with feedback.');
+      setShowSrRejectDialog(false);
+      setSrRejectReason('');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setSrReviewBusy(null);
+    }
+  }
+
+  /** Job may still be SUBMITTED_TO_QC (not yet opened) when acted on from
+   *  outside the QC Review Queue — open it first. */
+  async function ensureQcOpened(id: string, version: number): Promise<number> {
+    if (normalizedStatus(job!) === 'SUBMITTED_TO_QC') {
+      const updated = await adminService.transitionJob(id, 'qc_open', version);
+      return updated.version;
+    }
+    return version;
+  }
+
+  async function handleApproveQcReview() {
+    const id = requireUuid('approve submission');
+    if (!id || !job || job.version === undefined) return;
+    setQcReviewBusy('approve');
+    try {
+      const nextVersion = await ensureQcOpened(id, job.version);
+      await adminService.transitionJob(id, 'qc_approve', nextVersion);
+      toast.success('Approved — job locked and routed to CS for delivery.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setQcReviewBusy(null);
+    }
+  }
+
+  async function handleRejectQcReview() {
+    const id = requireUuid('reject submission');
+    if (!id || !job || job.version === undefined) return;
+    setQcReviewBusy('reject');
+    try {
+      const nextVersion = await ensureQcOpened(id, job.version);
+      await adminService.qcReject(id, nextVersion, qcRejectReason, qcRejectFeedback.trim());
+      toast.success('Rejected — returned with feedback.');
+      setShowQcRejectDialog(false);
+      setQcRejectFeedback('');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      handleClose();
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setQcReviewBusy(null);
+    }
+  }
+
+  async function handleUnhold() {
+    const id = requireUuid('unhold job');
+    if (!id || !job || job.version === undefined) return;
+    setUnholdBusy(true);
+    try {
+      await adminService.unholdJob(id, job.version);
+      toast.success('Job unheld — production has resumed.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.byId(id) });
+    } catch {
+      toast.error('Failed to unhold job. Please try again.');
+    } finally {
+      setUnholdBusy(false);
     }
   }
 
@@ -550,6 +907,16 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     }
   };
 
+  const handleApprove = () => {
+    const id = requireUuid('approve job');
+    if (!id) return;
+    if (job?.etaHours == null || job.etaHours <= 0) {
+      toast.error('Send Acknowledgement first to set an ETA before approving.');
+      return;
+    }
+    approveJob.mutate({ jobId: id, body: { etaHours: job.etaHours } });
+  };
+
   const handleSendMailSubmit = async () => {
     if (sendMailConfirmText.trim().toUpperCase() !== 'CONFIRM') return;
     const id = requireUuid('send mail');
@@ -573,6 +940,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
       }
     } catch (err) {
       setSendMailPhase('idle');
+      toastApiError(err);
       return;
     }
 
@@ -640,6 +1008,62 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
     }
   };
 
+  const generateCopyText = () => {
+    const lines: string[] = [];
+    lines.push(`Design Name: ${displayJob.design || '—'}`);
+    lines.push(`\n--- JOB DETAILS ---`);
+    lines.push(`Client ID: ${displayJob.clientId || '—'}`);
+    lines.push(`Order Type: ${displayJob.order || '—'}`);
+    if (displayJob.specificType) lines.push(`Specific Service: ${displayJob.specificType}`);
+    lines.push(`Complexity: ${displayJob.complexity || '—'}`);
+    if (displayJob.process) lines.push(`Process: ${displayJob.process}`);
+    lines.push(`Colors: ${displayJob.colors != null ? displayJob.colors : '—'}`);
+
+    let outputFormatsStr = '—';
+    if (displayJob.finalFiles?.length) {
+      const text = displayJob.notes || displayJob.summary;
+      const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
+      const customFormat = match && match[1] ? match[1].trim() : null;
+      const labels = displayJob.finalFiles.map(f => {
+        if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
+          if (customFormat) {
+            if (/^others:\s*/i.test(customFormat)) {
+              return customFormat.replace(/^others:\s*/i, 'Others: ');
+            }
+            return `Others: ${customFormat}`;
+          }
+          return f;
+        }
+        return f;
+      });
+      outputFormatsStr = [...new Set(labels)].join(', ');
+    }
+    lines.push(`Output Formats: ${outputFormatsStr}`);
+    lines.push(`Assigned To: ${displayJob.assignedTo ?? 'Unassigned'}`);
+    if (displayJob.subType) lines.push(`Sub-Type: ${displayJob.subType}`);
+
+    lines.push(`\n--- SPECIFICATIONS ---`);
+    if (displayJob.etaHours) lines.push(`ETA: ${displayJob.etaHours}h`);
+    if (isAcknowledged && etaCountdown) lines.push(`ETA Countdown: ${etaCountdown.display}`);
+    if (displayJob.clientPo) lines.push(`Client PO / Ref: ${displayJob.clientPo}`);
+    if (displayJob.aiScore && aiOverall !== null) {
+      lines.push(`AI QC Score: ${aiOverall}/100 — ${aiPass ? 'Pass' : 'Fail'}`);
+    }
+
+    const clientText = (displayJob.summary ?? '').replace(/\[[^\]]*\]/g, '').trim();
+    if (clientText) {
+      lines.push(`\n--- CLIENT INSTRUCTIONS ---`);
+      lines.push(clientText);
+    }
+
+    if (displayJob.notes) {
+      lines.push(`\n--- NOTES / BRIEF ---`);
+      lines.push(displayJob.notes);
+    }
+
+    return lines.join('\n');
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -675,23 +1099,44 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <div
-                className="flex items-center gap-2 mb-1.5"
+                className="flex items-center gap-2 mb-1.5 flex-wrap"
                 style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: 11.5, fontWeight: 700, color: '#B22234', letterSpacing: '0.04em' }}
               >
                 <span>{job.ref}</span>
+                <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full"
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: 'normal',
+                    padding: '3px 9px',
+                    ...(clientActivityAccent(clientActivityBucket) === 'good'
+                      ? { background: 'rgba(5,150,105,0.1)', border: '1px solid rgba(5,150,105,0.3)', color: '#059669' }
+                      : clientActivityAccent(clientActivityBucket) === 'warn'
+                        ? { background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.3)', color: '#D97706' }
+                        : clientActivityAccent(clientActivityBucket) === 'stale'
+                          ? { background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.3)', color: '#DC2626' }
+                          : { background: 'rgba(100,116,139,0.1)', border: '1px solid rgba(100,116,139,0.3)', color: '#64748B' }),
+                  }}
+                  title="Time since this client's previous order"
+                >
+                  <Timer className="w-3 h-3" aria-hidden />
+                  {formatClientActivityBucket(clientActivityBucket)}
+                </span>
               </div>
-              <h2 className="text-[20px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[20px] font-extrabold leading-tight break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
               </h2>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className={cn('badge', orderAccent(job.order))}>{job.order}</span>
+                {/* Order / project type badges commented out per user request:
                 {job.project === 'Amend' ? (
                   <>
-                    {/* Collapse status + project into one Amend R{n} badge */}
                     <span className={cn('badge', 'crimson')}>
                       Amend{job.modificationCount ? ` R${job.modificationCount}` : ''}
                     </span>
-                    {/* Show the workflow status separately only when it's not redundant */}
                     {job.status !== 'Amend' && (
                       <span className={cn('badge', statusAccent(job.status))}>{job.status}</span>
                     )}
@@ -702,28 +1147,106 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     <span className="badge gray">{job.project}</span>
                   </>
                 )}
-                <span className={cn('priority-badge', priorityClass(job.priority))}>{job.priority}</span>
+                */}
+                <span className={cn('badge', statusAccent(job.status))}>{displayStatus(job.status)}</span>
+                {(isReadyToDeliver || isDelivered) && !job.isLocked ? (
+                  <span
+                    className="badge amber"
+                    title="Delivered via CS bypass — skipped Team Lead, producer, and QC review"
+                  >
+                    Bypassed QC
+                  </span>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
-              {/* Close button */}
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#475569';
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = '#fff';
-                  (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
-                }}
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Close button (+ Unhold, when the job is on hold) */}
+              <div className="flex items-center gap-2">
+                {job.rawStatus === JobStatus.HOLD && (
+                  <button
+                    type="button"
+                    className="rounded-full flex items-center justify-center transition-colors font-semibold whitespace-nowrap"
+                    style={{
+                      fontSize: 12,
+                      padding: '7px 14px',
+                      border: '1px solid rgba(225,29,72,0.3)',
+                      color: '#e11d48',
+                      background: 'rgba(225,29,72,0.08)',
+                    }}
+                    onClick={handleUnhold}
+                    disabled={unholdBusy}
+                  >
+                    {unholdBusy ? 'Unholding…' : 'Unhold Project'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generateCopyText()).then(() => {
+                      toast.success('Job details copied to clipboard');
+                    });
+                  }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                  }}
+                  aria-label="Copy job details"
+                  title="Copy job details"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ border: '1px solid #E8EDF5', color: '#94A3B8', background: '#fff' }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = '#fff';
+                    (e.currentTarget as HTMLButtonElement).style.color = '#94A3B8';
+                  }}
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {allCompletedFiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAllFiles}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm"
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #E2E8F0',
+                    color: '#64748B',
+                    fontSize: 11,
+                  }}
+                  onMouseOver={(e) => {
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    btn.style.background = '#F8FAFC';
+                    btn.style.color = '#334155';
+                  }}
+                  onMouseOut={(e) => {
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    btn.style.background = '#fff';
+                    btn.style.color = '#64748B';
+                  }}
+                  aria-label="Download files"
+                >
+                  <Download className="w-3 h-3" />
+                  Download Files
+                </button>
+              )}
 
               {/* Trigger button — opens the ack popover. While pending: show spinner chip instead. */}
               {canAcknowledge ? (
@@ -831,7 +1354,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     </span>
                   </div>
                 </div>
-              ) : !isDelivered && isAcknowledged && (!etaCountdown || etaCountdown.expired) && job?.project !== 'Amend' ? (
+              ) : !isDelivered && isAcknowledged && (!etaCountdown || etaCountdown.expired) && job?.project !== 'Amend' && isCsOrAdmin ? (
                 /* ETA expired (or no ETA set) — show Deliver Project button for non-amend jobs */
                 <button
                   type="button"
@@ -856,19 +1379,63 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   aria-label="Open deliver project panel"
                 >
                   <Send className="w-3.5 h-3.5" aria-hidden />
-                  <span>Deliver Project</span>
+                  <span>Dispatch Project</span>
                 </button>
               ) : null}
             </div>
           </div>
         </div>
 
+        {/* ── CLIENT CARD EXPIRY WARNING ── */}
+        {cardExpiryStatus === 'expired' || cardExpiryStatus === 'expiring_soon' ? (
+          <div
+            className="flex-shrink-0 flex items-center gap-2.5 px-6 py-2.5"
+            style={
+              cardExpiryStatus === 'expired'
+                ? {
+                  background: 'rgba(220,38,38,0.16)',
+                  borderBottom: '2px solid #DC2626',
+                  borderLeft: '4px solid #DC2626',
+                  color: '#991B1B',
+                }
+                : {
+                  background: 'rgba(220,38,38,0.1)',
+                  borderBottom: '2px solid rgba(220,38,38,0.5)',
+                  borderLeft: '4px solid #DC2626',
+                  color: '#B91C1C',
+                }
+            }
+          >
+            <CreditCard className="w-4 h-4 shrink-0" aria-hidden />
+            <span className="text-[12.5px] font-bold">
+              {(() => {
+                // "Card on file" only applies to a saved/recurring card. A
+                // one-time CREDIT_CARD entry isn't saved anywhere for reuse,
+                // so call it what it is — the client's card details.
+                const isCardOnFile = job.clientPaymentMode === 'CARD_ON_FILE';
+                const noun = isCardOnFile ? 'card on file' : 'card details';
+                const expiryDate =
+                  job.clientCardExpMonth != null && job.clientCardExpYear != null
+                    ? `${String(job.clientCardExpMonth).padStart(2, '0')}/${String(job.clientCardExpYear).slice(-2)}`
+                    : null;
+                if (cardExpiryStatus === 'expired') {
+                  return `This client's ${noun} expired${expiryDate ? ` on ${expiryDate}` : ''}.`;
+                }
+                return `This client's ${noun} expire${expiryDate ? ` ${expiryDate}` : ''} — within the next month.`;
+              })()}
+            </span>
+          </div>
+        ) : null}
+
         {/* ── ACK POPOVER ── */}
         {showAckPopover && canAcknowledge && (() => {
-          // Quote flow only: ETA was already communicated to the client in the
-          // price email, so lock it. For regular order flow the admin can always
-          // edit the ETA here even if it was pre-set via the Edit modal.
-          const etaIsLocked = (isQuote || job?.project === 'Quote') && job != null && job.etaHours != null && job.etaHours > 0;
+          // ETA was already communicated to the client alongside the price
+          // (send-price sets both together, and the backend now rejects
+          // further edits to eta_hours once the client has confirmed) — lock
+          // it whenever a price was actually sent, regardless of project
+          // type or current status. Only jobs that skipped pricing entirely
+          // (no admin_price ever set) get a free-form ETA input here.
+          const etaIsLocked = job != null && job.adminPrice != null && job.etaHours != null && job.etaHours > 0;
           const etaParsed = ackEtaHours ? parseFloat(ackEtaHours) : NaN;
           const etaValid = etaIsLocked || (!isNaN(etaParsed) && etaParsed > 0);
           const isDisabled = acknowledgeJob.isPending || !etaValid;
@@ -1245,6 +1812,74 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                         </button>
                       )}
                     </div>
+                    {totalImages > 0 && (
+                      <div className="mt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-[11px] font-bold text-slate-500 tracking-wider">
+                            {totalImages} PREVIEW{totalImages === 1 ? '' : 'S'}
+                          </h3>
+                          {totalImages > 1 && (
+                            <button
+                              type="button"
+                              className="text-[11px] font-bold text-slate-500 hover:text-crimson flex items-center gap-1 transition"
+                              onClick={async () => {
+                                const imageFiles = viewMode === 'client' && !showCompare ? clientImageFiles : adminImageFiles;
+                                if (!imageFiles || imageFiles.length === 0) return;
+
+                                const toastId = toast.loading(`Preparing zip of ${imageFiles.length} image(s)…`);
+                                try {
+                                  const JSZip = (await import('jszip')).default;
+                                  const zip = new JSZip();
+
+                                  await Promise.all(
+                                    imageFiles.map(async (f) => {
+                                      const res = await adminService.getDownloadUrl(f.id);
+                                      const fileRes = await fetch(res.url);
+                                      if (!fileRes.ok) throw new Error(`Failed to fetch ${f.file_name}`);
+                                      const blob = await fileRes.blob();
+                                      zip.file(f.file_name, blob);
+                                    })
+                                  );
+
+                                  const content = await zip.generateAsync({ type: 'blob' });
+                                  const link = document.createElement('a');
+                                  link.href = URL.createObjectURL(content);
+                                  link.download = `${job?.ref || 'Images'}.zip`;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(link.href);
+
+                                  toast.success('Zip file downloaded successfully.', { id: toastId });
+                                } catch (err) {
+                                  console.error(err);
+                                  toast.error('Failed to create zip file.', { id: toastId });
+                                }
+                              }}
+                            >
+                              <Download className="w-3.5 h-3.5" /> Download All
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                          {images.map((src, i) => {
+                            return (
+                              <div
+                                key={`thumb-${i}`}
+                                className="w-16 h-16 shrink-0 rounded border border-slate-200 bg-slate-100 overflow-hidden cursor-pointer hover:opacity-80 hover:scale-105 transition-all"
+                                style={{
+                                  borderColor: (i >= carPage && i < carPage + 2) || (totalImages === 1) ? '#B22234' : '#E2E8F0',
+                                  boxShadow: (i >= carPage && i < carPage + 2) || (totalImages === 1) ? '0 0 0 1.5px #B22234' : 'none'
+                                }}
+                                onClick={() => setCarPage(Math.min(i, Math.max(0, totalImages - 2)))}
+                              >
+                                <img src={src} alt="Thumbnail" className="w-full h-full object-cover" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* RIGHT — Review & Set Price card (quote view only) */}
@@ -1303,6 +1938,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                                   const n = parseFloat(next);
                                   setPriceInvalid(Number.isFinite(n) && n > MAX_PRICE);
                                 }}
+                                onWheel={(e) => e.currentTarget.blur()}
                                 style={{
                                   width: '100%',
                                   background: quoteSent ? '#FEF3C7' : '#FFFFFF',
@@ -1342,6 +1978,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                                 const n = parseFloat(next);
                                 setEtaInvalid(Number.isFinite(n) && n > MAX_ETA_HOURS);
                               }}
+                              onWheel={(e) => e.currentTarget.blur()}
                               style={{
                                 width: '100%',
                                 background: quoteSent ? '#FEF3C7' : '#FFFFFF',
@@ -1376,7 +2013,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                             value={noteToClient}
                             readOnly={quoteSent}
                             disabled={quoteSent}
-                            onChange={(e) => setNoteToClient(e.target.value)}
+                            maxLength={500}
+                            onChange={(e) => setNoteToClient(e.target.value.slice(0, 500))}
                             placeholder={quoteSent && !noteToClient ? '— No note sent —' : undefined}
                             style={{
                               width: '100%',
@@ -1395,6 +2033,17 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               cursor: quoteSent ? 'not-allowed' : 'text',
                             }}
                           />
+                          {!quoteSent ? (
+                            <div
+                              style={{
+                                textAlign: 'right', fontSize: 10, marginTop: 3,
+                                color: noteToClient.length >= 500 ? '#B22234' : '#92400E',
+                                opacity: 0.65, fontWeight: 600,
+                              }}
+                            >
+                              {noteToClient.length}/500
+                            </div>
+                          ) : null}
                         </div>
 
                         {/* Info banner — message swaps when the price has
@@ -1416,8 +2065,8 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           <AlertCircle className="w-3 h-3 shrink-0" style={{ marginTop: 1 }} aria-hidden />
                           <span>
                             {quoteSent
-                              ? <>Price already sent. Status is <b>Quote Approved</b> — awaiting client confirmation.</>
-                              : <>Sending price updates status to <b>Quote Approved</b> and requests client confirmation.</>}
+                              ? <>Price already sent. Status is <b>Quote Sent</b> — awaiting client confirmation.</>
+                              : <>Sending price updates status to <b>Quote Sent</b> and requests client confirmation.</>}
                           </span>
                         </div>
 
@@ -1441,7 +2090,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                               // specifically failed.
                               const priceMsg = priceInvalid
                                 ? (parseFloat(agencyPrice) > MAX_PRICE
-                                  ? `Quoted price must be at most $${MAX_PRICE.toLocaleString()}.`
+                                  ? `Quoted price must be at most $${MAX_PRICE.toLocaleString('en-US')}.`
                                   : 'Please enter a valid quoted price.')
                                 : null;
                               const etaMsg = etaInvalid
@@ -1530,6 +2179,100 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 </div>
               );
             })()}
+
+            {/* COMPARE — original brief vs the finished work, side by side.
+                Shows once there's actually a completed submission to compare
+                against; this is the main tool QC uses to judge a submission. */}
+            {allCompletedFiles.length > 0 && (
+              <div className="mb-5">
+                <SectionLabel>COMPARE — ORIGINAL VS COMPLETED</SectionLabel>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Original ({clientImageFiles.length + clientOtherFiles.length})
+                    </div>
+                    <FileGrid
+                      imageFiles={clientImageFiles}
+                      imageUrls={clientImageUrls ?? []}
+                      otherFiles={clientOtherFiles}
+                      onPreview={makeCompareGridPreview(clientImageFiles)}
+                      onDownload={handleDownloadOneFile}
+                      maxHeightPx={220}
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Completed ({allCompletedFiles.length})
+                    </div>
+                    <FileGrid
+                      imageFiles={completedImageFiles}
+                      imageUrls={completedImageUrls ?? []}
+                      otherFiles={completedOtherFiles}
+                      onPreview={makeCompareGridPreview(completedImageFiles)}
+                      onDownload={handleDownloadOneFile}
+                      maxHeightPx={220}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REFERENCE FILES — non-image uploads (PDF, AI, DST, ...) */}
+            {referenceFiles.length > 0 && (
+              <div className="mb-5">
+                <SectionLabel>REFERENCE FILES</SectionLabel>
+                <ul
+                  className="flex flex-col gap-1.5 overflow-y-auto pr-1"
+                  style={referenceFiles.length > 3 ? { maxHeight: 190 } : undefined}
+                >
+                  {referenceFiles.map((file) => (
+                    <li
+                      key={file.id}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] cursor-pointer transition"
+                      style={{ background: 'rgba(15,23,42,0.03)', border: '1px solid rgba(15,23,42,0.08)' }}
+                      onClick={() => handlePreviewFile(file)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Preview ${file.file_name}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handlePreviewFile(file);
+                        }
+                      }}
+                    >
+                      <span
+                        className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center"
+                        style={{ background: 'rgba(15,23,42,0.05)', border: '1px solid rgba(15,23,42,0.08)' }}
+                        aria-hidden
+                      >
+                        <FileText className="w-4 h-4" style={{ color: '#64748B' }} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate" style={{ color: '#1E293B' }}>{file.file_name}</div>
+                        <div className="text-[10.5px]" style={{ color: '#94A3B8' }}>
+                          {formatBytes(file.file_size_bytes)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 transition"
+                        style={{ color: '#94A3B8' }}
+                        aria-label={`Download ${file.file_name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          adminService.getDownloadUrl(file.id).then((res) => {
+                            window.open(res.url, '_blank', 'noopener,noreferrer');
+                          });
+                        }}
+                      >
+                        <Download className="w-3.5 h-3.5" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* WORKFLOW STEPPER */}
             <div className="mb-5 relative">
@@ -1636,7 +2379,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                       const text = displayJob.notes || displayJob.summary;
                       const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
                       const customFormat = match && match[1] ? match[1].trim() : null;
-                      return displayJob.finalFiles.map(f => {
+                      const labels = displayJob.finalFiles.map(f => {
                         if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
                           if (customFormat) {
                             if (/^others:\s*/i.test(customFormat)) {
@@ -1647,7 +2390,11 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                           return f;
                         }
                         return f;
-                      }).join(', ');
+                      });
+                      // Defensive dedup — older records saved before the
+                      // final_files mapping fix may carry repeated OTHERS
+                      // entries (one per unrecognized format token).
+                      return [...new Set(labels)].join(', ');
                     })()}
                   />
                 ) : null}
@@ -1688,15 +2435,15 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 ) : null}
                 <DetailRow
                   label="Client Budget"
-                  value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString()}` : 'Not provided'}
+                  value={clientBudget !== null ? `$${Number(clientBudget).toLocaleString('en-US')}` : 'Not provided'}
                 />
                 <DetailRow
                   label="Admin Counter"
-                  value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString()}` : 'None'}
+                  value={adminCounter !== null ? `$${Number(adminCounter).toLocaleString('en-US')}` : 'None'}
                 />
                 <DetailRow
                   label="Agreed Price"
-                  value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString()}` : 'Pending'}
+                  value={agreedPrice !== null ? `$${Number(agreedPrice).toLocaleString('en-US')}` : 'Pending'}
                 />
                 {displayJob.aiScore && aiOverall !== null ? (
                   <DetailRow
@@ -1708,15 +2455,66 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </div>
             </div>
 
+            {/* CLIENT INSTRUCTIONS — strip structured [Key: Value] metadata tokens */}
+            {(() => {
+              const clientText = (displayJob.summary ?? '')
+                .replace(/\[[^\]]*\]/g, '')
+                .trim();
+              if (!clientText) return null;
+              return (
+                <div className="mb-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-[0.14em] whitespace-nowrap shrink-0"
+                      style={{ color: '#94A3B8' }}
+                    >
+                      Client Instructions
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: '#E8EDF5' }} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(clientText).then(() => {
+                          toast.success('Copied to clipboard');
+                        });
+                      }}
+                      className="flex items-center gap-1.5 shrink-0 text-[10.5px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                      style={{ color: '#64748B', border: '1px solid #E2E8F0', background: '#F8FAFC' }}
+                      onMouseOver={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#EFF6FF';
+                        (e.currentTarget as HTMLButtonElement).style.color = '#2563EB';
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = '#BFDBFE';
+                      }}
+                      onMouseOut={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.background = '#F8FAFC';
+                        (e.currentTarget as HTMLButtonElement).style.color = '#64748B';
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = '#E2E8F0';
+                      }}
+                      aria-label="Copy client instructions"
+                    >
+                      <Copy className="w-3 h-3" aria-hidden />
+                      Copy
+                    </button>
+                  </div>
+                  <div
+                    className="text-[12.5px] leading-relaxed p-3.5 rounded-xl whitespace-pre-wrap"
+                    style={{ background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#0C4A6E' }}
+                  >
+                    <ExpandableText text={clientText} color="#2563EB" />
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* NOTES / BRIEF */}
             {displayJob.notes ? (
               <div className="mb-5">
                 <SectionLabel>NOTES / BRIEF</SectionLabel>
                 <div
-                  className="text-[12.5px] leading-relaxed p-3.5 rounded-xl"
+                  className="text-[12.5px] leading-relaxed p-3.5 rounded-xl whitespace-pre-wrap"
                   style={{ background: '#F8FAFC', border: '1px solid #E8EDF5', color: '#475569' }}
                 >
-                  {displayJob.notes}
+                  <ExpandableText text={displayJob.notes} color="#B22234" />
                 </div>
               </div>
             ) : null}
@@ -1859,6 +2657,18 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             );
           })()}
 
+          {/* ── HOLD ── job is paused pending a reply to a staff-raised query.
+              The Unhold action itself lives in the header, beside Close. */}
+          {!showCompare && job.rawStatus === JobStatus.HOLD && (
+            <div
+              className="flex items-center gap-2 rounded-[10px] px-4 py-3 mt-4 text-[12.5px] font-semibold"
+              style={{ background: 'rgba(225,29,72,0.08)', border: '1px solid rgba(225,29,72,0.25)', color: '#e11d48' }}
+            >
+              <AlertCircle className="w-4 h-4 shrink-0" aria-hidden />
+              On hold — waiting on the client's reply to a query. The ETA timer is paused.
+            </div>
+          )}
+
           {/* ── QUERIES ── always use the canonical (non-admin-copy) job ID so
               the thread is shared with the client viewing the original job. */}
           {!showCompare && (
@@ -1879,7 +2689,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             onClick={handleDownloadAllFiles}
           >
             <Download className="w-3.5 h-3.5" aria-hidden />
-            Download Files
+            Source Files
           </button>
           <button
             type="button"
@@ -1904,15 +2714,21 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
             <Edit2 className="w-3.5 h-3.5" aria-hidden />
             Edit Job
           </button>
-          {!isQuote && isAcknowledged && !isDelivered && job?.project !== 'Amend' ? (
+          {!isQuote && isAcknowledged && !isDelivered && job?.project !== 'Amend' && isCsOrAdmin ? (
             <button
               type="button"
               className="btn btn-crimson"
               style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
-              onClick={() => openSendMailModal()}
+              onClick={() => {
+                if (!isReadyToDeliver) {
+                  setShowQcWarning(true);
+                } else {
+                  openSendMailModal();
+                }
+              }}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
-              Deliver Project
+              Dispatch Project
             </button>
           ) : null}
           {normalizedStatus(job) === 'MODIFICATION_REQUESTED' ? (
@@ -1938,18 +2754,115 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </button>
             </>
           ) : null}
-          {!isQuote && isCsApproved ? (
+          {!isQuote && isTeamLeadReviewStatus && canReviewAsTeamLead ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6, borderColor: '#e11d48', color: '#e11d48' }}
+                disabled={tlReviewBusy !== null}
+                onClick={() => { setTlRejectReason(''); setShowTlRejectDialog(true); }}
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+                Reject
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+                disabled={tlReviewBusy !== null}
+                onClick={() => { setTlApproveConfirmText(''); setShowTlApproveConfirm(true); }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+                {tlReviewBusy === 'approve' ? 'Approving…' : 'Approve'}
+              </button>
+            </>
+          ) : null}
+          {!isQuote && isSeniorReviewStatus && canReviewAsSenior ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6, borderColor: '#e11d48', color: '#e11d48' }}
+                disabled={srReviewBusy !== null}
+                onClick={() => { setSrRejectReason(''); setShowSrRejectDialog(true); }}
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+                Reject
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+                disabled={srReviewBusy !== null}
+                onClick={() => { setSrApproveConfirmText(''); setShowSrApproveConfirm(true); }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+                {srReviewBusy === 'approve' ? 'Approving…' : 'Approve'}
+              </button>
+            </>
+          ) : null}
+          {!isQuote && isQcReviewStatus && canReviewAsQc ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6, borderColor: '#e11d48', color: '#e11d48' }}
+                disabled={qcReviewBusy !== null}
+                onClick={() => { setQcRejectReason('OTHER'); setQcRejectFeedback(''); setShowQcRejectDialog(true); }}
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+                Reject
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+                disabled={qcReviewBusy !== null}
+                onClick={() => { setQcApproveConfirmText(''); setShowQcApproveConfirm(true); }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+                {qcReviewBusy === 'approve' ? 'Approving…' : 'Approve'}
+              </button>
+            </>
+          ) : null}
+          {!isQuote && isJobPlaced && isAcknowledged && isCsOrAdmin ? (
+            <button
+              type="button"
+              className="btn btn-crimson"
+              style={{ fontSize: 12, padding: '7px 13px', gap: 6, opacity: approveJob.isPending ? 0.6 : 1 }}
+              disabled={approveJob.isPending}
+              onClick={handleApprove}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" aria-hidden />
+              {approveJob.isPending ? 'Approving…' : 'Approve'}
+            </button>
+          ) : null}
+          {!isQuote && canAssign && onAssign ? (
             <button
               type="button"
               className="btn btn-crimson"
               style={{ fontSize: 12, padding: '7px 13px', gap: 6 }}
+              onClick={() => onAssign(job)}
+            >
+              <Send className="w-3.5 h-3.5" aria-hidden />
+              {job.assignedTo ? 'Reassign Job' : 'Assign Job'}
+            </button>
+          ) : null}
+          {/* {!isQuote && isCsApproved && isCsOrAdmin ? (
+            <button
+              type="button"
+              className="btn btn-crimson"
+              style={{ fontSize: 12, padding: '7px 13px', gap: 6, opacity: bypassDisabled ? 0.5 : 1 }}
+              disabled={bypassDisabled}
+              title={bypassDisabled ? 'Disabled by Admin — route this job through Team Lead assignment instead.' : undefined}
               onClick={() => setShowMarkComplete(true)}
             >
               <PackageCheck className="w-3.5 h-3.5" aria-hidden />
               Mark Complete
             </button>
-          ) : null}
-          {!isQuote && isReadyToDeliver ? (
+          ) : null} */}
+          {!isQuote && isReadyToDeliver && isCsOrAdmin ? (
             <button
               type="button"
               className="btn btn-crimson"
@@ -1957,7 +2870,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               onClick={() => setShowDispatchConfirm(true)}
             >
               <Send className="w-3.5 h-3.5" aria-hidden />
-              Dispatch to Client
+              Dispatch Project
             </button>
           ) : null}
         </div>
@@ -2021,6 +2934,403 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 disabled={amendBusy !== null}
               >
                 {amendBusy === 'reject' ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {showTlRejectDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && tlReviewBusy === null) setShowTlRejectDialog(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reject Submission"
+            className="glass-heavy rounded-2xl w-full max-w-[420px] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Reject This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              It returns to the junior with your feedback so they can revise and resubmit.
+            </p>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-1.5">
+              Feedback <span className="font-normal normal-case text-text-faint">(required)</span>
+            </label>
+            <textarea
+              className="w-full rounded-xl border border-[var(--glass-border)] bg-transparent text-[13px] text-text-main p-3 outline-none focus:border-[#e11d48] transition resize-none mb-4 placeholder:text-text-faint"
+              rows={3}
+              placeholder="e.g. Logo placement doesn't match the brief — please re-center it."
+              value={tlRejectReason}
+              onChange={(e) => setTlRejectReason(e.target.value)}
+              disabled={tlReviewBusy !== null}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowTlRejectDialog(false)}
+                disabled={tlReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={handleRejectTeamLeadReview}
+                disabled={tlReviewBusy !== null || !tlRejectReason.trim()}
+              >
+                {tlReviewBusy === 'reject' ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* ── TEAM LEAD APPROVE — 2-STEP (type CONFIRM) ── */}
+      {showTlApproveConfirm && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && tlReviewBusy === null) setShowTlApproveConfirm(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm Approval"
+            className="rounded-2xl w-full max-w-[420px] p-6"
+            style={{ background: '#E9EDF3', border: '1px solid #D3DAE6', boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Approve This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              It will move on to {job.order === 'Digitizing + Sewout' ? 'Sewout' : 'QC'} for review. This can't be undone from here.
+            </p>
+
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
+                Type to Confirm
+              </label>
+              <div className="text-[11px] text-text-faint">
+                Type <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono">CONFIRM</code> below to enable the button
+              </div>
+              <input
+                type="text"
+                value={tlApproveConfirmText}
+                onChange={(e) => setTlApproveConfirmText(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && tlApproveConfirmText.trim().toUpperCase() === 'CONFIRM' && tlReviewBusy === null) {
+                    void handleApproveTeamLeadReview().then(() => setShowTlApproveConfirm(false));
+                  }
+                }}
+                placeholder="CONFIRM"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                disabled={tlReviewBusy !== null}
+                className="w-full text-center font-bold tracking-wider uppercase rounded-xl px-4 py-3 outline-none font-mono text-[14px] transition"
+                style={{
+                  border: `1.5px solid ${tlApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '#22C55E' : 'var(--glass-border)'}`,
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  boxShadow: tlApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '0 0 0 3px rgba(34,197,94,0.15)' : 'none',
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowTlApproveConfirm(false)}
+                disabled={tlReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={async () => {
+                  await handleApproveTeamLeadReview();
+                  setShowTlApproveConfirm(false);
+                }}
+                disabled={tlReviewBusy !== null || tlApproveConfirmText.trim().toUpperCase() !== 'CONFIRM'}
+              >
+                {tlReviewBusy === 'approve' ? 'Approving…' : 'Confirm Approve'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {showSrRejectDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && srReviewBusy === null) setShowSrRejectDialog(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reject Submission"
+            className="glass-heavy rounded-2xl w-full max-w-[420px] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Reject This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              It returns to the junior with your feedback so they can revise and resubmit.
+            </p>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-1.5">
+              Feedback <span className="font-normal normal-case text-text-faint">(required)</span>
+            </label>
+            <textarea
+              className="w-full rounded-xl border border-[var(--glass-border)] bg-transparent text-[13px] text-text-main p-3 outline-none focus:border-[#e11d48] transition resize-none mb-4 placeholder:text-text-faint"
+              rows={3}
+              placeholder="e.g. Stitch density is off — please rework and resubmit."
+              value={srRejectReason}
+              onChange={(e) => setSrRejectReason(e.target.value)}
+              disabled={srReviewBusy !== null}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowSrRejectDialog(false)}
+                disabled={srReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={handleRejectSeniorReview}
+                disabled={srReviewBusy !== null || !srRejectReason.trim()}
+              >
+                {srReviewBusy === 'reject' ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* ── SENIOR REVIEW APPROVE — 2-STEP (type CONFIRM) ── */}
+      {showSrApproveConfirm && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && srReviewBusy === null) setShowSrApproveConfirm(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm Approval"
+            className="rounded-2xl w-full max-w-[420px] p-6"
+            style={{ background: '#E9EDF3', border: '1px solid #D3DAE6', boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Approve This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              It will move on to {job.order === 'Digitizing + Sewout' ? 'Sewout' : 'QC'} for review. This can't be undone from here.
+            </p>
+
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
+                Type to Confirm
+              </label>
+              <div className="text-[11px] text-text-faint">
+                Type <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono">CONFIRM</code> below to enable the button
+              </div>
+              <input
+                type="text"
+                value={srApproveConfirmText}
+                onChange={(e) => setSrApproveConfirmText(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && srApproveConfirmText.trim().toUpperCase() === 'CONFIRM' && srReviewBusy === null) {
+                    void handleApproveSeniorReview().then(() => setShowSrApproveConfirm(false));
+                  }
+                }}
+                placeholder="CONFIRM"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                disabled={srReviewBusy !== null}
+                className="w-full text-center font-bold tracking-wider uppercase rounded-xl px-4 py-3 outline-none font-mono text-[14px] transition"
+                style={{
+                  border: `1.5px solid ${srApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '#22C55E' : 'var(--glass-border)'}`,
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  boxShadow: srApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '0 0 0 3px rgba(34,197,94,0.15)' : 'none',
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowSrApproveConfirm(false)}
+                disabled={srReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={async () => {
+                  await handleApproveSeniorReview();
+                  setShowSrApproveConfirm(false);
+                }}
+                disabled={srReviewBusy !== null || srApproveConfirmText.trim().toUpperCase() !== 'CONFIRM'}
+              >
+                {srReviewBusy === 'approve' ? 'Approving…' : 'Confirm Approve'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {showQcRejectDialog && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && qcReviewBusy === null) setShowQcRejectDialog(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reject Submission"
+            className="glass-heavy rounded-2xl w-full max-w-[420px] p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Reject This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              It returns to the producer with a structured reason so they can self-serve the fix.
+            </p>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-1.5">
+              Reason
+            </label>
+            <select
+              value={qcRejectReason}
+              onChange={(e) => setQcRejectReason(e.target.value)}
+              className="w-full rounded-xl border border-[var(--glass-border)] bg-transparent text-[13px] text-text-main p-3 outline-none mb-4"
+              disabled={qcReviewBusy !== null}
+            >
+              {QC_REJECTION_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            <label className="block text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-1.5">
+              Feedback <span className="font-normal normal-case text-text-faint">(required)</span>
+            </label>
+            <textarea
+              className="w-full rounded-xl border border-[var(--glass-border)] bg-transparent text-[13px] text-text-main p-3 outline-none resize-none mb-4 placeholder:text-text-faint"
+              rows={3}
+              placeholder="Describe what needs to change…"
+              value={qcRejectFeedback}
+              onChange={(e) => setQcRejectFeedback(e.target.value)}
+              disabled={qcReviewBusy !== null}
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowQcRejectDialog(false)}
+                disabled={qcReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={handleRejectQcReview}
+                disabled={qcReviewBusy !== null || !qcRejectFeedback.trim()}
+              >
+                {qcReviewBusy === 'reject' ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* ── QC APPROVE — 2-STEP (type CONFIRM) ── */}
+      {showQcApproveConfirm && createPortal(
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/55 anim-fade-in"
+          onClick={(e) => { if (e.target === e.currentTarget && qcReviewBusy === null) setShowQcApproveConfirm(false); }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm Approval"
+            className="rounded-2xl w-full max-w-[420px] p-6"
+            style={{ background: '#E9EDF3', border: '1px solid #D3DAE6', boxShadow: '0 32px 80px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[15px] font-bold mb-1 text-text-main">Approve This Submission?</h2>
+            <p className="text-[12.5px] text-text-muted leading-relaxed mb-4">
+              The job will be locked from the producer and routed to CS for delivery. This can't be undone from here.
+            </p>
+
+            <div className="flex flex-col gap-1.5 mb-4">
+              <label className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
+                Type to Confirm
+              </label>
+              <div className="text-[11px] text-text-faint">
+                Type <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono">CONFIRM</code> below to enable the button
+              </div>
+              <input
+                type="text"
+                value={qcApproveConfirmText}
+                onChange={(e) => setQcApproveConfirmText(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && qcApproveConfirmText.trim().toUpperCase() === 'CONFIRM' && qcReviewBusy === null) {
+                    void handleApproveQcReview().then(() => setShowQcApproveConfirm(false));
+                  }
+                }}
+                placeholder="CONFIRM"
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                disabled={qcReviewBusy !== null}
+                className="w-full text-center font-bold tracking-wider uppercase rounded-xl px-4 py-3 outline-none font-mono text-[14px] transition"
+                style={{
+                  border: `1.5px solid ${qcApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '#22C55E' : 'var(--glass-border)'}`,
+                  background: 'transparent',
+                  color: 'var(--text-main)',
+                  boxShadow: qcApproveConfirmText.trim().toUpperCase() === 'CONFIRM' ? '0 0 0 3px rgba(34,197,94,0.15)' : 'none',
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowQcApproveConfirm(false)}
+                disabled={qcReviewBusy !== null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-crimson"
+                onClick={async () => {
+                  await handleApproveQcReview();
+                  setShowQcApproveConfirm(false);
+                }}
+                disabled={qcReviewBusy !== null || qcApproveConfirmText.trim().toUpperCase() !== 'CONFIRM'}
+              >
+                {qcReviewBusy === 'approve' ? 'Approving…' : 'Confirm Approve'}
               </button>
             </div>
           </div>
@@ -2107,7 +3417,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   the rep typed in a sane number with many digits, or an
                   absurd 30-digit value) don't blow out the dialog. */}
               {(() => {
-                const priceStr = Number(parseFloat(agencyPrice) || 0).toLocaleString();
+                const priceStr = Number(parseFloat(agencyPrice) || 0).toLocaleString('en-US');
                 // Scale the headline price down as it grows so it still fits.
                 const priceFontSize =
                   priceStr.length > 22 ? 18 :
@@ -2173,7 +3483,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 </svg>
                 <div style={{ fontSize: 12.5, color: '#B22234', lineHeight: 1.55, fontWeight: 600 }}>
                   <strong>Please note:</strong> Sending this quote proposal locks the job status to{' '}
-                  <strong>Quote Approved</strong>. The client will be prompted to authorize the final price and ETA to commence production.
+                  <strong>Quote Sent</strong>. The client will be prompted to authorize the final price and ETA to commence production.
                 </div>
               </div>
 
@@ -2188,7 +3498,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <input
                   type="text"
                   value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
+                  onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && confirmText.trim().toUpperCase() === 'CONFIRM' && !sendPrice.isPending) {
                       handleConfirmSubmit();
@@ -2314,7 +3624,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </div>
               <div className="flex-1 min-w-0">
                 <div style={{ fontSize: 17, fontWeight: 800, color: '#78350F', letterSpacing: '0.01em', marginBottom: 2 }}>
-                  Deliver Project
+                  Dispatch Project
                 </div>
                 <div style={{ fontSize: 12, color: '#92400E', opacity: 0.85 }}>
                   This will notify the client that their order is ready for delivery.
@@ -2621,14 +3931,16 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                 <input
                   type="text"
                   value={sendMailConfirmText}
-                  onChange={(e) => setSendMailConfirmText(e.target.value)}
+                  onChange={(e) => setSendMailConfirmText(e.target.value.toUpperCase())}
                   disabled={sendMailPhase !== 'idle'}
                   onKeyDown={(e) => {
+                    const totalFilesCount = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).length + sendMailFiles.length;
                     if (
                       e.key === 'Enter' &&
                       sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' &&
                       sendMailPhase === 'idle' &&
-                      (allCompletedFiles.length + sendMailFiles.length) > 0
+                      totalFilesCount > 0 &&
+                      hasAllRequiredFormats
                     ) {
                       handleSendMailSubmit();
                     }
@@ -2673,7 +3985,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
               </button>
               {(() => {
                 const totalFilesCount = allCompletedFiles.filter((f) => !excludedServerFileIds.has(f.id)).length + sendMailFiles.length;
-                const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0;
+                const ready = sendMailConfirmText.trim().toUpperCase() === 'CONFIRM' && totalFilesCount > 0 && hasAllRequiredFormats;
                 const disabled = !ready || sendMailPhase !== 'idle';
                 return (
                   <button
@@ -2693,10 +4005,77 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                     }}
                   >
                     <Send className="w-3.5 h-3.5" aria-hidden />
-                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Delivering…' : 'Deliver Project'}
+                    {sendMailPhase === 'uploading' ? 'Uploading…' : sendMailPhase === 'sending' ? 'Dispatching…' : 'Dispatch Project'}
                   </button>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── QC WARNING MODAL ── */}
+      {showQcWarning ? (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{
+            background: 'rgba(15,23,42,0.55)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            zIndex: 60,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowQcWarning(false);
+          }}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Warning: Not QC Approved"
+            className="relative w-full max-w-[400px] rounded-2xl flex flex-col overflow-hidden"
+            style={{
+              background: '#fff',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center shrink-0"
+                  style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: 'rgba(245,158,11,0.15)',
+                    color: '#D97706',
+                  }}
+                >
+                  <AlertCircle className="w-5 h-5" aria-hidden />
+                </div>
+                <h3 className="text-[16px] font-bold" style={{ color: '#0D1B2A' }}>Not QC Approved</h3>
+              </div>
+              <p className="text-[13px] leading-relaxed mb-6" style={{ color: '#475569' }}>
+                This project has not yet been approved by Quality Control. Are you sure you want to dispatch it to the client?
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setShowQcWarning(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-crimson"
+                  onClick={() => {
+                    setShowQcWarning(false);
+                    openSendMailModal();
+                  }}
+                >
+                  Continue Dispatching
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2753,7 +4132,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   Dispatch to Client
                 </div>
                 <div style={{ fontSize: 12, color: '#991B1B', opacity: 0.85 }}>
-                  The client will be notified and the job will move to Delivered.
+                  The client will be notified and the job will move to Dispatched.
                 </div>
               </div>
               <button
@@ -2790,7 +4169,7 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
                   </li>
                   <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#7F1D1D', fontWeight: 600, lineHeight: 1.5 }}>
                     <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
-                    Job moves to Delivered
+                    Job moves to Dispatched
                   </li>
                   <li style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: '#7F1D1D', fontWeight: 600, lineHeight: 1.5 }}>
                     <span style={{ color: '#16A34A', fontWeight: 800 }}>✓</span>
@@ -2857,6 +4236,49 @@ export function JobDetailModal({ job, onClose, onEdit, quoteView = false }: JobD
         </div>
       ) : null}
 
+      <FilePreviewModal
+        source={
+          previewFile
+            ? previewUrl
+              ? { kind: 'remote', url: previewUrl, name: previewFile.file_name, type: previewFile.file_type }
+              : null
+            : null
+        }
+        loading={previewLoading}
+        onClose={() => {
+          setPreviewFile(null);
+          setPreviewUrl(null);
+        }}
+      />
+    </div>
+  );
+}
+
+const TEXT_COLLAPSE_CHARS = 300;
+const TEXT_COLLAPSE_LINES = 4;
+
+function ExpandableText({ text, color = '#B22234' }: { text: string; color?: string }) {
+  const isLong = text.length > TEXT_COLLAPSE_CHARS || text.split('\n').length > TEXT_COLLAPSE_LINES;
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => { setExpanded(false); }, [text]);
+  const preview = isLong && !expanded ? text.slice(0, TEXT_COLLAPSE_CHARS).trimEnd() : text;
+
+  return (
+    <div>
+      <div style={{ overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+        {preview}
+        {isLong && !expanded ? '…' : null}
+      </div>
+      {isLong ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-[11.5px] font-semibold"
+          style={{ color, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          {expanded ? 'Show less ↑' : 'View more ↓'}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -2943,7 +4365,7 @@ function CompareView({
         const text = j.notes || j.summary;
         const match = text?.match(/\[\s*Expected Output Format\s*:\s*([^\]]*?)\s*\]/i);
         const customFormat = match && match[1] ? match[1].trim() : null;
-        return j.finalFiles.map(f => {
+        const labels = j.finalFiles.map(f => {
           if (f.toUpperCase() === 'OTHERS' || f.toUpperCase() === 'OTHER') {
             if (customFormat) {
               if (/^others:\s*/i.test(customFormat)) {
@@ -2954,7 +4376,8 @@ function CompareView({
             return f;
           }
           return f;
-        }).join(', ');
+        });
+        return [...new Set(labels)].join(', ');
       }
     },
     { label: 'Placement', get: (j) => j.placement || '—' },

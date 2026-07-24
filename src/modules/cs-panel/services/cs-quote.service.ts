@@ -9,6 +9,11 @@ export interface SendQuotePriceBody {
   etaHours?: number;       // optional, saved to eta_hours on the job card
 }
 
+export interface ApproveJobBody {
+  etaHours: number;  // required — Direct Order Placement fixes ETA at this step (price already known)
+  note?: string;
+}
+
 export interface RejectQuoteBody {
   reason?: string;
 }
@@ -69,6 +74,13 @@ export const csQuoteService = {
     );
   },
 
+  approveJob(jobId: string, body: ApproveJobBody): Promise<IJobCard> {
+    return apiClient.post<IJobCard, ApproveJobBody>(
+      `/api/v1/cs/jobs/${jobId}/approve`,
+      body,
+    );
+  },
+
   rejectQuote(jobId: string, body: RejectQuoteBody = {}): Promise<IJobCard> {
     return apiClient.post<IJobCard, RejectQuoteBody>(
       `/api/v1/cs/jobs/${jobId}/quote/reject`,
@@ -105,5 +117,14 @@ export const csQuoteService = {
       `/api/v1/cs/jobs/${jobId}/notify-ready`,
       body,
     );
+  },
+
+  /** CS bypass (cs_complete) feature flag — PRD §1.6/§4 item 5. Defaults to enabled. */
+  getBypassSetting(): Promise<{ enabled: boolean }> {
+    return apiClient.get<{ enabled: boolean }>('/api/v1/cs/bypass-setting');
+  },
+
+  setBypassSetting(enabled: boolean): Promise<{ enabled: boolean }> {
+    return apiClient.put<{ enabled: boolean }, { enabled: boolean }>('/api/v1/cs/bypass-setting', { enabled });
   },
 };

@@ -54,7 +54,7 @@ export function CSNewJobsPage() {
     return (
       <div className="page">
         <GreetingHero title="New Jobs" subtitle="All active production jobs." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
       </div>

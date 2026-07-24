@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { CreateJobForm, GreetingHero } from '@modules/shared-ui';
+import { AdminBriefForm, GreetingHero } from '@modules/shared-ui';
 import { useAdminClients, useCreateJobCard, useProvisionClient } from '../../modules/admin-panel/hooks/use-admin-clients';
 
 export function AdminPlaceOrderPage() {
@@ -13,7 +13,7 @@ export function AdminPlaceOrderPage() {
         title="Place Order (Admin)"
         subtitle="Direct order placement — pick any client, attach a brief, and drop a job straight into production."
       />
-      <CreateJobForm
+      <AdminBriefForm
         mode="order"
         clients={data?.items ?? []}
         clientsLoading={isLoading}

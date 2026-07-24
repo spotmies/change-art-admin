@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, CheckCheck, Search } from 'lucide-react';
+import { Check, CheckCheck, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { NotificationType, type INotification } from '@contracts';
@@ -152,7 +152,7 @@ export function AdminNotificationsPage() {
                   <span
                     className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
                     style={{
-                      background: 'var(--crimson)',
+                      background: 'var(--color-crimson)',
                       color: 'white',
                       minWidth: 16,
                       height: 16,
@@ -189,17 +189,31 @@ export function AdminNotificationsPage() {
               aria-hidden
             />
             <input
-              type="search"
+              type="text"
               className="fi"
-              style={{ paddingLeft: 28 }}
+              style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
               placeholder="Search title or body…"
               value={search}
+              maxLength={500}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
               aria-label="Search notifications"
             />
+            {search && (
+              <button
+                type="button"
+                className="fjb-search-x"
+                onClick={() => {
+                  setSearch('');
+                  setPage(1);
+                }}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
           </div>
         </div>
 
@@ -208,7 +222,7 @@ export function AdminNotificationsPage() {
             Loading notifications…
           </div>
         ) : isError ? (
-          <div className="flex items-center justify-center py-12 text-[var(--crimson)] text-sm">
+          <div className="flex items-center justify-center py-12 text-[var(--color-crimson)] text-sm">
             Failed to load notifications. Please refresh and try again.
           </div>
         ) : filtered.length === 0 ? (
@@ -226,7 +240,7 @@ export function AdminNotificationsPage() {
                   notification={n}
                   onMarkRead={() => markRead.mutate(n.id)}
                   busy={markRead.isPending}
-                  onNavigate={(jobId) => navigate(`/admin/jobs?open=${jobId}`)}
+                  onNavigate={(path) => navigate(path)}
                 />
               ))}
             </ul>
@@ -245,24 +259,29 @@ export function AdminNotificationsPage() {
   );
 }
 
-/** Extract the job UUID from notification data, if present. */
-function getJobId(n: INotification): string | null {
-  return (n.data?.jobId as string | undefined) ?? null;
+/** Resolve where clicking this notification should navigate, if anywhere. */
+function getNotificationPath(n: INotification): string | null {
+  const data = n.data as Record<string, unknown> | null;
+  const jobId = data?.jobId as string | undefined;
+  const kind = data?.kind as string | undefined;
+  if (kind === 'profile_change_submitted') return '/admin/clients?tab=requests';
+  if (jobId) return `/admin/jobs?open=${jobId}`;
+  return null;
 }
 
 interface RowProps {
   notification: INotification;
   onMarkRead: () => void;
   busy: boolean;
-  onNavigate: (jobId: string) => void;
+  onNavigate: (path: string) => void;
 }
 
 function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowProps) {
-  const jobId = getJobId(n);
+  const path = getNotificationPath(n);
 
   function handleClick() {
     if (!n.is_read) onMarkRead();
-    if (jobId) onNavigate(jobId);
+    if (path) onNavigate(path);
   }
 
   return (
@@ -270,17 +289,17 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
       className="flex items-start gap-3 px-3 py-2.5 rounded-md border border-glass-border transition-colors"
       style={{
         background: n.is_read ? 'transparent' : 'rgba(220,38,38,0.04)',
-        cursor: jobId ? 'pointer' : 'default',
+        cursor: path ? 'pointer' : 'default',
       }}
-      onClick={jobId ? handleClick : undefined}
-      role={jobId ? 'button' : undefined}
-      tabIndex={jobId ? 0 : undefined}
-      onKeyDown={jobId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
+      onClick={path ? handleClick : undefined}
+      role={path ? 'button' : undefined}
+      tabIndex={path ? 0 : undefined}
+      onKeyDown={path ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
     >
       <span
         aria-hidden
         className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
-        style={{ background: n.is_read ? 'transparent' : 'var(--crimson)' }}
+        style={{ background: n.is_read ? 'transparent' : 'var(--color-crimson)' }}
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -293,9 +312,9 @@ function NotificationRow({ notification: n, onMarkRead, busy, onNavigate }: RowP
         {n.body ? (
           <div className="text-[12px] text-text-muted mt-1 whitespace-pre-wrap">{n.body}</div>
         ) : null}
-        {jobId ? (
-          <div className="text-[11px] mt-1" style={{ color: 'var(--crimson)', fontWeight: 600 }}>
-            Click to open job →
+        {path ? (
+          <div className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)', fontWeight: 600 }}>
+            {path.startsWith('/admin/clients') ? 'Click to review request →' : 'Click to open job →'}
           </div>
         ) : null}
       </div>

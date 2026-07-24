@@ -1,27 +1,25 @@
-import { GreetingHero, JobTable, StatGrid, JOBS } from '@modules/shared-ui';
+import { Callout, GreetingHero, JobTable, StatGrid } from '@modules/shared-ui';
+import { useAdminJobViews } from '@modules/admin-panel/hooks/use-admin-jobs';
 
 export function SewoutHistoryPage() {
-  const sewoutJobs = JOBS.filter(
-    (j) => j.order === 'Digitizing + Sewout' && (j.stage === 'qc' || j.stage === 'delivered'),
-  );
+  const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
+  const submitted = jobs.filter((j) => j.rawStatus === 'SUBMITTED_TO_QC' || j.rawStatus === 'QC_REVIEW');
 
   return (
     <div className="page">
       <GreetingHero
         title="Sewout History"
-        subtitle="Every sewout you've recorded — thread match, stitch count, runtime, and the photo proof attached."
+        subtitle="Sewouts you've submitted to QC."
       />
 
-      <StatGrid
-        stats={[
-          { accent: 'blue', label: 'This Week', value: 5 },
-          { accent: 'teal', label: 'This Month', value: 17 },
-          { accent: 'green', label: 'Approved Rate', value: '97%' },
-          { accent: 'amber', label: 'Returned', value: 1 },
-        ]}
-      />
+      <StatGrid stats={[{ accent: 'purple', label: 'Awaiting QC', value: submitted.length }]} />
 
-      <JobTable jobs={sewoutJobs} defaultView="table" emptyLabel="No history yet." />
+      <Callout tone="info">
+        Once QC approves a job it locks and leaves your active queue — this view shows what's still
+        in flight, not the full historical archive.
+      </Callout>
+
+      <JobTable jobs={submitted} defaultView="table" emptyLabel={isLoading ? 'Loading…' : 'No history yet.'} />
     </div>
   );
 }

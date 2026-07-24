@@ -1,5 +1,5 @@
 import { apiClient } from '@lib/api-client';
-import type { IClient, IFileVersion, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
+import type { IClient, IClientPaymentMethod, IFileVersion, IIngestedEmail, IJobCard, IUser, PaginatedList } from '@contracts';
 
 // ─── Client profile change requests (admin review queue) ──────────────────
 // Local to this module — not in @contracts because the backend enum mirror
@@ -41,6 +41,8 @@ export interface ProfileChangeRequestFilters {
 
 export interface JobCardFilters {
   status?: string;
+  /** Comma-separated statuses, e.g. "JOB_PLACED,QUOTE_SUBMITTED". Takes precedence over `status`. */
+  statuses?: string;
   order_type?: string;
   project_type?: string;
   client_id?: string;
@@ -54,10 +56,15 @@ export interface JobCardFilters {
   pipeline?: string;
   exclude_stage?: string;
   unacknowledged?: boolean;
+  include_ack_placed?: boolean;
 }
 
 export interface ClientFilters {
   search?: string;
+  /** When true, only Hotlisted clients are returned. */
+  hotlisted?: boolean;
+  /** When set, filters to only Active (true) or only Inactive (false) clients. */
+  is_active?: boolean;
   page?: number;
   per_page?: number;
 }
@@ -182,15 +189,58 @@ export const adminService = {
     return apiClient.get<Record<string, number>>('/api/v1/job-cards/badges');
   },
 
-  transitionJob(jobId: string, action: string, version: number, notes?: string): Promise<IJobCard> {
-    return apiClient.post<IJobCard, { action: string; version: number; data?: { notes: string } }>(
+  transitionJob(
+    jobId: string,
+    action: string,
+    version: number,
+    notes?: string,
+    feedback?: string,
+  ): Promise<IJobCard> {
+    const data = notes || feedback ? { ...(notes ? { notes } : {}), ...(feedback ? { feedback } : {}) } : undefined;
+    return apiClient.post<IJobCard, { action: string; version: number; data?: { notes?: string; feedback?: string } }>(
       `/api/v1/workflow/${jobId}/transition`,
-      { action, version, ...(notes ? { data: { notes } } : {}) },
+      { action, version, ...(data ? { data } : {}) },
     );
+  },
+
+  /** QC reject requires a structured reason + written feedback (ChangeArt-New-PRD.md §2.8). */
+  qcReject(jobId: string, version: number, rejectionReason: string, feedback: string): Promise<IJobCard> {
+    return apiClient.post<
+      IJobCard,
+      { action: string; version: number; data: { rejection_reason: string; feedback: string } }
+    >(`/api/v1/workflow/${jobId}/transition`, {
+      action: 'qc_reject',
+      version,
+      data: { rejection_reason: rejectionReason, feedback },
+    });
+  },
+
+  /** Sewout submit requires a mandatory stitch count — backend rejects without it. */
+  transitionJobWithStitchCount(
+    jobId: string,
+    action: string,
+    version: number,
+    stitchCount?: number,
+  ): Promise<IJobCard> {
+    return apiClient.post<
+      IJobCard,
+      { action: string; version: number; data?: { stitch_count: number } }
+    >(`/api/v1/workflow/${jobId}/transition`, {
+      action,
+      version,
+      ...(stitchCount != null ? { data: { stitch_count: stitchCount } } : {}),
+    });
   },
 
   getJobCard(id: string): Promise<IJobCard> {
     return apiClient.get<IJobCard>(`/api/v1/job-cards/${id}`);
+  },
+
+  unholdJob(jobId: string, version: number): Promise<IJobCard> {
+    return apiClient.post<IJobCard, { version: number }>(
+      `/api/v1/job-cards/${jobId}/unhold`,
+      { version },
+    );
   },
 
   /**
@@ -237,6 +287,28 @@ export const adminService = {
     });
   },
 
+  /**
+   * Directory-wide summary tiles — independent of any table search/filter,
+   * so narrowing the client table down to a search match never changes
+   * these numbers.
+   */
+  getClientStats(): Promise<{
+    active_accounts: number;
+    new_this_month: number;
+    top_client: { client_name: string; company_name: string | null } | null;
+  }> {
+    return apiClient.get('/api/v1/clients/stats');
+  },
+
+  getClientById(id: string): Promise<IClient> {
+    return apiClient.get<IClient>(`/api/v1/clients/${id}`);
+  },
+
+  /** Every payment method a client has saved (not just their single default). */
+  getClientPaymentMethods(clientId: string): Promise<IClientPaymentMethod[]> {
+    return apiClient.get<IClientPaymentMethod[]>(`/api/v1/clients/${clientId}/payment-methods`);
+  },
+
 
 
   createClient(body: CreateClientBody): Promise<IClient> {
@@ -253,6 +325,25 @@ export const adminService = {
 
   deleteClient(id: string): Promise<void> {
     return apiClient.delete<void>(`/api/v1/clients/${id}`);
+  },
+
+  /** Admin-only: mark or unmark a client as Hotlisted. */
+  setClientHotlisted(id: string, hotlisted: boolean): Promise<IClient> {
+    return apiClient.patch<IClient, { hotlisted: boolean }>(`/api/v1/clients/${id}/hotlist`, {
+      hotlisted,
+    });
+  },
+
+  /** Admin/CS: activate or deactivate a client's portal account. */
+  setClientActive(id: string, is_active: boolean): Promise<IClient> {
+    return apiClient.patch<IClient, { is_active: boolean }>(`/api/v1/clients/${id}/status`, {
+      is_active,
+    });
+  },
+
+  /** Admin: send the Credit Card Authorization Form to a client's registered email. */
+  sendCcForm(id: string): Promise<IClient> {
+    return apiClient.post<IClient, Record<string, never>>(`/api/v1/clients/${id}/send-cc-form`, {});
   },
 
   /** List self-registered clients awaiting admin approval. */
@@ -338,6 +429,11 @@ export const adminService = {
   // Soft delete — marks the user inactive and invalidates their sessions.
   deactivateUser(id: string): Promise<IUser> {
     return apiClient.patch<IUser>(`/api/v1/users/${id}/deactivate`);
+  },
+
+  // Emails the user a password reset link via the same flow as self-service "forgot password".
+  resetUserPassword(id: string): Promise<IUser> {
+    return apiClient.patch<IUser>(`/api/v1/users/${id}/reset-password`);
   },
 
   listProfileChangeRequests(

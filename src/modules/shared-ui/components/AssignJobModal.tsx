@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X, UserPlus, Users, AlertCircle } from 'lucide-react';
+import { X, UserPlus, Users, AlertCircle, AlertTriangle, ChevronDown } from 'lucide-react';
 import { UserRole, UserSubType, type IUser } from '@contracts';
-import { useAdminUsers } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { useStaffDirectory } from '@modules/team-lead/hooks/use-staff-directory';
+import type { StaffDirectoryEntry, StaffJobBrief } from '@modules/team-lead/services/staff-directory.service';
 import { useAssignJob } from '@modules/admin-panel/hooks/use-assignments';
 import type { Job } from '../mocks/jobs';
+
+const AVAILABILITY_LABEL: Record<StaffDirectoryEntry['availability'], { label: string; accent: string }> = {
+  FREE: { label: 'Free', accent: 'green' },
+  BUSY: { label: 'Busy', accent: 'amber' },
+  OVERLOADED: { label: 'Overloaded', accent: 'red' },
+};
 
 interface AssignJobModalProps {
   job: Job | null;
@@ -23,12 +30,12 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [isIn, setIsIn] = useState(false);
+  // Which staff member's ongoing-projects panel is expanded — click (or hover
+  // via onMouseEnter below) to preview their current load before assigning.
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
-  // Fetch internal staff once — exclude clients server-side.
-  // Backend caps per_page at 100 (see listUsersQuerySchema). For a small
-  // tenant 100 covers the entire internal staff list; if a deployment ever
-  // grows past 100 active users this should switch to a paginator.
-  const { data, isLoading, isError } = useAdminUsers({ is_active: true, per_page: 100 });
+  // Fetch internal staff directory showing workloads.
+  const { data, isLoading, isError } = useStaffDirectory();
   const assignMutation = useAssignJob();
 
   useEffect(() => {
@@ -52,21 +59,21 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
 
   // Build role groups in the same display order as the v3 prototype.
   const groups = useMemo(() => {
-    const rows = data?.items ?? [];
-    const sortByName = (a: IUser, b: IUser) => a.name.localeCompare(b.name);
+    const rows = data ?? [];
+    const sortByName = (a: StaffDirectoryEntry, b: StaffDirectoryEntry) => a.user.name.localeCompare(b.user.name);
     const filter = (predicate: (u: IUser) => boolean) =>
-      rows.filter((u) => u.is_active && predicate(u)).sort(sortByName);
+      rows.filter((entry) => entry.user.is_active && predicate(entry.user)).sort(sortByName);
     return [
-      { label: 'Team Lead',        users: filter((u) => u.role === UserRole.TEAM_LEAD) },
-      { label: 'Senior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.SENIOR) },
-      { label: 'Junior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.JUNIOR) },
-      { label: 'Digitizor',        users: filter((u) => u.role === UserRole.DIGITATOR) },
-      { label: 'Sewout',           users: filter((u) => u.role === UserRole.SEWOUT) },
-      { label: 'QC Reviewer',      users: filter((u) => u.role === UserRole.QC) },
-      { label: 'Client Servicing', users: filter((u) => u.role === UserRole.CS) },
-      { label: 'Admin',            users: filter((u) => u.role === UserRole.ADMIN) },
-    ].filter((g) => g.users.length > 0);
-  }, [data?.items]);
+      { label: 'Team Lead',        staff: filter((u) => u.role === UserRole.TEAM_LEAD) },
+      { label: 'Senior Designer',  staff: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.SENIOR) },
+      { label: 'Junior Designer',  staff: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.JUNIOR) },
+      { label: 'Digitizor',        staff: filter((u) => u.role === UserRole.DIGITATOR) },
+      { label: 'Sewout',           staff: filter((u) => u.role === UserRole.SEWOUT) },
+      { label: 'QC Reviewer',      staff: filter((u) => u.role === UserRole.QC) },
+      { label: 'Client Servicing', staff: filter((u) => u.role === UserRole.CS) },
+      { label: 'Admin',            staff: filter((u) => u.role === UserRole.ADMIN) },
+    ].filter((g) => g.staff.length > 0);
+  }, [data]);
 
   if (!job) return null;
 
@@ -134,7 +141,7 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
                 <span style={{ color: '#CBD5E1' }}>·</span>
                 <span>Assign Job</span>
               </div>
-              <h2 className="text-[18px] font-extrabold leading-tight" style={{ color: '#0D1B2A' }}>
+              <h2 className="text-[18px] font-extrabold leading-tight line-clamp-2 break-words" style={{ color: '#0D1B2A' }}>
                 {job.design}
               </h2>
               <div className="text-[12px] mt-1" style={{ color: '#64748B' }}>
@@ -220,49 +227,107 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
                   {g.label}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {g.users.map((u) => {
+                  {g.staff.map((entry) => {
+                    const u = entry.user;
                     const checked = selectedUserId === u.id;
                     const initials = (u.name || u.email).split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+                    const avail = AVAILABILITY_LABEL[entry.availability];
+                    const atRiskCount = entry.jobs.filter((j) => j.at_risk).length;
+
+                    const isExpanded = expandedUserId === u.id;
+                    const toggleExpanded = (e: React.MouseEvent) => {
+                      // Stop the click from also toggling the radio via the
+                      // wrapping <label>'s native label→control forwarding.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setExpandedUserId(isExpanded ? null : u.id);
+                    };
+
                     return (
-                      <label
+                      <div
                         key={u.id}
-                        className="flex items-center gap-2.5 cursor-pointer transition"
                         style={{
-                          padding: '10px 12px',
-                          border: `1px solid ${checked ? 'rgba(178,34,52,0.55)' : '#E8EDF5'}`,
-                          background: checked ? 'rgba(178,34,52,0.04)' : '#fff',
-                          borderRadius: 8,
+                          gridColumn: isExpanded ? '1 / -1' : undefined,
+                          border: `1px solid ${checked ? 'rgba(178,34,52,0.55)' : isExpanded ? '#DCE3EE' : '#E8EDF5'}`,
+                          borderRadius: 10,
+                          background: checked ? 'rgba(178,34,52,0.04)' : isExpanded ? '#FAFBFD' : '#fff',
+                          transition: 'border-color 150ms ease, background 150ms ease',
+                          overflow: 'hidden',
                         }}
+                        onMouseEnter={() => { if (entry.jobs.length > 0) setExpandedUserId(u.id); }}
                       >
-                        <input
-                          type="radio"
-                          name="assign-person"
-                          value={u.id}
-                          checked={checked}
-                          onChange={() => setSelectedUserId(u.id)}
-                          style={{ accentColor: '#B22234', flexShrink: 0 }}
-                          disabled={assignMutation.isPending}
-                        />
-                        <div
-                          className="flex items-center justify-center shrink-0"
-                          style={{
-                            width: 32, height: 32, borderRadius: '50%',
-                            background: 'rgba(178,34,52,0.12)',
-                            border: '1px solid rgba(178,34,52,0.2)',
-                            fontSize: 10, fontWeight: 700, color: '#B22234',
-                          }}
+                        <label
+                          className="flex items-center gap-2.5 cursor-pointer"
+                          style={{ padding: '10px 12px' }}
                         >
-                          {initials || '?'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-[12.5px] truncate" style={{ color: '#0D1B2A' }}>
-                            {u.name || u.email}
+                          <input
+                            type="radio"
+                            name="assign-person"
+                            value={u.id}
+                            checked={checked}
+                            onChange={() => setSelectedUserId(u.id)}
+                            style={{ accentColor: '#B22234', flexShrink: 0 }}
+                            disabled={assignMutation.isPending}
+                          />
+                          <div
+                            className="flex items-center justify-center shrink-0"
+                            style={{
+                              width: 32, height: 32, borderRadius: '50%',
+                              background: 'rgba(178,34,52,0.12)',
+                              color: '#B22234', fontSize: 11, fontWeight: 800, letterSpacing: '0.02em',
+                            }}
+                          >
+                            {initials}
                           </div>
-                          <div className="text-[10.5px]" style={{ color: '#64748B' }}>
-                            {u.sub_type ? `${u.sub_type[0]}${u.sub_type.slice(1).toLowerCase()} · ` : ''}{u.email}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-semibold text-[13px] text-[#0D1B2A] truncate">{u.name}</div>
+                              <span className={`badge ${avail.accent}`}>{avail.label}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-[2px] text-[11px]" style={{ color: '#94A3B8' }}>
+                              <span>{entry.active_job_count} active job{entry.active_job_count === 1 ? '' : 's'}</span>
+                              {atRiskCount > 0 ? (
+                                <span
+                                  className="inline-flex items-center gap-1 font-semibold"
+                                  style={{
+                                    color: '#B45309',
+                                    background: 'rgba(217,119,6,0.1)',
+                                    borderRadius: 99,
+                                    padding: '1px 6px',
+                                  }}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5" aria-hidden />
+                                  {atRiskCount} at risk
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      </label>
+                          {entry.jobs.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={toggleExpanded}
+                              aria-label={isExpanded ? 'Hide ongoing projects' : 'Show ongoing projects'}
+                              aria-expanded={isExpanded}
+                              className="flex-shrink-0 flex items-center justify-center transition"
+                              style={{
+                                width: 24, height: 24, borderRadius: 6,
+                                color: isExpanded ? '#B22234' : '#94A3B8',
+                                background: isExpanded ? 'rgba(178,34,52,0.08)' : 'transparent',
+                              }}
+                            >
+                              <ChevronDown
+                                className="w-3.5 h-3.5"
+                                style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms ease' }}
+                                aria-hidden
+                              />
+                            </button>
+                          ) : null}
+                        </label>
+
+                        {isExpanded && entry.jobs.length > 0 ? (
+                          <StaffOngoingJobs jobs={entry.jobs} />
+                        ) : null}
+                      </div>
                     );
                   })}
                 </div>
@@ -327,6 +392,72 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
             {assignMutation.isPending ? 'Assigning…' : 'Confirm Assignment'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function humanizeStatus(status: string): string {
+  return status
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+/** Ongoing-projects preview shown under a staff row on hover/click, so the
+ *  assigner can see exactly what this person is already carrying — and its
+ *  ETA — before piling on more work. */
+function StaffOngoingJobs({ jobs }: { jobs: StaffJobBrief[] }) {
+  return (
+    <div style={{ borderTop: '1px solid #E8EDF5', padding: '10px 12px 12px' }}>
+      <div
+        className="mb-1.5"
+        style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94A3B8' }}
+      >
+        Ongoing projects
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {jobs.map((j) => (
+          <div
+            key={j.job_card_id}
+            className="flex items-center justify-between gap-3"
+            style={{ background: '#fff', border: '1px solid #EDF1F7', borderRadius: 8, padding: '8px 10px' }}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono font-semibold" style={{ color: '#B22234', fontSize: 10.5 }}>
+                  {j.reference_number}
+                </span>
+                <span
+                  className="font-semibold"
+                  style={{ fontSize: 9.5, color: '#475569', background: '#F1F5F9', borderRadius: 4, padding: '1px 6px' }}
+                >
+                  {humanizeStatus(j.status)}
+                </span>
+                {j.at_risk ? (
+                  <span
+                    className="inline-flex items-center gap-1 font-semibold"
+                    style={{ fontSize: 9.5, color: '#B91C1C', background: 'rgba(220,38,38,0.1)', borderRadius: 4, padding: '1px 6px' }}
+                  >
+                    <AlertTriangle className="w-2.5 h-2.5" aria-hidden />
+                    At risk
+                  </span>
+                ) : null}
+              </div>
+              <div className="truncate mt-1" style={{ fontSize: 12, fontWeight: 600, color: '#0D1B2A' }}>
+                {j.design_name}
+                {j.client_name ? <span style={{ fontWeight: 500, color: '#94A3B8' }}> · {j.client_name}</span> : null}
+              </div>
+            </div>
+            <div
+              className="shrink-0 text-right"
+              style={{ fontSize: 11, fontWeight: 600, color: j.eta_hours != null ? '#0D1B2A' : '#94A3B8' }}
+            >
+              {j.eta_hours != null ? `ETA ${j.eta_hours}h` : 'No ETA'}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

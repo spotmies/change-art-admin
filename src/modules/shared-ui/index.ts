@@ -10,6 +10,8 @@ export { Topbar } from './components/Topbar';
 export { MobileBottomNav } from './components/MobileBottomNav';
 export { NotificationBell } from './components/NotificationBell';
 export { ConfirmModal } from './components/ConfirmModal';
+export { RowActionsMenu } from './components/RowActionsMenu';
+export type { RowAction } from './components/RowActionsMenu';
 
 // Badges
 export { StatusBadge, PriorityBadge } from './components/StatusBadge';
@@ -19,6 +21,8 @@ export { GreetingHero } from './components/GreetingHero';
 export { StatCard, StatGrid } from './components/StatCard';
 export type { StatCardProps, StatAccent } from './components/StatCard';
 export { Panel, SectionHeader } from './components/Panel';
+export { RoleProfilePage } from './components/RoleProfilePage';
+export type { ProfileAccent, ProfileAccessItem, ProfileQuickLink } from './components/RoleProfilePage';
 export { Callout } from './components/Callout';
 export type { CalloutTone } from './components/Callout';
 export { Pills } from './components/Pills';
@@ -36,10 +40,16 @@ export { BarChart } from './components/BarChart';
 export type { BarChartItem } from './components/BarChart';
 export { CreateJobForm } from './components/CreateJobForm';
 export { ClientBriefForm } from './components/ClientBriefForm';
+export { AdminBriefForm } from './components/AdminBriefForm';
+export type { ClientBriefData } from './components/AdminBriefForm';
 export { JobDetailModal } from './components/JobDetailModal';
 export { EditJobModal } from './components/EditJobModal';
+export { AssignJobModal } from './components/AssignJobModal';
+export { ProducerSubmitModal } from './components/ProducerSubmitModal';
 export type { EditFields } from './components/EditJobModal';
 export { RequestModificationModal } from './components/RequestModificationModal';
+export { FilePreviewModal } from './components/FilePreviewModal';
+export type { PreviewSource } from './components/FilePreviewModal';
 
 // Nav config
 export { NAV_CONFIG } from './nav-config';

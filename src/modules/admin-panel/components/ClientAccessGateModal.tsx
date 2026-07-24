@@ -159,7 +159,7 @@ export function ClientAccessGateModal({
             className="flex items-center justify-center w-11 h-11 rounded-full mb-3"
             style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.25)' }}
           >
-            <ShieldAlert className="w-5 h-5" style={{ color: 'var(--crimson)' }} aria-hidden />
+            <ShieldAlert className="w-5 h-5" style={{ color: 'var(--color-crimson)' }} aria-hidden />
           </div>
           <h2 id="gate-modal-title" className="text-[15px] font-bold">
             Verify Identity to Continue

@@ -21,6 +21,60 @@ import { config } from './config';
  * The `api-contract-guard` subagent audits this rule.
  */
 
+/** Friendly labels for the field names backend validation errors key their `details` by. */
+const FIELD_LABELS: Record<string, string> = {
+  client_name: 'Client name',
+  contact_name: 'Client name',
+  company_name: 'Company name',
+  contact_number: 'Contact number',
+  phone: 'Contact number',
+  email: 'Email address',
+  password: 'Password',
+  confirm_password: 'Confirm password',
+  design_name: 'Design name',
+  client_po: 'PO / reference number',
+  reference_number: 'PO / reference number',
+  specific_type: 'Specific service',
+  fabric: 'Fabric',
+  payment: 'Payment method',
+  description: 'Description',
+  notes: 'Notes',
+  note: 'Note',
+  reason: 'Reason',
+  mail: 'Client email',
+  mail_description: 'Description',
+};
+
+/**
+ * Rewrites a raw Zod validation message (e.g. "String must contain at most 32
+ * character(s)") into plain, field-specific copy users can act on, instead of
+ * surfacing schema internals verbatim.
+ */
+function humanizeFieldError(field: string, raw: string): string {
+  const label = FIELD_LABELS[field] ?? field.replace(/_/g, ' ');
+  const atLeast = raw.match(/at least (\d+) character/i);
+  const atMost = raw.match(/at most (\d+) character/i);
+  const isDigitField = field === 'contact_number' || field === 'phone';
+
+  if (atLeast) {
+    return isDigitField
+      ? `${label} must have at least ${atLeast[1]} digits.`
+      : `${label} must be at least ${atLeast[1]} characters.`;
+  }
+  if (atMost) {
+    return isDigitField
+      ? `${label} must not exceed ${atMost[1]} digits.`
+      : `${label} must be at most ${atMost[1]} characters.`;
+  }
+  if (/required/i.test(raw)) return `${label} is required.`;
+  if (/invalid email/i.test(raw)) return `${label} must be a valid email address.`;
+  // Some backend messages (e.g. the password-strength policy) already read
+  // naturally on their own — don't prefix those with a redundant field label.
+  if (raw.toLowerCase().startsWith(label.toLowerCase())) return raw;
+
+  return `${label}: ${raw}`;
+}
+
 class ApiClientError extends Error {
   public readonly code: ErrorCode | string;
   public readonly status: number;
@@ -42,9 +96,11 @@ class ApiClientError extends Error {
   /** Returns the human-readable copy registered in @contracts/error-codes. */
   public toUserMessage(): string {
     if (this.code === 'VALIDATION_ERROR' && this.details) {
-      const messages = Object.values(this.details).flat().filter(Boolean);
+      const messages = Object.entries(this.details).flatMap(([field, msgs]) =>
+        (msgs ?? []).filter(Boolean).map((m) => humanizeFieldError(field, m)),
+      );
       if (messages.length > 0) {
-        return messages.join(', ');
+        return messages.join(' ');
       }
     }
     return ERROR_MESSAGES[this.code as ErrorCode] ?? this.message ?? ERROR_MESSAGES.UNKNOWN_ERROR;
@@ -87,6 +143,19 @@ function normaliseError(err: unknown): ApiClientError {
         message: body.error.message,
         status,
         details: body.error.details,
+      });
+    }
+
+    // Better Auth (used for /api/auth/*) returns a flat { code, message } body
+    // instead of our API's { success, error } envelope — preserve its code/message
+    // rather than collapsing to a generic UNKNOWN_ERROR, so callers (e.g. LoginForm)
+    // can surface the real reason (invalid credentials, unverified email, etc.).
+    const flatBody = body as { code?: unknown; message?: unknown } | undefined;
+    if (flatBody && typeof flatBody === 'object' && typeof flatBody.code === 'string') {
+      return new ApiClientError({
+        code: flatBody.code,
+        message: typeof flatBody.message === 'string' ? flatBody.message : ERROR_MESSAGES.UNKNOWN_ERROR,
+        status,
       });
     }
 

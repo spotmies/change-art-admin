@@ -40,7 +40,7 @@ export function CSNewQuotesPage() {
     return (
       <div className="page">
         <GreetingHero title="Quote Requests" subtitle="Incoming client quotes." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load quotes. Please refresh and try again.
         </div>
       </div>

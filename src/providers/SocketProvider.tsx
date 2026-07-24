@@ -14,6 +14,7 @@ import {
   type ModificationRequestedEvent,
   type AttendanceClockEvent,
   type QueryRaisedEvent,
+  type ClientUpdatedEvent,
 } from '@contracts';
 import { useIsAuthenticated, useSessionUser } from '@modules/auth/stores/auth-store';
 import { connectSocket, disconnectSocket, ensureSocketConnected } from '@lib/socket-client';
@@ -118,6 +119,15 @@ export function SocketProvider({ children }: SocketProviderProps) {
           style: { whiteSpace: 'pre-line', maxWidth: 380 },
         },
       );
+
+      // 4. A new client sign-up or profile-change request just landed —
+      // refresh the Clients page's pending lists so it shows up without the
+      // Admin needing to navigate away and back (they only rely on this
+      // notification, since neither event has its own dedicated socket event).
+      const kind = (n.data as { kind?: string } | null)?.kind;
+      if (kind === 'client_pending_approval' || kind === 'profile_change_submitted') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      }
     });
 
     socket.on(SOCKET_EVENTS.FILE_UPLOAD_COMPLETE, (_event: FileUploadCompleteEvent) => {
@@ -156,6 +166,34 @@ export function SocketProvider({ children }: SocketProviderProps) {
     socket.on(SOCKET_EVENTS.QUERY_RAISED, (event: QueryRaisedEvent) => {
       if (!event?.jobId) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.queries.forJob(event.jobId) });
+
+      // Client-raised queries also create an in-app notification in the DB (via
+      // the BullMQ worker), but the worker has no socket access so NOTIFICATION_NEW
+      // is never emitted from that path. Bump the bell badge + invalidate the
+      // list here using the QUERY_RAISED event, which IS emitted by the main process.
+      if (event.raisedByRole === 'CLIENT') {
+        queryClient.setQueryData<{ count: number }>(
+          queryKeys.notifications.unreadCount(),
+          (old) => ({ count: (old?.count ?? 0) + 1 }),
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list() });
+        const snippet = event.message ? `"${event.message.slice(0, 80)}${event.message.length > 80 ? '…' : ''}"` : '';
+        toast(`New client query${snippet ? `\n${snippet}` : ''}`, {
+          id: `query-${event.queryId}`,
+          icon: '💬',
+          duration: 6000,
+          style: { whiteSpace: 'pre-line', maxWidth: 380 },
+        });
+      }
+    });
+
+    // A client updated their account/payment details (e.g. card expiry) —
+    // not job-specific, so just invalidate every job list/detail and the
+    // clients list so any open card-expiry warning re-fetches and either
+    // clears or updates instead of showing stale data.
+    socket.on(SOCKET_EVENTS.CLIENT_UPDATED, (_event: ClientUpdatedEvent) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all() });
     });
 
     // Re-attach on tab focus — Chrome/Safari sometimes background-throttle the
@@ -186,6 +224,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       socket.off(SOCKET_EVENTS.ATTENDANCE_CLOCK);
       socket.off(SOCKET_EVENTS.JOB_ACKNOWLEDGED);
       socket.off(SOCKET_EVENTS.QUERY_RAISED);
+      socket.off(SOCKET_EVENTS.CLIENT_UPDATED);
     };
   }, [isAuthenticated, user, queryClient]);
 

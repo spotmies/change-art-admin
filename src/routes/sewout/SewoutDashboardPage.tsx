@@ -1,97 +1,121 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
-import { Send, Camera } from 'lucide-react';
+import { Send, Play } from 'lucide-react';
 import {
   Callout,
   GreetingHero,
   JobTable,
-  Panel,
-  SectionHeader,
   StatGrid,
-  JOBS,
+  ProducerSubmitModal,
   type Job,
 } from '@modules/shared-ui';
+import { useAdminJobViews } from '@modules/admin-panel/hooks/use-admin-jobs';
+import { adminService } from '@modules/admin-panel/services/admin.service';
+import { queryKeys } from '@lib/query-keys';
+import { toastApiError } from '@lib/toast-error';
+import { getAllowedFormats } from '@lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 
+/**
+ * Real Sewout workspace — ChangeArt-New-PRD.md §2.7, §5.7. Jobs are
+ * auto-scoped server-side to the logged-in Sewout user.
+ */
 export function SewoutDashboardPage() {
+  const navigate = useNavigate();
   const user = useSessionUser();
-  const firstName = user?.name.split(' ')[0] ?? 'Vinay';
+  const firstName = user?.name.split(' ')[0] ?? '';
 
-  const pending = JOBS.filter((j) => j.stage === 'sewout');
-  const submittedQc = JOBS.filter((j) => j.order === 'Digitizing + Sewout' && j.stage === 'qc');
+  const { jobs, isLoading } = useAdminJobViews({ per_page: 100 });
+  const pending = jobs.filter((j) => j.rawStatus === 'SUBMITTED_TO_SEWOUT');
+  const inProgress = jobs.filter((j) => j.rawStatus === 'SEWOUT_IN_PROGRESS');
+  const submittedQc = jobs.filter((j) => j.rawStatus === 'SUBMITTED_TO_QC' || j.rawStatus === 'QC_REVIEW');
 
   return (
     <div className="page">
       <GreetingHero
-        title={`Hi ${firstName}`}
-        subtitle="Sewout queue. Run stitch files on the machine, photograph the result, and forward to QC."
+        title={`Hi ${firstName || 'there'}`}
+        subtitle="Sewout queue. Run stitch files on the machine, log the stitch count, and forward to QC."
       />
 
       <StatGrid
         stats={[
           { accent: 'crimson', label: 'Pending Sewout', value: pending.length },
-          { accent: 'amber', label: 'On Machine Now', value: 1 },
+          { accent: 'amber', label: 'On Machine Now', value: inProgress.length },
           { accent: 'purple', label: 'Submitted to QC', value: submittedQc.length },
-          { accent: 'green', label: 'Done (wk.)', value: 5 },
         ]}
       />
 
       <Callout tone="info">
-        Each sewout needs a thread match log, runtime, stitch count, and a photo of the finished
-        embroidery before you forward it to QC.
+        Stitch count is mandatory before submitting to QC — the backend rejects a submission
+        without it.
       </Callout>
 
-      <div className="two-col mt-3">
-        <div>
-          <SectionHeader title="Pending Sewouts" />
-          <JobTable
-            jobs={pending}
-            defaultView="grid"
-            renderActions={(j) => <SewoutActions job={j} />}
-            emptyLabel="Nothing on the queue."
-          />
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <Panel title="This Week">
-            <ul className="text-[12.5px] text-text-muted space-y-2">
-              <li><span className="font-mono text-text">5</span> sewouts logged</li>
-              <li><span className="font-mono text-text">14.2k</span> avg. stitch count</li>
-              <li><span className="font-mono text-text">100%</span> photo coverage</li>
-            </ul>
-          </Panel>
-          <Panel title="Machine Status">
-            <ul className="text-[12.5px] text-text-muted space-y-2">
-              <li>Tajima A — <span className="text-text">running</span></li>
-              <li>Tajima B — <span className="text-text">idle</span></li>
-              <li>Brother PR — <span className="text-text">maintenance</span></li>
-            </ul>
-          </Panel>
-        </div>
+      <div className="mt-3">
+        <JobTable
+          jobs={pending.concat(inProgress)}
+          defaultView="grid"
+          onOpen={(j) => navigate(`/sewout/job/${j.uuid}`)}
+          renderActions={(j) => <SewoutActions job={j} />}
+          emptyLabel={isLoading ? 'Loading…' : 'Nothing on the queue.'}
+        />
       </div>
     </div>
   );
 }
 
 function SewoutActions({ job }: { job: Job }) {
+  const queryClient = useQueryClient();
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  const handleAccept = async () => {
+    if (!job.uuid || job.version == null) return;
+    setPending(true);
+    try {
+      await adminService.transitionJob(job.uuid, 'sewout_accept', job.version);
+      toast.success('Accepted — job moved to Sewout In Progress.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    } catch (err) {
+      toastApiError(err);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const handleSubmit = async (_uploadedFileIds: string[], stitchCount?: number) => {
+    if (!job.uuid || job.version == null) return;
+    await adminService.transitionJobWithStitchCount(job.uuid, 'sewout_submit', job.version, stitchCount);
+    toast.success('Submitted to QC.');
+    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+  };
+
   return (
     <div className="job-actions" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        className="btn btn-outline"
-        aria-label={`Upload photo for ${job.id}`}
-        onClick={() => alert(`Photo upload for ${job.id}`)}
-      >
-        <Camera aria-hidden className="w-3.5 h-3.5" />
-        Photo
-      </button>
-      <button
-        type="button"
-        className="btn btn-crimson"
-        aria-label={`Submit ${job.id}`}
-        onClick={() => alert(`Submit ${job.id} to QC`)}
-      >
-        <Send aria-hidden className="w-3.5 h-3.5" />
-        To QC
-      </button>
+      {job.rawStatus === 'SUBMITTED_TO_SEWOUT' ? (
+        <button type="button" className="btn btn-crimson" disabled={pending} onClick={handleAccept}>
+          <Play className="w-3.5 h-3.5" aria-hidden />
+          Accept
+        </button>
+      ) : (
+        <button type="button" className="btn btn-crimson" onClick={() => setShowSubmit(true)}>
+          <Send className="w-3.5 h-3.5" aria-hidden />
+          To QC
+        </button>
+      )}
+      {showSubmit && job.uuid ? (
+        <ProducerSubmitModal
+          jobUuid={job.uuid}
+          jobLabel={job.id}
+          title="Submit Sewout to QC"
+          confirmLabel="Submit to QC"
+          requireStitchCount
+          allowedFormats={getAllowedFormats(job)}
+          onClose={() => setShowSubmit(false)}
+          onSubmit={handleSubmit}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GreetingHero,
   JobFilterBar,
@@ -20,6 +20,7 @@ function mapOrderType(ot: string): string | undefined {
   if (ot === 'Artwork')             return 'ARTWORK';
   if (ot === 'Digitizing')          return 'DIGITIZING';
   if (ot === 'Digitizing + Sewout') return 'DIGITIZING_SEWOUT';
+  if (ot === 'Others')              return 'OTHERS';
   return undefined;
 }
 
@@ -87,6 +88,10 @@ export function AdminNewQuotesPage() {
   const isLoading = pendingQuery.isLoading || awaitingQuery.isLoading;
   const isError   = pendingQuery.isError   || awaitingQuery.isError;
 
+  const hasLoadedOnce = useRef(false);
+  useEffect(() => { if (!isLoading) hasLoadedOnce.current = true; }, [isLoading]);
+  const isFirstLoad = isLoading && !hasLoadedOnce.current;
+
   function handlePendingFiltersChange(next: JobFilters) {
     setPendingFilters(next);
     setPendingPage(1);
@@ -101,7 +106,7 @@ export function AdminNewQuotesPage() {
     return (
       <div className="page">
         <GreetingHero title="Quote Requests" subtitle="Incoming quote requests across all Client Servicing." />
-        <div className="flex items-center justify-center py-16 text-[var(--crimson)] text-sm">
+        <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load quotes. Please refresh and try again.
         </div>
       </div>
@@ -122,7 +127,7 @@ export function AdminNewQuotesPage() {
         ]}
       />
 
-      {isLoading ? (
+      {isFirstLoad ? (
         <div className="flex items-center justify-center py-16 text-text-faint text-sm">
           Loading quotes…
         </div>
