@@ -1,15 +1,16 @@
 import {
-  Bell,
   ClipboardList,
+  Cog,
   FileCheck,
+  FileText,
   Gauge,
   Inbox,
   LayoutDashboard,
   Mail,
+  MessageSquare,
   PencilRuler,
   ScrollText,
   Send,
-  Settings,
   ShieldCheck,
   Sparkles,
   Truck,
@@ -28,7 +29,7 @@ import { UserRole } from '@contracts';
  * to TanStack Query selectors at the Sidebar render layer.
  */
 
-export type NavBadgeAccent = 'crimson' | 'amber' | 'green' | 'navy';
+export type NavBadgeAccent = 'crimson' | 'amber' | 'green' | 'navy' | 'red' | 'blue' | 'purple' | 'orange' | 'teal';
 
 export interface NavItem {
   id: string;
@@ -38,14 +39,8 @@ export interface NavItem {
   badge?: number;
   badgeAccent?: NavBadgeAccent;
   subtitle?: string;
-  /**
-   * Skip the "mark as seen while viewing this section" dampening (see
-   * Sidebar.tsx) and always show the live count. Use for items whose badge
-   * reflects a queue of pending items still awaiting action elsewhere (e.g.
-   * approve/reject a client request) — the count should stay visible even
-   * while you're on the page, since merely viewing it doesn't clear it.
-   */
-  persistentBadge?: boolean;
+  /** Distinct display title for the topbar header — falls back to `label` (which stays short for the sidebar link). */
+  title?: string;
 }
 
 export interface NavSection {
@@ -67,16 +62,26 @@ export const NAV_CONFIG = {
     sections: [
       {
         id: 'main',
-        label: 'Main',
+        label: 'Client Service',
         items: [
-          { id: 'dashboard', label: 'Dashboard', to: '/cs', icon: LayoutDashboard },
-          { id: 'new-quotes', label: 'New Quotes', to: '/cs/new-quotes', icon: Inbox },
-          { id: 'new-jobs', label: 'New Jobs', to: '/cs/new-jobs', icon: ScrollText },
+          {
+            id: 'dashboard',
+            label: 'Dashboard',
+            to: '/cs',
+            icon: LayoutDashboard,
+            title: 'Client Service Dashboard',
+            subtitle: "Good {greeting}, {user.name}! Here's what needs your attention today.",
+          },
+          { id: 'new-jobs', label: 'New Requests', to: '/cs/new-jobs', icon: Inbox, badgeAccent: 'red' },
+          { id: 'live', label: 'Live (Direct)', to: '/cs/projects?project=Live', icon: FileText, badgeAccent: 'green' },
+          { id: 'live-quote', label: 'Live Quote', to: '/cs/projects?project=Live+Quote', icon: MessageSquare, badgeAccent: 'blue' },
+          { id: 'quote', label: 'Quote', to: '/cs/new-quotes', icon: FileText, badgeAccent: 'purple' },
+          { id: 'amend', label: 'Amend', to: '/cs/amendments', icon: PencilRuler, badgeAccent: 'orange' },
+          { id: 'in-production', label: 'In Production', to: '/cs/projects?filter=In+Production', icon: Cog, badgeAccent: 'amber' },
+          { id: 'deliver', label: 'Ready to Dispatch', to: '/cs/deliver', icon: Truck, badgeAccent: 'teal' },
           { id: 'projects', label: 'All Projects', to: '/cs/projects', icon: ClipboardList },
-          { id: 'email-inbox', label: 'Email Inbox', to: '/cs/email-inbox', icon: Mail },
+          { id: 'email-inbox', label: 'Email Inbox', to: '/cs/email-inbox', icon: Mail, badgeAccent: 'red' },
           { id: 'queue', label: 'Job Queue', to: '/cs/queue', icon: Gauge },
-          { id: 'deliver', label: 'Ready to Dispatch', to: '/cs/deliver', icon: Truck },
-          { id: 'amend', label: 'Amendments', to: '/cs/amendments', icon: PencilRuler },
         ],
       },
       {
@@ -211,26 +216,39 @@ export const NAV_CONFIG = {
         id: 'administration',
         label: 'Administration',
         items: [
-          { id: 'dashboard', label: 'Admin Dashboard', to: '/admin', icon: LayoutDashboard },
-          { id: 'new-jobs',    label: 'New Jobs',        to: '/admin/new-jobs',    icon: ScrollText },
-          { id: 'new-quotes',  label: 'New Quotes',      to: '/admin/new-quotes',  icon: Inbox },
-          { id: 'amendments',  label: 'Amendments',      to: '/admin/amendments',  icon: PencilRuler, badgeAccent: 'amber' },
-          { id: 'email-inbox', label: 'Email Inbox',     to: '/admin/email-inbox', icon: Mail },
-          { id: 'jobs',       label: 'All Jobs',         to: '/admin/jobs',        icon: ClipboardList },
-          { id: 'clients',    label: 'Clients',          to: '/admin/clients',     icon: Users, persistentBadge: true },
-          { id: 'users',      label: 'User Management',  to: '/admin/users',       icon: ShieldCheck },
-          { id: 'notifications', label: 'Notifications', to: '/admin/notifications', icon: Bell },
-          { id: 'settings',   label: 'Settings',         to: '/admin/settings',    icon: Settings },
-          // { id: 'reports',    label: 'Reports',          to: '/admin/reports',     icon: Gauge },
+          {
+            id: 'dashboard',
+            label: 'Dashboard',
+            to: '/admin',
+            icon: LayoutDashboard,
+            title: 'Admin Dashboard',
+            subtitle: "Good {greeting}, {user.name}! Platform-wide overview across all modules.",
+          },
+          { id: 'new-jobs',     label: 'New Requests',     to: '/admin/new-jobs',                      icon: ScrollText, badgeAccent: 'red' },
+          { id: 'live',         label: 'Live (Direct)',    to: '/admin/projects?project=Live',          icon: FileText, badgeAccent: 'green' },
+          { id: 'live-quote',   label: 'Live Quote',       to: '/admin/projects?project=Live+Quote',    icon: MessageSquare, badgeAccent: 'blue' },
+          { id: 'new-quotes',   label: 'Quote',            to: '/admin/new-quotes',                     icon: Inbox, badgeAccent: 'purple' },
+          { id: 'amendments',   label: 'Amend',            to: '/admin/amendments',                     icon: PencilRuler, badgeAccent: 'orange' },
+          { id: 'in-production', label: 'In Production',   to: '/admin/jobs?filter=In+Production',      icon: Cog, badgeAccent: 'amber' },
+          { id: 'deliver',      label: 'Ready to Dispatch', to: '/admin/deliver',                       icon: Truck, badgeAccent: 'teal' },
+          { id: 'projects',     label: 'All Projects',     to: '/admin/projects',                       icon: ClipboardList },
+          { id: 'email-inbox',  label: 'Email Inbox',      to: '/admin/email-inbox',                    icon: Mail, badgeAccent: 'red' },
+          { id: 'queue',        label: 'Job Queue',        to: '/admin/queue',                          icon: Gauge },
+          { id: 'users',        label: 'User Management',  to: '/admin/users',                          icon: ShieldCheck },
         ],
       },
       {
         id: 'create',
         label: 'Create',
         items: [
-          { id: 'create-quote', label: 'New Quote',    to: '/admin/create-quote', icon: Sparkles },
+          { id: 'create-quote', label: 'Create Quote', to: '/admin/create-quote', icon: Sparkles },
           { id: 'place-order',  label: 'Place Order',  to: '/admin/place-order',  icon: Send },
         ],
+      },
+      {
+        id: 'records',
+        label: 'Records',
+        items: [{ id: 'clients', label: 'Client Records', to: '/admin/clients', icon: Users }],
       },
     ],
     mobile: [
@@ -238,7 +256,6 @@ export const NAV_CONFIG = {
       { id: 'new-jobs',  label: 'Jobs',    to: '/admin/new-jobs', icon: ScrollText },
       { id: 'clients',   label: 'Clients', to: '/admin/clients',  icon: Users },
       { id: 'users',     label: 'Users',   to: '/admin/users',    icon: ShieldCheck },
-      // { id: 'reports',   label: 'Reports', to: '/admin/reports',  icon: Gauge },
     ],
   },
 } as unknown as Record<UserRole, RoleNavConfig>;

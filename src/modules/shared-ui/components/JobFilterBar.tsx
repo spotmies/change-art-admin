@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Search, X, SlidersHorizontal, CalendarDays } from 'lucide-react';
+import { ChevronDown, Search, X, CalendarDays } from 'lucide-react';
 import type { IClient } from '@contracts';
 
 export interface JobFilters {
@@ -104,9 +104,6 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => toDraft(filters));
 
-  const activeCount = [filters.orderType, filters.priority, filters.status, filters.clientId, filters.dateFrom, filters.dateTo].filter(Boolean).length;
-
-  function openPanel() { setDraft(toDraft(filters)); setOpen(true); }
   function closePanel() { setOpen(false); }
 
   function setField<K extends keyof Draft>(k: K, v: Draft[K]) {
@@ -149,15 +146,6 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
           )}
         </div>
 
-        <button
-          type="button"
-          className={`fjb-toggle${open || activeCount > 0 ? ' fjb-toggle--active' : ''}`}
-          onClick={() => open ? closePanel() : openPanel()}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span>Filters</span>
-          {activeCount > 0 && <span className="fjb-count">{activeCount}</span>}
-        </button>
       </div>
 
       {/* ── Expanded filter panel — single row ── */}

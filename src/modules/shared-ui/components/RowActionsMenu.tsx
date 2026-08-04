@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreVertical } from 'lucide-react';
 import { cn } from '@lib/utils';
@@ -24,6 +24,10 @@ export interface RowAction {
 interface RowActionsMenuProps {
   actions: RowAction[];
   ariaLabel?: string;
+  /** Extra classes on the trigger button. */
+  triggerClassName?: string;
+  /** Inline styles on the trigger button — useful for precise sizing overrides. */
+  triggerStyle?: CSSProperties;
 }
 
 /**
@@ -32,7 +36,7 @@ interface RowActionsMenuProps {
  * `overflow-x-auto` table wrapper (the row's actions cell lives inside one).
  * Closes on outside click, Esc, or scroll — mirroring NotificationBell's popover.
  */
-export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowActionsMenuProps) {
+export function RowActionsMenu({ actions, ariaLabel = 'Row actions', triggerClassName, triggerStyle }: RowActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
@@ -71,7 +75,8 @@ export function RowActionsMenu({ actions, ariaLabel = 'Row actions' }: RowAction
       <button
         ref={btnRef}
         type="button"
-        className="btn btn-outline !p-2"
+        className={cn('btn btn-outline !p-2', triggerClassName)}
+        style={triggerStyle}
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}

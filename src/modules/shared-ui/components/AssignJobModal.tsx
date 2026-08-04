@@ -50,23 +50,36 @@ export function AssignJobModal({ job, onClose, onAssigned }: AssignJobModalProps
     return () => window.removeEventListener('keydown', onKey);
   }, [job, assignMutation.isPending]);
 
-  // Build role groups in the same display order as the v3 prototype.
+  // Assignment is for production work only — Team Lead, QC Reviewer, Client
+  // Servicing, and Admin never get assigned a job to actually produce, so
+  // they're excluded entirely. Which production groups show up is further
+  // narrowed by the job's order type, since e.g. an Artwork job has no
+  // business being handed to a Digitizor.
   const groups = useMemo(() => {
     const rows = data?.items ?? [];
     const sortByName = (a: IUser, b: IUser) => a.name.localeCompare(b.name);
     const filter = (predicate: (u: IUser) => boolean) =>
       rows.filter((u) => u.is_active && predicate(u)).sort(sortByName);
-    return [
-      { label: 'Team Lead',        users: filter((u) => u.role === UserRole.TEAM_LEAD) },
-      { label: 'Senior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.SENIOR) },
-      { label: 'Junior Designer',  users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.JUNIOR) },
-      { label: 'Digitizor',        users: filter((u) => u.role === UserRole.DIGITATOR) },
-      { label: 'Sewout',           users: filter((u) => u.role === UserRole.SEWOUT) },
-      { label: 'QC Reviewer',      users: filter((u) => u.role === UserRole.QC) },
-      { label: 'Client Servicing', users: filter((u) => u.role === UserRole.CS) },
-      { label: 'Admin',            users: filter((u) => u.role === UserRole.ADMIN) },
-    ].filter((g) => g.users.length > 0);
-  }, [data?.items]);
+
+    const allProductionGroups = [
+      { label: 'Senior Designer', users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.SENIOR) },
+      { label: 'Junior Designer', users: filter((u) => u.role === UserRole.DESIGNER && u.sub_type === UserSubType.JUNIOR) },
+      { label: 'Digitizor',       users: filter((u) => u.role === UserRole.DIGITATOR) },
+      { label: 'Sewout',          users: filter((u) => u.role === UserRole.SEWOUT) },
+    ];
+
+    const relevantLabels: Record<string, string[]> = {
+      Artwork: ['Senior Designer', 'Junior Designer'],
+      Digitizing: ['Digitizor'],
+      'Digitizing + Sewout': ['Digitizor', 'Sewout'],
+      Sewout: ['Sewout'],
+    };
+    const allowed = relevantLabels[job?.order ?? ''];
+
+    return allProductionGroups
+      .filter((g) => (allowed ? allowed.includes(g.label) : true))
+      .filter((g) => g.users.length > 0);
+  }, [data?.items, job?.order]);
 
   if (!job) return null;
 

@@ -50,6 +50,25 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   );
 }
 
+/** True once a job has reached its final dispatched/delivered state. */
+export function isCompletedStatus(status: string, stage: string): boolean {
+  return stage === 'delivered' && status === 'Dispatched';
+}
+
+interface CompletedStatusBadgeProps {
+  label: string;
+  className?: string;
+}
+
+/** Badge for a completed (dispatched) job — reuses the 'green' badge accent. */
+export function CompletedStatusBadge({ label, className }: CompletedStatusBadgeProps) {
+  return (
+    <span className={cn('badge', 'green', className)} aria-label={`Status: ${label}`}>
+      {label}
+    </span>
+  );
+}
+
 interface PriorityBadgeProps {
   priority: Priority;
   className?: string;

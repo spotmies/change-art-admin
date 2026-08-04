@@ -106,10 +106,18 @@ export function isJobEtaExpired(job: {
   etaHours?: number | null;
   status: string;
   rawStatus?: string;
+  stage?: string;
   created?: string | Date | null;
 }): boolean {
-  // A held job's timer is paused — it can't be "expired" while on hold.
-  if (job.rawStatus === 'HOLD') return false;
+  // A held, dispatched, cancelled, or delivered job is completed/inactive — it cannot be expired or overdue.
+  if (
+    job.rawStatus === 'HOLD' ||
+    job.status === 'Dispatched' ||
+    job.status === 'Cancelled' ||
+    job.stage === 'delivered'
+  ) {
+    return false;
+  }
 
   const now = Date.now();
   const ackAt = job.effectiveAcknowledgedAt ?? job.acknowledgedAt;

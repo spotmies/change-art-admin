@@ -59,7 +59,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const openMobile = useCallback(() => setMobileNavOpen(true), []);
 
   const title = pageTitleFromRoute(user?.role, location.pathname);
-  const resolvedSubtitle = title.subtitle?.replace('{user.name}', user?.name || '');
+  const firstName = user?.name?.split(' ')[0] || '';
+  const resolvedSubtitle = title.subtitle
+    ?.replace('{user.name}', firstName)
+    .replace('{greeting}', getGreeting());
 
   return (
     <div className="min-h-screen flex">
@@ -106,8 +109,15 @@ function pageTitleFromRoute(
   for (const section of cfg.sections) {
     const match = section.items.find((it) => it.to === pathname);
     if (match) {
-      return { title: match.label, subtitle: match.subtitle || cfg.label };
+      return { title: match.title || match.label, subtitle: match.subtitle || cfg.label };
     }
   }
   return { title: cfg.label };
+}
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }

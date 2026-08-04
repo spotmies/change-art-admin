@@ -1,28 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { useSessionUser, useAuthStore } from '@modules/auth/stores/auth-store';
 import { NAV_CONFIG, type NavItem } from '@modules/shared-ui/nav-config';
 import { authService } from '@modules/auth/services';
 import { cn, initials } from '@lib/utils';
 import { UserRole } from '@contracts';
-import { useAdminNavBadges } from '@modules/admin-panel/hooks/use-admin-badges';
+import { useAdminNavBadges, useCsNavBadges } from '@modules/admin-panel/hooks/use-admin-badges';
 
-// Per-section "seen" baselines, persisted so a cleared badge stays cleared
-// across reloads and only re-lights when the live count grows past it.
-const NAV_SEEN_KEY = 'admin-nav-seen';
-
-function readNavSeen(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(NAV_SEEN_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
-  } catch {
-    return {};
-  }
-}
-
-const PROFILE_PATH: Record<UserRole, string> = {
+export const PROFILE_PATH: Record<UserRole, string> = {
   [UserRole.CLIENT]:    '/login',
   [UserRole.CS]:        '/cs/profile',
   [UserRole.TEAM_LEAD]: '/team-lead/profile',
@@ -41,41 +28,12 @@ interface SidebarProps {
 export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
   const user = useSessionUser();
   const reset = useAuthStore((s) => s.reset);
-  const location = useLocation();
   // Must be called unconditionally (Rules of Hooks). enabled=false when no user
-  // or non-admin role, so no fetch fires in those cases.
+  // or the wrong role, so no fetch fires in those cases.
   const adminBadges = useAdminNavBadges(user?.role === UserRole.ADMIN);
+  const csBadges = useCsNavBadges(user?.role === UserRole.CS);
 
-  const [seen, setSeen] = useState<Record<string, number>>(readNavSeen);
   const [confirmOpen, setConfirmOpen] = useState(false);
-
-  const markSeen = useCallback((id: string, count: number) => {
-    setSeen((prev) => {
-      if (prev[id] === count) return prev;
-      const next = { ...prev, [id]: count };
-      try { localStorage.setItem(NAV_SEEN_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }, []);
-
-  // Reconcile baselines: clear a badge while you're viewing its section, and
-  // lower the baseline when items get processed so genuinely-new arrivals
-  // re-light it.
-  useEffect(() => {
-    if (user?.role !== UserRole.ADMIN) return;
-    const items = NAV_CONFIG[UserRole.ADMIN].sections.flatMap((s) => s.items);
-    for (const [id, live] of Object.entries(adminBadges)) {
-      const item = items.find((it) => it.id === id);
-      if (!item || item.persistentBadge) continue;
-      const onPage = location.pathname.startsWith(item.to);
-      const base = seen[id] ?? 0;
-      if (onPage) {
-        if (base !== live) markSeen(id, live);
-      } else if (live < base) {
-        markSeen(id, live);
-      }
-    }
-  }, [adminBadges, location.pathname, seen, markSeen, user]);
 
   if (!user) return null;
 
@@ -90,7 +48,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
   const asideClass = cn(
     'fixed top-0 left-0 z-40 h-full flex flex-col overflow-hidden transition-transform',
     'w-[var(--sidebar-w)] flex-shrink-0',
-    'glass-heavy border-r border-glass-border',
+    'sidebar-shell border-r border-glass-border',
     collapsedOnMobile ? '-translate-x-full md:translate-x-0' : 'translate-x-0',
   );
 
@@ -107,12 +65,6 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
         />
       </div>
 
-      {/* Role pill */}
-      <div className="role-pill">
-        <div className="role-pill-dot" />
-        <div className="role-pill-text">{navConfig.label}</div>
-      </div>
-
       {/* Sections */}
       <nav className="flex-1 overflow-y-auto py-1 px-2" aria-label="Sections">
         {navConfig.sections.map((section) => (
@@ -122,13 +74,7 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
             </div>
             <ul>
               {section.items.map((item) => {
-                const live = adminBadges[item.id];
-                const dynamicBadge =
-                  live === undefined
-                    ? undefined
-                    : item.persistentBadge
-                      ? live
-                      : Math.max(0, live - (seen[item.id] ?? 0));
+                const dynamicBadge = user.role === UserRole.CS ? csBadges[item.id] : adminBadges[item.id];
                 return (
                   <SidebarItem
                     key={item.id}
@@ -163,7 +109,9 @@ export function Sidebar({ collapsedOnMobile, onNavigateMobile }: SidebarProps) {
               {initials(user.name)}
             </div>
             <div className="min-w-0">
-              <div className="text-[12px] font-semibold truncate">{user.name}</div>
+              <div className="text-[12px] font-semibold truncate" title={user.name}>
+                {user.name.length > 15 ? `${user.name.slice(0, 15)}...` : user.name}
+              </div>
               <div className="text-[10.5px] text-text-muted truncate">
                 {navConfig.label}
                 {user.sub_type ? ` · ${user.sub_type.toLowerCase()}` : ''}
@@ -200,37 +148,54 @@ function SidebarItem({
   dynamicBadge?: number;
 }) {
   const Icon = item.icon;
+  const location = useLocation();
   // Prefer dynamic count (from API); fall back to static value from nav-config.
   const badge = dynamicBadge ?? item.badge;
   const accent = item.badgeAccent ?? 'crimson';
+
+  // Several CS nav items point at the same route with different `?project=`
+  // / `?filter=` query strings (e.g. "Live", "Live Quote", "All Projects" all
+  // resolve to /cs/projects). React Router's NavLink only compares pathname,
+  // so it would highlight all of them at once — match the query string too
+  // when the item's `to` specifies one, and require an *empty* query when it
+  // doesn't (so "All Projects" isn't active while a filtered item is).
+  const [itemPath, itemQuery = ''] = item.to.split('?');
+  const itemParams = new URLSearchParams(itemQuery);
+  const currentParams = new URLSearchParams(location.search);
+  const isActive =
+    location.pathname === itemPath &&
+    itemParams.toString() === currentParams.toString();
+
   return (
     <li>
-      <NavLink
+      {/* Plain Link, not NavLink — NavLink sets its own aria-current="page"
+          off a pathname-only match internally, which the CSS keys off of
+          too, so several query-string variants of the same route (e.g.
+          /cs/projects?project=Live vs ?filter=In+Production) would all light
+          up together even with a custom className override. Driving both
+          the class AND aria-current from our own `isActive` avoids that. */}
+      <Link
         to={item.to}
-        end={item.to.split('/').length <= 2}
         onClick={onClick}
-        className={({ isActive }) => cn('nav-item', isActive && 'active')}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn('nav-item', isActive && 'active')}
       >
         <Icon aria-hidden className="w-[15px] h-[15px] flex-shrink-0" />
         <span className="truncate">{item.label}</span>
         {badge !== undefined && badge > 0 ? (
           <span
-            className={cn(
-              'nav-badge',
-              accent === 'amber' && 'amber',
-              accent === 'navy' && 'navy',
-            )}
+            className={cn('nav-badge', accent !== 'crimson' && accent)}
             aria-label={`${badge} new`}
           >
             {badge}
           </span>
         ) : null}
-      </NavLink>
+      </Link>
     </li>
   );
 }
 
-function LogoutConfirmDialog({
+export function LogoutConfirmDialog({
   open,
   onCancel,
   onConfirm,

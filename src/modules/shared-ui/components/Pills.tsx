@@ -4,6 +4,8 @@ export interface PillItem {
   id: string;
   label: string;
   count?: number;
+  /** Small status dot rendered before the label (e.g. '#22c55e'). Omit for a plain pill like "All". */
+  dotColor?: string;
 }
 
 interface PillsProps {
@@ -19,18 +21,25 @@ interface PillsProps {
  */
 export function Pills({ items, activeId, onSelect, className }: PillsProps) {
   return (
-    <div className={cn('pills', className)} role="tablist">
+    <div className={cn('pills-segmented-bar flex-nowrap overflow-x-auto scrollbar-none', className)} role="tablist">
       {items.map((item) => (
         <button
           key={item.id}
           type="button"
           role="tab"
           aria-selected={item.id === activeId}
-          className={cn('pill', item.id === activeId && 'active')}
+          className={cn('pill-segmented-item whitespace-nowrap shrink-0', item.id === activeId && 'active')}
           onClick={() => onSelect(item.id)}
         >
-          {item.label}
-          {typeof item.count === 'number' ? ` (${item.count})` : null}
+          {item.dotColor ? (
+            <span
+              className="pill-dot"
+              style={{ borderColor: item.dotColor, color: item.dotColor }}
+              aria-hidden
+            />
+          ) : null}
+          <span className="pill-label whitespace-nowrap">{item.label}</span>
+          {typeof item.count === 'number' ? <span className="pill-count whitespace-nowrap">({item.count})</span> : null}
         </button>
       ))}
     </div>

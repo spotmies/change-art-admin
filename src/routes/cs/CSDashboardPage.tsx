@@ -1,215 +1,302 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useSessionUser } from '@modules/auth/stores/auth-store';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { cn } from '@lib/utils';
 import {
-  BarChart,
-  Callout,
-  DonutChart,
-  GreetingHero,
   JobTable,
-  Panel,
-  SectionHeader,
-  StatGrid,
-  DASH_METRICS,
-  DASH_RANGES,
-  type DashRange,
+  Pagination,
+  Pills,
+  CsStatGrid,
+  TodaysOverviewPanel,
+  RecentActivityPanel,
+  EmailInboxCta,
+  JobFilterBar,
+  EMPTY_FILTERS,
+  JOB_STATUS_OPTIONS,
+  applyJobFilters,
+  type CsStatCardProps,
+  type PillItem,
+  type OverviewItem,
+  type ActivityItem,
+  type JobFilters,
 } from '@modules/shared-ui';
-import { Inbox, Cog, CheckCircle2, Package } from 'lucide-react';
+import {
+  Briefcase,
+  MessageSquareText,
+  FileText,
+  SquarePen,
+  Cog,
+  Send,
+  PlusCircle,
+  Inbox,
+  User,
+  Clock,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
+import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { useUnreadCount } from '@modules/notifications/hooks/use-notifications';
 import { isJobEtaExpired } from '@lib/utils';
 
+const PER_PAGE = 12;
+
+type FilterId = 'all' | 'Live' | 'Live Quote' | 'Quote' | 'Amend' | 'In Production' | 'Ready to Dispatch';
+type SortOrder = 'newest' | 'oldest';
+
+const PILL_DOT_COLORS: Record<Exclude<FilterId, 'all'>, string> = {
+  Live: '#22c55e',
+  'Live Quote': '#3b82f6',
+  Quote: '#a855f7',
+  Amend: '#f97316',
+  'In Production': '#f59e0b',
+  'Ready to Dispatch': '#14b8a6',
+};
+
 export function CSDashboardPage() {
-  const user = useSessionUser();
-  const firstName = user?.name.split(' ')[0] ?? 'there';
+  const [filter, setFilter] = useState<FilterId>('all');
+  const [sort, setSort] = useState<SortOrder>('newest');
+  const [showFilters, setShowFilters] = useState(false);
+  const [extraFilters, setExtraFilters] = useState<JobFilters>(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
 
-  const [range, setRange] = useState<DashRange>('This Month');
-  const m = DASH_METRICS[range].cs;
+  const { jobs: allJobs } = useAdminJobViews({ per_page: 200 });
+  const { data: unreadData } = useUnreadCount();
+  // per_page: 500 — needed to populate the filter drawer's client dropdown with all client names.
+  const clientsQuery = useAdminClients({ per_page: 500 });
+  const clients = clientsQuery.data?.items ?? [];
 
-  const { jobs: allJobs } = useAdminJobViews({ per_page: 100 });
-
-  const newJobs = useMemo(
-    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j)).slice(0, 4),
+  const newRequests = useMemo(
+    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j)),
     [allJobs],
   );
-  const pendingQuotesAll = useMemo(
-    () => allJobs.filter((j) => j.stage === 'quote' && j.status === 'Quote Submitted'),
-    [allJobs],
-  );
-  const pendingQuotes = useMemo(() => pendingQuotesAll.slice(0, 4), [pendingQuotesAll]);
-
-  // Mirrors the filters used on the pages these stat tiles link to, so the
-  // dashboard numbers always agree with what the drill-down page shows.
-  const inProduction = useMemo(
-    () => allJobs.filter((j) => j.status === 'In Production'),
-    [allJobs],
-  );
+  const live = useMemo(() => allJobs.filter((j) => j.project === 'Live'), [allJobs]);
+  const liveQuote = useMemo(() => allJobs.filter((j) => j.project === 'Live Quote'), [allJobs]);
+  const quote = useMemo(() => allJobs.filter((j) => j.project === 'Quote'), [allJobs]);
+  const amend = useMemo(() => allJobs.filter((j) => j.project === 'Amend'), [allJobs]);
+  const inProduction = useMemo(() => allJobs.filter((j) => j.status === 'In Production'), [allJobs]);
   const readyToDispatch = useMemo(
     () => allJobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)),
     [allJobs],
   );
-  const dispatched = useMemo(
-    () => allJobs.filter((j) => j.stage === 'delivered' && j.status === 'Dispatched'),
+  const overdue = useMemo(() => allJobs.filter((j) => isJobEtaExpired(j)), [allJobs]);
+  const waitingClientReply = useMemo(
+    () => allJobs.filter((j) => j.status === 'Quote Submitted' || j.status === 'Quote Approved'),
     [allJobs],
   );
 
-  // Order Split: bucket every job by its order type. "Digitizing + Sewout"
-  // combo jobs count toward Digitizing, matching the convention used
-  // elsewhere in the app (see EditJobModal's process-tab bucketing).
-  const orderSplit = useMemo(() => {
-    const art = allJobs.filter((j) => j.order === 'Artwork').length;
-    const dig = allJobs.filter((j) => j.order === 'Digitizing' || j.order === 'Digitizing + Sewout').length;
-    const sew = allJobs.filter((j) => j.order === 'Sewout').length;
-    return { orders: art + dig + sew, art, dig, sew };
-  }, [allJobs]);
+  const pills: PillItem[] = [
+    { id: 'all', label: 'All', count: allJobs.length },
+    { id: 'Live', label: 'Live', count: live.length, dotColor: PILL_DOT_COLORS.Live },
+    { id: 'Live Quote', label: 'Live Quote', count: liveQuote.length, dotColor: PILL_DOT_COLORS['Live Quote'] },
+    { id: 'Quote', label: 'Quote', count: quote.length, dotColor: PILL_DOT_COLORS.Quote },
+    { id: 'Amend', label: 'Amend', count: amend.length, dotColor: PILL_DOT_COLORS.Amend },
+    { id: 'In Production', label: 'In Production', count: inProduction.length, dotColor: PILL_DOT_COLORS['In Production'] },
+    { id: 'Ready to Dispatch', label: 'Ready to Dispatch', count: readyToDispatch.length, dotColor: PILL_DOT_COLORS['Ready to Dispatch'] },
+  ];
 
-  // Activity Trend: jobs created on each day of the current week (Mon–Sun).
-  const weeklyTrend = useMemo(() => {
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sun
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + mondayOffset);
-    monday.setHours(0, 0, 0, 0);
-
-    const counts = [0, 0, 0, 0, 0, 0, 0];
-    for (const job of allJobs) {
-      const created = new Date(job.created);
-      const dayIdx = Math.floor((created.getTime() - monday.getTime()) / 86_400_000);
-      if (dayIdx >= 0 && dayIdx < 7) counts[dayIdx]++;
+  const pillFilteredJobs = useMemo(() => {
+    switch (filter) {
+      case 'Live': return live;
+      case 'Live Quote': return liveQuote;
+      case 'Quote': return quote;
+      case 'Amend': return amend;
+      case 'In Production': return inProduction;
+      case 'Ready to Dispatch': return readyToDispatch;
+      default: return allJobs;
     }
+  }, [filter, allJobs, live, liveQuote, quote, amend, inProduction, readyToDispatch]);
 
-    const maxVal = Math.max(...counts, 1);
-    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, i) => ({
-      label,
-      value: counts[i],
-      height: Math.max(Math.round((counts[i] / maxVal) * 100), 4),
-      highlight: i === 6,
-      color: i === 3 ? 'var(--color-navy-light)' : undefined,
-    }));
-  }, [allJobs]);
+  // Extra filter drawer (order type/priority/status/client) on top of the
+  // pill filter, then sorted by creation date per the "Latest First" control.
+  const filteredJobs = useMemo(() => {
+    const withExtraFilters = applyJobFilters(pillFilteredJobs, extraFilters);
+    return [...withExtraFilters].sort((a, b) => {
+      const diff = new Date(b.created).getTime() - new Date(a.created).getTime();
+      return sort === 'newest' ? diff : -diff;
+    });
+  }, [pillFilteredJobs, extraFilters, sort]);
+
+  // Reset to page 1 whenever the active filter/sort/pill selection changes,
+  // so a stale page number from a longer list doesn't leave the view empty.
+  useEffect(() => {
+    setPage(1);
+  }, [filter, extraFilters, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / PER_PAGE));
+  const pageJobs = useMemo(
+    () => filteredJobs.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [filteredJobs, page],
+  );
+
+  const csStats: CsStatCardProps[] = [
+    {
+      accent: 'cs-green',
+      tag: 'Live',
+      description: 'Direct Orders',
+      value: live.length,
+      statusText: 'Waiting Assignment',
+      icon: <Briefcase />,
+      href: '/cs/projects?project=Live',
+    },
+    {
+      accent: 'cs-blue',
+      tag: 'Live Quote',
+      description: 'Quote Approved Jobs',
+      value: liveQuote.length,
+      statusText: 'Waiting Assignment',
+      icon: <MessageSquareText />,
+      href: '/cs/projects?project=Live+Quote',
+    },
+    {
+      accent: 'cs-purple',
+      tag: 'Quote',
+      description: 'Awaiting Quote / Approval',
+      value: quote.length,
+      statusText: 'Pending Response',
+      icon: <FileText />,
+      href: '/cs/new-quotes',
+    },
+    {
+      accent: 'cs-orange',
+      tag: 'Amend',
+      description: 'Revision Requested',
+      value: amend.length,
+      statusText: 'Pending Assignment',
+      icon: <SquarePen />,
+      href: '/cs/amendments',
+    },
+    {
+      accent: 'cs-amber',
+      tag: 'In Production',
+      description: 'Jobs In Progress',
+      value: inProduction.length,
+      statusText: 'On Production',
+      icon: <Cog />,
+      href: '/cs/projects?filter=In+Production',
+    },
+    {
+      accent: 'cs-teal',
+      tag: 'Ready to Dispatch',
+      description: 'Upload & Dispatch',
+      value: readyToDispatch.length,
+      statusText: 'Ready to Send',
+      icon: <Send />,
+      href: '/cs/deliver',
+    },
+  ];
+
+  const overviewItems: OverviewItem[] = [
+    { id: 'new-requests', label: 'New Requests', value: newRequests.length, href: '/cs/new-jobs', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
+    { id: 'waiting-assignment', label: 'Waiting Assignment', value: live.length + liveQuote.length, href: '/cs/projects?project=Live', icon: <Briefcase className="w-3.5 h-3.5" />, accent: '#22c55e' },
+    { id: 'waiting-reply', label: 'Waiting Client Reply', value: waitingClientReply.length, href: '/cs/new-quotes', icon: <MessageSquareText className="w-3.5 h-3.5" />, accent: '#a855f7' },
+    { id: 'in-production', label: 'In Production', value: inProduction.length, href: '/cs/projects?filter=In+Production', icon: <Cog className="w-3.5 h-3.5" />, accent: '#f97316' },
+    { id: 'ready-to-dispatch', label: 'Ready to Dispatch', value: readyToDispatch.length, href: '/cs/deliver', icon: <Send className="w-3.5 h-3.5" />, accent: '#14b8a6' },
+    { id: 'overdue', label: 'Overdue Jobs', value: overdue.length, tone: overdue.length > 0 ? 'danger' : 'default', href: '/cs/deliver', icon: <Clock className="w-3.5 h-3.5" /> },
+  ];
+
+  const recentActivity: ActivityItem[] = useMemo(
+    () =>
+      [...allJobs]
+        .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+        .slice(0, 5)
+        .map((job) => {
+          const { icon, accent } = activityIcon(job.status);
+          return {
+            id: job.id,
+            icon,
+            accent,
+            title: activityLabel(job.status),
+            subtitle: job.design,
+            time: relativeTime(job.created),
+          };
+        }),
+    [allJobs],
+  );
 
   return (
     <div className="page">
-      <GreetingHero
-        title={`Good ${getGreeting()}, ${firstName}`}
-        subtitle="Here's what's happening across your production pipeline today."
-        action={<RangeSelector value={range} onChange={setRange} />}
-      />
-
-      <StatGrid
-        stats={[
-          {
-            accent: 'crimson',
-            label: 'Quote Pending',
-            value: pendingQuotesAll.length,
-            delta: m.sub1,
-            deltaDirection: 'up',
-            icon: <Inbox aria-hidden />,
-            href: '/cs/new-quotes',
-          },
-          {
-            accent: 'amber',
-            label: 'In Production',
-            value: inProduction.length,
-            delta: m.sub2,
-            icon: <Cog aria-hidden />,
-            href: '/cs/projects?filter=In+Production',
-          },
-          {
-            accent: 'teal',
-            label: 'Ready to Dispatch',
-            value: readyToDispatch.length,
-            delta: m.sub3,
-            deltaDirection: 'up',
-            icon: <CheckCircle2 aria-hidden />,
-            href: '/cs/deliver',
-          },
-          {
-            accent: 'green',
-            label: 'Dispatched',
-            value: dispatched.length,
-            delta: m.sub4,
-            deltaDirection: 'up',
-            icon: <Package aria-hidden />,
-            href: '/cs/projects?filter=Dispatched',
-          },
-        ]}
-      />
+      {/* CS 6-column stat strip */}
+      <CsStatGrid stats={csStats} />
 
       <div className="two-col">
         <div>
-          <SectionHeader
-            title={<span style={{ color: '#5eead4' }}>New Jobs</span>}
-            action={<Link to="/cs/new-jobs">View All →</Link>}
-          />
-          <JobTable jobs={newJobs} compact withControls={false} />
-
-          <div className="mt-6">
-            <SectionHeader
-              title={<span style={{ color: '#ff8a95' }}>Quotes Pending Your Review</span>}
-              action={<Link to="/cs/new-quotes">View All →</Link>}
-            />
-            <JobTable jobs={pendingQuotes} compact withControls={false} quoteView />
+          <div className="pills-control-bar">
+            <div className="pills-scroll-wrapper">
+              <Pills items={pills} activeId={filter} onSelect={(id) => setFilter(id as FilterId)} className="dashboard-pills mb-0" />
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0 pills-actions">
+              <select
+                className="filter-sort-select"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortOrder)}
+                aria-label="Sort jobs"
+              >
+                <option value="newest">Latest First</option>
+                <option value="oldest">Oldest First</option>
+              </select>
+              <button
+                type="button"
+                className={cn('filter-toggle-btn', showFilters && 'active')}
+                onClick={() => setShowFilters((v) => !v)}
+                aria-pressed={showFilters}
+              >
+                <SlidersHorizontal className="w-3 h-3" aria-hidden />
+                Filter
+              </button>
+            </div>
           </div>
+
+          {showFilters ? (
+            <JobFilterBar
+              filters={extraFilters}
+              onChange={setExtraFilters}
+              statusOptions={JOB_STATUS_OPTIONS}
+              clients={clients}
+              className="mb-3"
+            />
+          ) : null}
+
+          <div className="mt-3">
+            <JobTable jobs={pageJobs} showActions defaultView="grid" withControls={false} minimalColumns />
+          </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filteredJobs.length}
+            perPage={PER_PAGE}
+            onPageChange={setPage}
+          />
         </div>
 
         <div className="flex flex-col gap-3">
-          <Panel title="Order Split">
-            <DonutChart
-              centerValue={orderSplit.orders}
-              centerLabel="Orders"
-              showCount
-              slices={[
-                { label: 'Artwork', value: orderSplit.art, color: 'var(--color-navy-light)' },
-                { label: 'Digitizing', value: orderSplit.dig, color: 'var(--color-crimson)' },
-                { label: 'Sewout', value: orderSplit.sew, color: 'var(--color-amber)' },
-              ]}
-            />
-          </Panel>
-
-          <Panel title="Activity Trend">
-            <BarChart items={weeklyTrend} />
-          </Panel>
-
-          {pendingQuotes.length > 0 ? (
-            <Callout tone="info">
-              {pendingQuotes.length} quote{pendingQuotes.length === 1 ? '' : 's'} awaiting your
-              pricing review.
-            </Callout>
-          ) : null}
+          <TodaysOverviewPanel items={overviewItems} viewAllHref="/cs/projects" />
+          <RecentActivityPanel items={recentActivity} />
+          <EmailInboxCta href="/cs/email-inbox" unreadCount={unreadData?.count ?? 0} />
         </div>
       </div>
     </div>
   );
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'morning';
-  if (h < 17) return 'afternoon';
-  return 'evening';
+function activityLabel(status: string): string {
+  if (status === 'Quote Submitted') return 'Quote request received';
+  if (status === 'Order Placed') return 'New request received';
+  if (status === 'Dispatched') return 'Job dispatched to client';
+  return 'Job updated';
 }
 
-function RangeSelector({
-  value,
-  onChange,
-}: {
-  value: DashRange;
-  onChange: (v: DashRange) => void;
-}) {
-  return (
-    <select
-      className="btn btn-outline"
-      style={{ padding: '8px 12px', cursor: 'pointer' }}
-      value={value}
-      onChange={(e) => onChange(e.target.value as DashRange)}
-      aria-label="Time range"
-    >
-      {DASH_RANGES.map((r) => (
-        <option key={r} value={r}>
-          {r}
-        </option>
-      ))}
-    </select>
-  );
+function activityIcon(status: string): { icon: ReactNode; accent: string } {
+  if (status === 'Quote Submitted') return { icon: <FileText className="w-3.5 h-3.5" />, accent: '#a855f7' };
+  if (status === 'Order Placed') return { icon: <Inbox className="w-3.5 h-3.5" />, accent: '#3b82f6' };
+  if (status === 'Dispatched') return { icon: <Send className="w-3.5 h-3.5" />, accent: '#22c55e' };
+  return { icon: <PlusCircle className="w-3.5 h-3.5" />, accent: '#6366f1' };
+}
+
+function relativeTime(dateStr: string): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

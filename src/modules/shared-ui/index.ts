@@ -18,9 +18,16 @@ export { StatusBadge, PriorityBadge } from './components/StatusBadge';
 
 // Page primitives — ported from change_artwork_demo_v2.html
 export { GreetingHero } from './components/GreetingHero';
-export { StatCard, StatGrid } from './components/StatCard';
-export type { StatCardProps, StatAccent } from './components/StatCard';
+export { StatCard, StatGrid, CsStatCard, CsStatGrid } from './components/StatCard';
+export type { StatCardProps, StatAccent, CsStatCardProps, CsStatAccent } from './components/StatCard';
 export { Panel, SectionHeader } from './components/Panel';
+export {
+  TodaysOverviewPanel,
+  RecentActivityPanel,
+  EmailInboxCta,
+  type OverviewItem,
+  type ActivityItem,
+} from './components/DashboardWidgets';
 export { Callout } from './components/Callout';
 export type { CalloutTone } from './components/Callout';
 export { Pills } from './components/Pills';

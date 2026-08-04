@@ -6,7 +6,6 @@ import {
   Mail,
   Pencil,
   Shield,
-  TrendingUp,
   UserCircle,
 } from 'lucide-react';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
@@ -59,11 +58,6 @@ const ACCESS_ITEMS: { icon: React.ReactNode; text: string; accent: Accent }[] = 
     accent: 'gold',
   },
   {
-    icon: <TrendingUp className="w-3.5 h-3.5" />,
-    text: 'Reports & analytics — all pre-built reports, export, and scheduled delivery',
-    accent: 'purple',
-  },
-  {
     icon: <ClipboardList className="w-3.5 h-3.5" />,
     text: 'Platform settings — pricing catalogue, SLA tiers, integrations',
     accent: 'amber',
@@ -74,7 +68,6 @@ const QUICK_LINKS = [
   { label: 'User Management', to: '/admin/users' },
   { label: 'Client Records',  to: '/admin/clients' },
   { label: 'All Jobs',        to: '/admin/jobs' },
-  { label: 'Reports',         to: '/admin/reports' },
   { label: 'Platform Settings', to: '/admin/settings' },
 ];
 

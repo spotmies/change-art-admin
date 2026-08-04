@@ -5,7 +5,8 @@ import type { SessionUser } from '@contracts';
  * Global auth state — populated by AuthProvider on mount and on every
  * sign-in/sign-out. The session source of truth is the HTTP-only cookie
  * set by Better Auth; this store only mirrors what the server returns
- * from `GET /api/auth/session`.
+ * from `GET /api/v1/auth/session` (the sanitized wrapper — never the raw
+ * `/api/auth/get-session`).
  *
  * The store NEVER persists to localStorage or sessionStorage. A page
  * reload re-fetches the session from the server so a stale store can't

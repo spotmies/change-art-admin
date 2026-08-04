@@ -110,16 +110,20 @@ export function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         type="button"
-        className="btn btn-outline !p-2 relative"
+        className="relative w-9 h-9 rounded-full flex items-center justify-center text-text-muted hover:text-text-main transition"
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid var(--glass-border)',
+        }}
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <Bell aria-hidden className="w-4 h-4" />
+        <Bell aria-hidden strokeWidth={3} className="w-[18px] h-[18px]" />
         {unread > 0 ? (
           <span
-            className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-1 text-white"
+            className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white leading-none"
             style={{ background: 'var(--color-crimson, #c41e3a)' }}
           >
             {unread > 99 ? '99+' : unread}

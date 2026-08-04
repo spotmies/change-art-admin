@@ -63,7 +63,6 @@ import { AdminEmailInboxPage } from '@routes/admin/AdminEmailInboxPage';
 import { AdminNotificationsPage } from '@routes/admin/AdminNotificationsPage';
 import { AdminCreateQuotePage } from '@routes/admin/AdminCreateQuotePage';
 import { AdminPlaceOrderPage } from '@routes/admin/AdminPlaceOrderPage';
-import { AdminReportsPage } from '@routes/admin/AdminReportsPage';
 import { AdminSettingsPage } from '@routes/admin/AdminSettingsPage';
 import { AdminProfilePage } from '@routes/admin/AdminProfilePage';
 
@@ -218,6 +217,9 @@ export const router = createBrowserRouter([
       { index: true, element: <AdminDashboardPage /> },
       { path: 'jobs', element: <AdminJobsPage /> },
       { path: 'jobs/:jobCardId', element: <AdminJobDetailPage /> },
+      { path: 'projects', element: <CSProjectsPage /> },
+      { path: 'queue', element: <CSQueuePage /> },
+      { path: 'deliver', element: <CSDeliverPage /> },
       { path: 'new-jobs', element: <AdminNewJobsPage /> },
       { path: 'new-quotes', element: <AdminNewQuotesPage /> },
       { path: 'clients', element: <AdminClientsPage /> },
@@ -227,7 +229,6 @@ export const router = createBrowserRouter([
       { path: 'amendments', element: <CSAmendmentsPage /> },
       { path: 'create-quote', element: <AdminCreateQuotePage /> },
       { path: 'place-order', element: <AdminPlaceOrderPage /> },
-      { path: 'reports', element: <AdminReportsPage /> },
       { path: 'settings', element: <AdminSettingsPage /> },
       { path: 'profile', element: <AdminProfilePage /> },
     ],

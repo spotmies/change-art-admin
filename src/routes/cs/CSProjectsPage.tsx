@@ -18,6 +18,7 @@ import { isJobEtaExpired } from '@lib/utils';
 const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
 const VALID_STATUS_VALUES = new Set(JOB_STATUS_OPTIONS.map((o) => o.value));
+const VALID_PROJECT_VALUES = new Set(['Live', 'Quote', 'Amend', 'Live Quote']);
 
 export function CSProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,7 +27,15 @@ export function CSProjectsPage() {
   // Validate against the known option list to reject junk/unmapped values.
   const rawFilterParam = searchParams.get('filter') ?? '';
   const filterParam = VALID_STATUS_VALUES.has(rawFilterParam) ? rawFilterParam : '';
-  const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
+  // Pre-seed a project-type filter from ?project= (used by the sidebar's
+  // Live / Live Quote / Quote / Amend nav items).
+  const rawProjectParam = searchParams.get('project') ?? '';
+  const projectParam = VALID_PROJECT_VALUES.has(rawProjectParam) ? rawProjectParam : '';
+  const { jobs: allJobs, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
+  const allData = useMemo(
+    () => (projectParam ? allJobs.filter((j) => j.project === projectParam) : allJobs),
+    [allJobs, projectParam],
+  );
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>({ ...EMPTY_FILTERS, status: filterParam });
 
@@ -69,12 +78,9 @@ export function CSProjectsPage() {
     }
   }
 
-  function clearFilter() {
-    const next = new URLSearchParams(searchParams);
-    next.delete('filter');
-    setSearchParams(next, { replace: true });
-    setFilters(EMPTY_FILTERS);
-  }
+
+
+  const activeFilterLabel = filterParam || projectParam;
 
   if (isError) {
     return (
@@ -92,16 +98,9 @@ export function CSProjectsPage() {
       <GreetingHero
         title="All Projects"
         subtitle={
-          filterParam
-            ? `Showing ${filterParam.toLowerCase()} jobs.`
+          activeFilterLabel
+            ? `Showing ${activeFilterLabel.toLowerCase()} jobs.`
             : 'Browse every active, delivered, and amendment job across the Client Servicing pipeline.'
-        }
-        action={
-          filterParam ? (
-            <button type="button" className="btn btn-outline" onClick={clearFilter}>
-              Clear filter: {filterParam} ✕
-            </button>
-          ) : undefined
         }
       />
 
@@ -127,7 +126,7 @@ export function CSProjectsPage() {
             clients={clients}
           />
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
-            {filterParam ? `No ${filterParam.toLowerCase()} jobs.` : 'No projects match these filters.'}
+            {activeFilterLabel ? `No ${activeFilterLabel.toLowerCase()} jobs.` : 'No projects match these filters.'}
           </div>
         </>
       ) : (
