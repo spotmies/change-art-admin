@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
-import { X, Download, Send, AlertCircle, Timer, CheckCircle2, FileText, Upload, Loader2, Copy, CreditCard, ShoppingCart, Pencil, Search, User, Play, Info, DollarSign, Check } from 'lucide-react';
+import { X, Download, Send, AlertCircle, Timer, CheckCircle2, FileText, Upload, Loader2, Copy, CreditCard, ShoppingCart, Pencil, Search, Play, Info, DollarSign, Check, Clock, Image as ImageIcon } from 'lucide-react';
 import { getCardExpiryStatus } from '@lib/card-expiry';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,7 @@ import { adminService } from '@modules/admin-panel/services/admin.service';
 import { FileCategory, JobStatus, type IFileVersion } from '@contracts';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import { FilePreviewModal } from './FilePreviewModal';
+import { resolveServiceBucket, resolveServiceFieldFlags } from '@lib/service-fields';
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!bytes) return '0 Bytes';
@@ -33,8 +34,9 @@ function formatBytes(bytes: number, decimals = 2) {
 /** Compute hh:mm:ss remaining from an ISO start timestamp + duration hours. */
 function computeEtaCountdown(acknowledgedAt: string, etaHours: number): { display: string; expired: boolean } {
   const startMs = new Date(acknowledgedAt).getTime();
-  const endMs = startMs + etaHours * 60 * 60 * 1000;
-  const remaining = Math.max(0, endMs - Date.now());
+  const totalMs = etaHours * 60 * 60 * 1000;
+  const endMs = startMs + totalMs;
+  const remaining = Math.min(totalMs, Math.max(0, endMs - Date.now()));
   if (remaining === 0) return { display: 'Completed', expired: true };
   const totalSec = Math.floor(remaining / 1000);
   const h = Math.floor(totalSec / 3600);
@@ -257,7 +259,7 @@ function OrderSummaryRow({
   );
 }
 
-export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteView: _quoteView = false }: JobDetailModalProps) {
+export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAssign, quoteView: _quoteView = false }: JobDetailModalProps) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'requirements' | 'messages' | 'notes' | 'activity'>('overview');
@@ -549,6 +551,9 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
   // the admin-edited copy and the original client submission.
   const showToggle = job.isAdminCopy === true;
   const displayJob: Job = showToggle && viewMode === 'client' && originalJob ? originalJob : job;
+
+  const serviceBucket = resolveServiceBucket(displayJob.order, displayJob.specificType);
+  const fieldFlags = resolveServiceFieldFlags(serviceBucket, displayJob.specificType);
 
   // Resolve the correct image list based on the active view mode:
   //   - Modified tab (viewMode='admin'): COMPLETED delivery files (what was sent to the client).
@@ -907,6 +912,23 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                 >
                   {unholdBusy ? 'Unholding…' : 'Unhold Project'}
                 </button>
+              )}
+              {/* ETA Countdown Timer */}
+              {!isDelivered && isAcknowledged && etaCountdown && (
+                <div
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 h-7 rounded-lg border",
+                    etaCountdown.expired
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-rose-200 bg-rose-50 text-rose-700"
+                  )}
+                  title="Estimated Time Remaining"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-bold font-mono tracking-wider pt-[1px]">
+                    {etaCountdown.display}
+                  </span>
+                </div>
               )}
               <button
                 type="button"
@@ -1403,20 +1425,14 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                     Uploaded Reference Image
                   </h3>
-                  <div className={cn(
-                    "relative rounded-lg overflow-y-auto border border-slate-200 bg-slate-100 min-h-[140px] max-h-[240px] p-1.5 custom-scrollbar",
-                    images.length === 0 ? "flex items-center justify-center" : images.length > 1 ? "grid grid-cols-2 gap-1.5 content-start" : "flex items-center justify-center"
-                  )}>
+                  <div className="relative rounded-lg border border-slate-200 bg-slate-100 min-h-[140px] max-h-[240px] p-1.5 flex items-center justify-center">
                     {images.length > 0 ? (
-                      images.map((src, idx) => (
-                        <img
-                          key={idx}
-                          src={src}
-                          alt={`${job.design} - ${idx + 1}`}
-                          className={cn("w-full object-contain", images.length > 1 ? "h-24 bg-white rounded border border-slate-200 p-1" : "h-full max-h-32 p-1.5")}
-                          loading="lazy"
-                        />
-                      ))
+                      <img
+                        src={images[0]}
+                        alt={job.design}
+                        className="w-full h-full max-h-48 object-contain p-1 rounded"
+                        loading="lazy"
+                      />
                     ) : (
                       <span className="text-[10px] text-slate-400 italic">No image uploaded</span>
                     )}
@@ -1473,10 +1489,18 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                     Job Details
                   </h3>
                   <div className="space-y-0.5">
-                    <JobDetailInfoRow icon={PlacementTargetIcon} label="Placement" value={job.placement || 'Left Chest'} />
-                    <JobDetailInfoRow icon={SizeFrameIcon} label="Size" value={job.width && job.height ? `${job.width}" W x ${job.height}" H` : '3.5" W x 3.2" H'} />
-                    <JobDetailInfoRow icon={ColorsBoxIcon} label="Colors (Client)" value={`${job.colors || 2} Colors`} />
-                    <JobDetailInfoRow icon={FabricCylinderIcon} label="Fabric" value={job.fabric || 'Cotton'} />
+                    {(fieldFlags.placement || job.placement) && (
+                      <JobDetailInfoRow icon={PlacementTargetIcon} label="Placement" value={job.placement || 'Not Specified'} />
+                    )}
+                    {(fieldFlags.size || (job.width || job.height)) && (
+                      <JobDetailInfoRow icon={SizeFrameIcon} label="Size" value={job.width && job.height ? `${job.width}" W x ${job.height}" H` : (job.width || job.height ? `${job.width || '-'} W x ${job.height || '-'} H` : 'Not Specified')} />
+                    )}
+                    {fieldFlags.colors && job.colors != null && job.colors > 0 && (
+                      <JobDetailInfoRow icon={ColorsBoxIcon} label="Colors (Client)" value={`${job.colors} ${job.colors === 1 ? 'Color' : 'Colors'}`} />
+                    )}
+                    {(fieldFlags.fabric || job.fabric) && (
+                      <JobDetailInfoRow icon={FabricCylinderIcon} label="Fabric" value={job.fabric || 'Not Specified'} />
+                    )}
                     <JobDetailInfoRow icon={AssignedUserIcon} label="Assigned To" value={job.assignedTo || 'Not Assigned'} />
                     <JobDetailInfoRow icon={CreatedCalendarIcon} label="Created Date" value={formatDate(job.created) || 'Jul 08, 2026'} />
                   </div>
@@ -1663,66 +1687,88 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-slate-800">
-                        <tr>
-                          <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Size</td>
-                          <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
-                            {job.width && job.height ? `${job.width}" W x ${job.height}" H` : '3.5" W x 3.2" H'}
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
-                          <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
-                              <span>Pending</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] break-words">-</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Colors</td>
-                          <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
-                            {job.colors ? `${job.colors} Colors` : '2 Colors'}
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
-                          <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
-                              <span>Pending</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-700 text-[11px] sm:text-[11.5px] leading-relaxed break-words">
-                            Minimum 3 colors required to achieve depth and clarity.
-                          </td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Placement</td>
-                          <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
-                            {job.placement || 'Left Chest'}
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
-                          <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
-                              <span>Pending</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] break-words">-</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Output File Format</td>
-                          <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
-                            {job.finalFiles?.length ? job.finalFiles.join(', ') : 'DST, PES'}
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
-                          <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
-                              <span>Pending</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2.5 text-slate-700 text-[11px] sm:text-[11.5px] leading-relaxed break-words">
-                            Additional formats will be provided.
-                          </td>
-                        </tr>
+                        {fieldFlags.processType && (
+                          <tr>
+                            <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Process Type</td>
+                            <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
+                              {job.process || job.order || 'Not Specified'}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
+                            <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+                                <span>Pending</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] break-words">-</td>
+                          </tr>
+                        )}
+                        {(fieldFlags.size || (job.width || job.height)) && (
+                          <tr>
+                            <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Size</td>
+                            <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
+                              {job.width && job.height ? `${job.width}" W x ${job.height}" H` : (job.width || job.height ? `${job.width || '-'} W x ${job.height || '-'} H` : 'Not Specified')}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
+                            <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+                                <span>Pending</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] break-words">-</td>
+                          </tr>
+                        )}
+                        {fieldFlags.colors && job.colors != null && job.colors > 0 && (
+                          <tr>
+                            <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Colors</td>
+                            <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
+                              {`${job.colors} ${job.colors === 1 ? 'Color' : 'Colors'}`}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
+                            <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+                                <span>Pending</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] leading-relaxed break-words">
+                              {job.colors > 0 && job.colors < 3 ? 'Minimum 3 colors required to achieve depth and clarity.' : '-'}
+                            </td>
+                          </tr>
+                        )}
+                        {(fieldFlags.placement || job.placement) && (
+                          <tr>
+                            <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Placement</td>
+                            <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
+                              {job.placement || 'Not Specified'}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
+                            <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+                                <span>Pending</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] break-words">-</td>
+                          </tr>
+                        )}
+                        {(fieldFlags.outputFormat || job.finalFiles?.length) && (
+                          <tr>
+                            <td className="py-2 px-2.5 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">Output File Format</td>
+                            <td className="py-2 px-2.5 font-bold text-slate-900 border-r border-slate-200 whitespace-nowrap">
+                              {job.finalFiles?.length ? job.finalFiles.join(', ') : 'Not Specified'}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 border-r border-slate-200 whitespace-nowrap">-</td>
+                            <td className="py-2 px-2.5 border-r border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1.5 font-bold text-slate-800 text-[10px] sm:text-[10.5px] whitespace-nowrap">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 inline-block" />
+                                <span>Pending</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-500 text-[11px] sm:text-[11.5px] leading-relaxed break-words">-</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1737,11 +1783,11 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                     Please provide detailed instructions for digitizing (unlimited characters).
                   </p>
                   <textarea
+                    readOnly
                     rows={8}
                     value={additionalInstructions}
-                    onChange={(e) => setAdditionalInstructions(e.target.value)}
-                    placeholder="Type your instructions here..."
-                    className="w-full rounded-lg border border-slate-200 p-2 text-[10.5px] text-slate-800 placeholder:text-slate-300 outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition resize-y"
+                    placeholder="No additional instructions provided."
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50/50 p-2 text-[10.5px] text-slate-700 placeholder:text-slate-400 outline-none resize-none cursor-default"
                   />
                   <p className="text-[9.5px] text-slate-400 mt-1">
                     Provide as much detail as possible for accurate digitizing.
@@ -1758,7 +1804,30 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(() => {
-                      const filesToRender = referenceFiles;
+                      const extraImages = images.slice(1).map((src: string, idx: number) => {
+                        let fileName = `Reference Image ${idx + 2}`;
+                        try {
+                          const rawName = decodeURIComponent(src.split('/').pop()?.split('?')[0] || '');
+                          if (rawName && rawName.length > 1 && rawName.includes('.')) {
+                            fileName = rawName;
+                          }
+                        } catch {
+                          // fallback
+                        }
+                        return {
+                          id: `extra-img-${idx}-${src}`,
+                          file_name: fileName,
+                          file_size_bytes: null,
+                          url: src,
+                          isImage: true,
+                        };
+                      });
+
+                      const filesToRender = [
+                        ...(referenceFiles || []),
+                        ...extraImages,
+                      ];
+
                       if (!filesToRender || filesToRender.length === 0) {
                         return (
                           <div className="col-span-full text-[10.5px] text-slate-400 italic">
@@ -1769,16 +1838,24 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                       return filesToRender.map((f: any) => (
                         <div key={f.id || f.file_name} className="flex items-center justify-between p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100 transition text-[10px]">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <FileText className="w-3 h-3 text-purple-600 shrink-0" />
+                            {f.isImage ? (
+                              <ImageIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            ) : (
+                              <FileText className="w-3 h-3 text-purple-600 shrink-0" />
+                            )}
                             <div className="min-w-0">
-                              <div className="font-semibold text-slate-800 truncate">{f.file_name}</div>
-                              <div className="text-[9px] text-slate-400">{formatBytes(f.file_size_bytes || 500000)}</div>
+                              <div className="font-semibold text-slate-800 truncate" title={f.file_name}>{f.file_name}</div>
+                              <div className="text-[9px] text-slate-400">
+                                {f.file_size_bytes ? formatBytes(f.file_size_bytes) : (f.isImage ? 'Reference Image' : 'Attachment')}
+                              </div>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => {
-                              if (f.id && f.id.length > 5) {
+                              if (f.url) {
+                                window.open(f.url, '_blank');
+                              } else if (f.id && f.id.length > 5) {
                                 adminService.getDownloadUrl(f.id).then((res) => {
                                   window.open(res.url, '_blank');
                                 });
@@ -1876,16 +1953,26 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                   <div className="text-[11px] font-bold uppercase text-slate-400 mb-2">Order Details</div>
                   <DetailRow label="Client ID" value={displayJob.clientId} />
                   <DetailRow label="Order Type" value={displayJob.order} />
-                  <DetailRow label="Placement" value={displayJob.placement || 'Left Chest'} />
-                  <DetailRow label="Size" value={displayJob.width && displayJob.height ? `${displayJob.width}" W x ${displayJob.height}" H` : '3.5" W x 3.2" H'} />
-                  <DetailRow label="Colors" value={String(displayJob.colors || 2)} />
+                  {(fieldFlags.placement || displayJob.placement) && (
+                    <DetailRow label="Placement" value={displayJob.placement || 'Not Specified'} />
+                  )}
+                  {(fieldFlags.size || (displayJob.width || displayJob.height)) && (
+                    <DetailRow label="Size" value={displayJob.width && displayJob.height ? `${displayJob.width}" W x ${displayJob.height}" H` : (displayJob.width || displayJob.height ? `${displayJob.width || '-'} W x ${displayJob.height || '-'} H` : 'Not Specified')} />
+                  )}
+                  {fieldFlags.colors && displayJob.colors != null && displayJob.colors > 0 && (
+                    <DetailRow label="Colors" value={`${displayJob.colors} ${displayJob.colors === 1 ? 'Color' : 'Colors'}`} />
+                  )}
                 </div>
                 <div>
                   <div className="text-[11px] font-bold uppercase text-slate-400 mb-2">Technical Specs</div>
-                  <DetailRow label="Fabric" value={displayJob.fabric || 'Cotton'} />
+                  {(fieldFlags.fabric || displayJob.fabric) && (
+                    <DetailRow label="Fabric" value={displayJob.fabric || 'Not Specified'} />
+                  )}
                   <DetailRow label="Complexity" value={displayJob.complexity || 'Standard'} />
-                  <DetailRow label="Process" value={displayJob.process || 'Digitizing'} />
-                  <DetailRow label="Output Formats" value={displayJob.finalFiles?.join(', ') || 'DST, PES'} />
+                  <DetailRow label="Process" value={displayJob.process || displayJob.order} />
+                  {(fieldFlags.outputFormat || displayJob.finalFiles?.length) && (
+                    <DetailRow label="Output Formats" value={displayJob.finalFiles?.join(', ') || 'Not Specified'} />
+                  )}
                 </div>
               </div>
             </div>
@@ -2034,6 +2121,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
             >
               Back to Dashboard
             </button>
+            {/* Phase 2: Save & Continue
             <button
               type="button"
               className="btn btn-outline text-[11.5px] px-3.5 py-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
@@ -2043,6 +2131,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
             >
               Save & Continue
             </button>
+            */}
           </div>
 
           <div className="flex items-center gap-2">
@@ -2056,6 +2145,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                 <span>Send Acknowledgement</span>
               </button>
             )}
+            {/* Phase 2: Assign
             <button
               type="button"
               className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
@@ -2064,7 +2154,8 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
               <User className="w-3.5 h-3.5" />
               <span>Assign</span>
             </button>
-            {!isDelivered && (
+            */}
+            {!isDelivered && !canAcknowledge && !quoteSent && (
               <button
                 type="button"
                 className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
