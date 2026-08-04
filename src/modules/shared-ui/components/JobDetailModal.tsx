@@ -9,7 +9,7 @@ import { queryKeys } from '@lib/query-keys';
 import toast from 'react-hot-toast';
 import { toastApiError } from '@lib/toast-error';
 import { cn } from '@lib/utils';
-import { type Job, jobImage } from '../mocks/jobs';
+import { type Job } from '../mocks/jobs';
 import { useSendQuotePrice, useDispatchJob, useAcknowledgeJob, useNotifyOrderReady } from '@/modules/cs-panel/hooks/use-cs-quote';
 import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service';
 
@@ -349,6 +349,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
   const [viewMode, setViewMode] = useState<'admin' | 'client'>('admin');
   // Side-by-side compare mode (admin copies only).
   const [showCompare, setShowCompare] = useState(false);
+  const [isZippingImages, setIsZippingImages] = useState(false);
 
   // When viewing an admin copy, lazily fetch the original client job so the
   // "Client Provided" tab and Compare view can display it.
@@ -560,7 +561,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
       ? resolvedUrls
       : fallbackImages.length > 0
         ? fallbackImages
-        : [jobImage(displayJob, 0, 560, 420)];
+        : [];
 
   // Same resolution as `images`, but for non-image reference files.
   const referenceFiles = isClientView
@@ -881,7 +882,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
       >
 
         {/* ── HEADER ── */}
-        <div className="flex-shrink-0 px-5 pt-2.5 pb-1.5 border-b border-slate-100" style={{ background: '#fff' }}>
+        <div className="flex-shrink-0 px-5 pt-2.5 pb-1.5" style={{ background: '#fff' }}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 shrink-0 shadow-sm border border-purple-200">
@@ -1048,10 +1049,10 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                 type="button"
                 onClick={() => setActiveTab(t.id as any)}
                 className={cn(
-                  'pb-2 pt-1 text-[11px] font-semibold transition-all relative',
+                  'pb-2 pt-1 text-[11px] font-semibold transition-all border-b-[2px] -mb-[1px]',
                   activeTab === t.id
-                    ? 'text-purple-700 font-bold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-purple-600'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'text-purple-700 font-bold border-purple-600'
+                    : 'text-slate-500 hover:text-slate-800 border-transparent hover:border-slate-300'
                 )}
               >
                 {t.label}
@@ -1402,25 +1403,67 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                     Uploaded Reference Image
                   </h3>
-                  <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-100 h-20 flex items-center justify-center">
-                    <img
-                      src={images[0]}
-                      alt={job.design}
-                      className="w-full h-full object-contain p-1.5"
-                      loading="lazy"
-                    />
+                  <div className={cn(
+                    "relative rounded-lg overflow-y-auto border border-slate-200 bg-slate-100 min-h-[140px] max-h-[240px] p-1.5 custom-scrollbar",
+                    images.length === 0 ? "flex items-center justify-center" : images.length > 1 ? "grid grid-cols-2 gap-1.5 content-start" : "flex items-center justify-center"
+                  )}>
+                    {images.length > 0 ? (
+                      images.map((src, idx) => (
+                        <img
+                          key={idx}
+                          src={src}
+                          alt={`${job.design} - ${idx + 1}`}
+                          className={cn("w-full object-contain", images.length > 1 ? "h-24 bg-white rounded border border-slate-200 p-1" : "h-full max-h-32 p-1.5")}
+                          loading="lazy"
+                        />
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No image uploaded</span>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (images[0]) {
-                        window.open(images[0], '_blank');
+                    onClick={async () => {
+                      if (!job.uuid) return;
+                      
+                      const totalOriginalFiles = images.length + referenceFiles.length;
+                      
+                      if (totalOriginalFiles === 1) {
+                        if (images.length === 1) {
+                          window.open(images[0], '_blank');
+                        } else if (referenceFiles.length === 1 && referenceFiles[0].id) {
+                          const res = await adminService.getDownloadUrl(referenceFiles[0].id);
+                          window.open(res.url, '_blank');
+                        }
+                      } else if (totalOriginalFiles > 1) {
+                        try {
+                          setIsZippingImages(true);
+                          const blob = await adminService.downloadZip(job.uuid, 'ORIGINAL');
+                          const objectUrl = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = objectUrl;
+                          a.download = `reference-files-${job.id.replace(/[^A-Za-z0-9-]/g, '')}.zip`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(objectUrl);
+                        } catch (err) {
+                          toast.error('Failed to generate ZIP file.');
+                        } finally {
+                          setIsZippingImages(false);
+                        }
                       }
                     }}
-                    className="w-full mt-1.5 btn btn-outline flex items-center justify-center gap-2 text-[10px] font-semibold py-1 border-purple-200 text-purple-700 hover:bg-purple-50"
+                    disabled={(images.length + referenceFiles.length) === 0 || isZippingImages}
+                    className={cn(
+                      "w-full mt-1.5 btn btn-outline flex items-center justify-center gap-2 text-[10px] font-semibold py-1 transition",
+                      (images.length + referenceFiles.length) > 0
+                        ? "border-purple-200 text-purple-700 hover:bg-purple-50"
+                        : "border-slate-200 text-slate-400 cursor-not-allowed opacity-75"
+                    )}
                   >
-                    <Download className="w-3 h-3" />
-                    <span>Download Image</span>
+                    {isZippingImages ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                    <span>{isZippingImages ? 'Zipping...' : (images.length + referenceFiles.length) > 1 ? 'Download Files' : 'Download Image'}</span>
                   </button>
                 </div>
 
@@ -1714,39 +1757,41 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                     <Info className="w-3 h-3 text-slate-400" />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(adminJobFiles?.length ? adminJobFiles : referenceFiles.length ? referenceFiles : [
-                      { id: 'f1', file_name: 'Lion_Logo.pdf', file_size_bytes: 1200000 },
-                      { id: 'f2', file_name: 'Brand_Reference.pdf', file_size_bytes: 2500000 },
-                      { id: 'f3', file_name: 'Lion_Logo.dst', file_size_bytes: 145000 },
-                      { id: 'f4', file_name: 'Lion_Logo.jpg', file_size_bytes: 320000 },
-                      { id: 'f5', file_name: 'Placement_Ref.jpg', file_size_bytes: 210000 },
-                    ]).map((f: any) => (
-                      <div key={f.id || f.file_name} className="flex items-center justify-between p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100 transition text-[10px]">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <FileText className="w-3 h-3 text-purple-600 shrink-0" />
-                          <div className="min-w-0">
-                            <div className="font-semibold text-slate-800 truncate">{f.file_name}</div>
-                            <div className="text-[9px] text-slate-400">{formatBytes(f.file_size_bytes || 500000)}</div>
+                    {(() => {
+                      const filesToRender = referenceFiles;
+                      if (!filesToRender || filesToRender.length === 0) {
+                        return (
+                          <div className="col-span-full text-[10.5px] text-slate-400 italic">
+                            No instruction attachments or source files uploaded.
                           </div>
+                        );
+                      }
+                      return filesToRender.map((f: any) => (
+                        <div key={f.id || f.file_name} className="flex items-center justify-between p-1.5 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-100 transition text-[10px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <FileText className="w-3 h-3 text-purple-600 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-800 truncate">{f.file_name}</div>
+                              <div className="text-[9px] text-slate-400">{formatBytes(f.file_size_bytes || 500000)}</div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (f.id && f.id.length > 5) {
+                                adminService.getDownloadUrl(f.id).then((res) => {
+                                  window.open(res.url, '_blank');
+                                });
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-purple-700 rounded-md transition shrink-0"
+                            title="Download file"
+                          >
+                            <Download className="w-3 h-3" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (f.id && f.id.length > 5) {
-                              adminService.getDownloadUrl(f.id).then((res) => {
-                                window.open(res.url, '_blank');
-                              });
-                            } else {
-                              toast.success(`Downloading ${f.file_name}`);
-                            }
-                          }}
-                          className="p-1 text-slate-400 hover:text-purple-700 rounded-md transition shrink-0"
-                          title="Download file"
-                        >
-                          <Download className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                   <p className="text-[9.5px] text-slate-400 mt-1.5">
                     Please review all instructions and reference files carefully.

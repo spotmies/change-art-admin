@@ -228,6 +228,14 @@ export const adminService = {
     return apiClient.get<{ url: string; file: IFileVersion }>(`/api/v1/files/${fileId}/download-url`);
   },
 
+  async downloadZip(jobCardId: string, category?: string): Promise<Blob> {
+    const response = await apiClient.raw.get<Blob>(
+      `/api/v1/files/job/${jobCardId}/download-zip`,
+      { params: category ? { category } : undefined, responseType: 'blob' },
+    );
+    return response.data;
+  },
+
   updateJobCard(id: string, body: UpdateJobCardBody): Promise<IJobCard> {
     return apiClient.patch<IJobCard, UpdateJobCardBody>(`/api/v1/job-cards/${id}`, body);
   },

@@ -1,3 +1,4 @@
+
 import { useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
@@ -609,12 +610,12 @@ function formatEtaDisplay(startIso?: string | null, etaHours?: number | null): s
   const startMs = startIso ? new Date(startIso).getTime() : Date.now();
   if (isNaN(startMs)) return null;
   const end = new Date(startMs + hours * 60 * 60 * 1000);
-  
+
   const today = new Date();
   const isToday = end.getDate() === today.getDate() &&
-                  end.getMonth() === today.getMonth() &&
-                  end.getFullYear() === today.getFullYear();
-                  
+    end.getMonth() === today.getMonth() &&
+    end.getFullYear() === today.getFullYear();
+
   const timeStr = end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   if (isToday) {
     return `Today ${timeStr}`;
@@ -743,223 +744,223 @@ function GridView({
   return (
     <div className={cn("grid-view-container min-w-0", className)}>
       <div className="grid-view">
-      {jobs.map((j) => {
-        const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
-        const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;
-        const DeptIcon = departmentIconFor(j.order);
-        const StatusIcon = statusIconFor(j.status);
+        {jobs.map((j) => {
+          const actionRequired = j.status === 'Pending Client Confirm' || j.status === 'Quote Approved';
+          const agencyPrice = j.negotiation?.agencyOffer ?? j.adminPrice ?? null;
+          const DeptIcon = departmentIconFor(j.order);
+          const StatusIcon = statusIconFor(j.status);
 
-        const isInProd = j.status === 'In Production' || j.stage === 'junior' || j.stage === 'senior' || j.stage === 'qc' || j.stage === 'sewout';
-        const isReadyDispatch = j.status === 'Ready to Deliver';
-        const titleClass = getTitleColorClass(j.project, j.status);
-        const stageCardClass = getStageCardClass(j.project, j.status);
-        const progress = stageProgressPercent(j.stage, j.status);
+          const isInProd = j.status === 'In Production' || j.stage === 'junior' || j.stage === 'senior' || j.stage === 'qc' || j.stage === 'sewout';
+          const isReadyDispatch = j.status === 'Ready to Deliver';
+          const titleClass = getTitleColorClass(j.project, j.status);
+          const stageCardClass = getStageCardClass(j.project, j.status);
+          const progress = stageProgressPercent(j.stage, j.status);
 
-        return (
-          <article
-            key={j.id}
-            className={cn('job-card min-w-0', stageCardClass, priorityCardClass(j.priority), actionRequired && 'job-card-attention')}
-            onClick={() => onOpen?.(j)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen?.(j);
-              }
-            }}
-          >
-            {/* Card Header: Project type badge + Job Ref + timestamp */}
-            <div className="jc-header px-2.5 pt-2 pb-0.5 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
-                <span className={cn('badge whitespace-nowrap flex-shrink-0 !text-[9px] !px-1.5 !py-[1px]', projectTypeBadgeAccent(j.project))}>
-                  {projectTypeBadgeLabel(j.project, j.modificationCount)}
-                </span>
-                {j.ref && (
-                  <span
-                    className="jc-ref font-mono font-bold text-[9px] text-[#334155] dark:text-[#cbd5e1] tracking-tight whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0"
-                    title={j.ref}
-                  >
-                    {j.ref}
+          return (
+            <article
+              key={j.id}
+              className={cn('job-card min-w-0', stageCardClass, priorityCardClass(j.priority), actionRequired && 'job-card-attention')}
+              onClick={() => onOpen?.(j)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onOpen?.(j);
+                }
+              }}
+            >
+              {/* Card Header: Project type badge + Job Ref + timestamp */}
+              <div className="jc-header px-2.5 pt-2 pb-0.5 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                  <span className={cn('badge whitespace-nowrap flex-shrink-0 !text-[9px] !px-1.5 !py-[1px]', projectTypeBadgeAccent(j.project))}>
+                    {projectTypeBadgeLabel(j.project, j.modificationCount)}
                   </span>
-                )}
-              </div>
-              <span className="jc-header-meta flex-shrink-0">
-                <span className="jc-time text-[9px] text-text-muted">{relativeTimeShort(j.created)}</span>
-              </span>
-            </div>
-
-            {/* Card Body - Top Metadata Section */}
-            <div className="jc-body px-2.5 pb-2 pt-1 flex flex-col flex-1 gap-1">
-              {/* Job title — colored by project type */}
-              <div className={cn('jc-title font-bold text-[13px] leading-tight truncate', titleClass)} title={j.design}>{j.design}</div>
-
-              {/* Client name */}
-              {j.client ? <div className="jc-client font-semibold text-[11.5px] leading-tight text-[#0D1B2A] -mt-0.5">{j.client}</div> : null}
-
-              {/* Info rows: Dept + Priority */}
-              <div className="flex items-center gap-2 text-[9.5px] font-semibold">
-                <div className="flex items-center gap-1 text-text-main">
-                  <DeptIcon className="w-3 h-3 text-text-muted shrink-0" aria-hidden />
-                  {j.order}
-                </div>
-                <span className={cn('priority-badge !text-[9px] !px-1.5 !py-[1px]', priorityClass(j.priority))}>
-                  {j.priority === 'Normal' ? (
-                    <Flag className="w-2.5 h-2.5 shrink-0" aria-hidden />
-                  ) : (
-                    <Zap className="w-2.5 h-2.5 shrink-0" aria-hidden />
-                  )}
-                  {j.priority}
-                </span>
-              </div>
-
-              {/* Info row: Status */}
-              <div className="flex items-center gap-1 text-[9.5px] font-bold text-slate-700 dark:text-slate-300">
-                {isCompletedStatus(j.status, j.stage) ? (
-                  <CompletedStatusBadge label="Matched" />
-                ) : (
-                  <>
-                    <StatusIcon className="w-3 h-3 shrink-0" aria-hidden />
-                    <span className={cn('font-bold', statusBadgeAccent(j.status) === 'green' ? 'text-green-600 dark:text-green-400' : statusBadgeAccent(j.status) === 'amber' ? 'text-amber-600 dark:text-amber-400' : statusBadgeAccent(j.status) === 'red' ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-200')}>
-                      {statusDisplay(j.status)}
+                  {j.ref && (
+                    <span
+                      className="jc-ref font-mono font-bold text-[9px] text-[#334155] dark:text-[#cbd5e1] tracking-tight whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0"
+                      title={j.ref}
+                    >
+                      {j.ref}
                     </span>
-                  </>
+                  )}
+                </div>
+                <span className="jc-header-meta flex-shrink-0">
+                  <span className="jc-time text-[9px] text-text-muted">{relativeTimeShort(j.created)}</span>
+                </span>
+              </div>
+
+              {/* Card Body - Top Metadata Section */}
+              <div className="jc-body px-2.5 pb-2 pt-1 flex flex-col flex-1 gap-1">
+                {/* Job title — colored by project type */}
+                <div className={cn('jc-title font-bold text-[13px] leading-tight truncate', titleClass)} title={j.design}>{j.design}</div>
+
+                {/* Client name */}
+                {j.client ? <div className="jc-client font-semibold text-[11.5px] leading-tight text-[#0D1B2A] -mt-0.5">{j.client}</div> : null}
+
+                {/* Info rows: Dept + Priority */}
+                <div className="flex items-center gap-2 text-[9.5px] font-semibold">
+                  <div className="flex items-center gap-1 text-text-main">
+                    <DeptIcon className="w-3 h-3 text-text-muted shrink-0" aria-hidden />
+                    {j.order}
+                  </div>
+                  <span className={cn('priority-badge !text-[9px] !px-1.5 !py-[1px]', priorityClass(j.priority))}>
+                    {j.priority === 'Normal' ? (
+                      <Flag className="w-2.5 h-2.5 shrink-0" aria-hidden />
+                    ) : (
+                      <Zap className="w-2.5 h-2.5 shrink-0" aria-hidden />
+                    )}
+                    {j.priority}
+                  </span>
+                </div>
+
+                {/* Info row: Status */}
+                <div className="flex items-center gap-1 text-[9.5px] font-bold text-slate-700 dark:text-slate-300">
+                  {isCompletedStatus(j.status, j.stage) ? (
+                    <CompletedStatusBadge label="Matched" />
+                  ) : (
+                    <>
+                      <StatusIcon className="w-3 h-3 shrink-0" aria-hidden />
+                      <span className={cn('font-bold', statusBadgeAccent(j.status) === 'green' ? 'text-green-600 dark:text-green-400' : statusBadgeAccent(j.status) === 'amber' ? 'text-amber-600 dark:text-amber-400' : statusBadgeAccent(j.status) === 'red' ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-200')}>
+                        {statusDisplay(j.status)}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {/* Progress section — label, bar, and percentage indicator ALL on the SAME flex line */}
+                {isInProd && progress != null ? (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[9.5px] text-text-muted font-medium shrink-0">Progress</span>
+                    <div className="flex-1 h-1.5 bg-slate-200/70 dark:bg-slate-700/60 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+                    </div>
+                    <span className="text-[9.5px] font-bold text-slate-900 dark:text-slate-100 shrink-0">{progress}%</span>
+                  </div>
+                ) : null}
+
+                {/* ETA Completion Time row */}
+                {isInProd && (
+                  <div className="text-[9.5px] font-semibold text-slate-700 dark:text-slate-300 -mt-0.5">
+                    ETA: <span className="font-bold text-slate-900 dark:text-slate-100">{formatEtaDisplay(j.effectiveAcknowledgedAt ?? j.acknowledgedAt ?? j.created, j.etaHours)}</span>
+                  </div>
+                )}
+
+                {/* Action-required callout */}
+                {actionRequired ? (
+                  <div className="jc-action mt-1">
+                    <CheckCircle2 aria-hidden className="w-3.5 h-3.5 mt-px shrink-0" />
+                    <span>
+                      Quote sent{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
+                      <strong>Awaiting client confirmation</strong>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Image area - Middle */}
+              <div className="jc-img" style={{ padding: '3px 6px 2px' }}>
+                {j.images?.length ? (
+                  <img
+                    className="w-full object-cover block rounded-md border border-[rgba(0,0,0,0.05)]"
+                    style={{ height: 120 }}
+                    src={j.images[0]}
+                    alt={j.design}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
+                  />
+                ) : (
+                  <div className="w-full rounded-md border border-[rgba(0,0,0,0.05)]" style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                  </div>
                 )}
               </div>
 
-              {/* Progress section — label, bar, and percentage indicator ALL on the SAME flex line */}
-              {isInProd && progress != null ? (
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[9.5px] text-text-muted font-medium shrink-0">Progress</span>
-                  <div className="flex-1 h-1.5 bg-slate-200/70 dark:bg-slate-700/60 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+              {/* Footer actions — single row flex-nowrap */}
+              <div className="jc-footer flex gap-1 p-1.5 border-t border-[rgba(0,0,0,0.06)]" onClick={(e) => e.stopPropagation()}>
+                {renderRowActions ? renderRowActions(j) : (
+                  <div className="flex gap-1 flex-nowrap flex-1 items-center w-full min-w-0">
+                    {/* Assign button */}
+                    {!j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote' && (
+                      <button
+                        type="button"
+                        className="btn font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Assign
+                      </button>
+                    )}
+                    {/* Upload Files button — ready-to-dispatch jobs only. */}
+                    {isReadyDispatch && (
+                      <button
+                        type="button"
+                        className="btn font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', background: DISPATCH_ACCENT, color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Upload
+                      </button>
+                    )}
+                    {/* Dispatch button */}
+                    {j.stage !== 'delivered' && j.stage !== 'quote' && (
+                      <button
+                        type="button"
+                        className={isReadyDispatch ? 'btn font-bold flex-1 min-w-0' : 'btn btn-outline font-bold flex-1 min-w-0'}
+                        style={
+                          isReadyDispatch
+                            ? { fontSize: 10, padding: '0 5px', background: DISPATCH_ACCENT, color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }
+                            : { fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }
+                        }
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Dispatch
+                      </button>
+                    )}
+                    {/* Prepare Quote button */}
+                    {(j.project === 'Quote' && (j.status === 'Pending' || j.stage === 'quote')) && (
+                      <button
+                        type="button"
+                        className="btn font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Prepare Quote
+                      </button>
+                    )}
+                    {/* Reply button */}
+                    {(j.project === 'Quote' || j.status === 'Quote Submitted' || j.project === 'Amend') && (
+                      <button
+                        type="button"
+                        className="btn btn-outline font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Reply
+                      </button>
+                    )}
+                    {/* View / View Progress button */}
+                    {!isReadyDispatch && (
+                      <button
+                        type="button"
+                        className="btn btn-outline font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        {isInProd ? 'Progress' : 'View'}
+                      </button>
+                    )}
                   </div>
-                  <span className="text-[9.5px] font-bold text-slate-900 dark:text-slate-100 shrink-0">{progress}%</span>
-                </div>
-              ) : null}
-
-              {/* ETA Completion Time row */}
-              {isInProd && (
-                <div className="text-[9.5px] font-semibold text-slate-700 dark:text-slate-300 -mt-0.5">
-                  ETA: <span className="font-bold text-slate-900 dark:text-slate-100">{formatEtaDisplay(j.effectiveAcknowledgedAt ?? j.acknowledgedAt ?? j.created, j.etaHours)}</span>
-                </div>
-              )}
-
-              {/* Action-required callout */}
-              {actionRequired ? (
-                <div className="jc-action mt-1">
-                  <CheckCircle2 aria-hidden className="w-3.5 h-3.5 mt-px shrink-0" />
-                  <span>
-                    Quote sent{agencyPrice ? ` — $${agencyPrice}` : ''} ·{' '}
-                    <strong>Awaiting client confirmation</strong>
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Image area - Middle */}
-            <div className="jc-img" style={{ padding: '3px 6px 2px' }}>
-              {j.images?.length ? (
-                <img
-                  className="w-full object-cover block rounded-md border border-[rgba(0,0,0,0.05)]"
-                  style={{ height: 120 }}
-                  src={j.images[0]}
-                  alt={j.design}
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-                />
-              ) : (
-                <div className="w-full rounded-md border border-[rgba(0,0,0,0.05)]" style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
-                </div>
-              )}
-            </div>
-
-            {/* Footer actions — single row flex-nowrap */}
-            <div className="jc-footer flex gap-1 p-1.5 border-t border-[rgba(0,0,0,0.06)]" onClick={(e) => e.stopPropagation()}>
-              {renderRowActions ? renderRowActions(j) : (
-                <div className="flex gap-1 flex-nowrap flex-1 items-center w-full min-w-0">
-                  {/* Assign button */}
-                  {!j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote' && (
-                    <button
-                      type="button"
-                      className="btn font-bold flex-1 min-w-0"
-                      style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      Assign
-                    </button>
-                  )}
-                  {/* Upload Files button — ready-to-dispatch jobs only. */}
-                  {isReadyDispatch && (
-                    <button
-                      type="button"
-                      className="btn font-bold flex-1 min-w-0"
-                      style={{ fontSize: 10, padding: '0 5px', background: DISPATCH_ACCENT, color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      Upload
-                    </button>
-                  )}
-                  {/* Dispatch button */}
-                  {j.stage !== 'delivered' && j.stage !== 'quote' && (
-                    <button
-                      type="button"
-                      className={isReadyDispatch ? 'btn font-bold flex-1 min-w-0' : 'btn btn-outline font-bold flex-1 min-w-0'}
-                      style={
-                        isReadyDispatch
-                          ? { fontSize: 10, padding: '0 5px', background: DISPATCH_ACCENT, color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }
-                          : { fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }
-                      }
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      Dispatch
-                    </button>
-                  )}
-                  {/* Prepare Quote button */}
-                  {(j.project === 'Quote' && (j.status === 'Pending' || j.stage === 'quote')) && (
-                    <button
-                      type="button"
-                      className="btn font-bold flex-1 min-w-0"
-                      style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      Prepare Quote
-                    </button>
-                  )}
-                  {/* Reply button */}
-                  {(j.project === 'Quote' || j.status === 'Quote Submitted' || j.project === 'Amend') && (
-                    <button
-                      type="button"
-                      className="btn btn-outline font-bold flex-1 min-w-0"
-                      style={{ fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }}
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      Reply
-                    </button>
-                  )}
-                  {/* View / View Progress button */}
-                  {!isReadyDispatch && (
-                    <button
-                      type="button"
-                      className="btn btn-outline font-bold flex-1 min-w-0"
-                      style={{ fontSize: 10, padding: '0 5px', height: 25, borderRadius: 5, whiteSpace: 'nowrap', ...stageOutlineStyle(j.project) }}
-                      onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
-                    >
-                      {isInProd ? 'Progress' : 'View'}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </article>
-        );
-      })}
+                )}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
