@@ -135,3 +135,36 @@ export function isJobEtaExpired(job: {
   }
   return false;
 }
+
+/** Format a Date object to YYYY-MM-DD for date inputs and API queries. */
+export function formatDateForInput(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Calculate dateFrom and dateTo (YYYY-MM-DD) based on preset label like "Last 1 Week", "Last 15 Days", "Last 1 Month", etc. */
+export function getDateRangeFromPreset(preset: string): { dateFrom: string; dateTo: string } {
+  if (!preset || preset === 'All Time' || preset === 'Custom Range') {
+    return { dateFrom: '', dateTo: '' };
+  }
+
+  const now = new Date();
+  const dateTo = formatDateForInput(now);
+  let days = 30;
+
+  const lower = preset.toLowerCase();
+  if (lower.includes('1 week') || lower.includes('7') || lower.includes('1week') || lower.includes('week')) {
+    days = 7;
+  } else if (lower.includes('15')) {
+    days = 15;
+  } else if (lower.includes('1 month') || lower.includes('30') || lower.includes('1month') || lower.includes('month')) {
+    days = 30;
+  }
+
+  const fromDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const dateFrom = formatDateForInput(fromDate);
+  return { dateFrom, dateTo };
+}
+

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, Search, X, CalendarDays } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, Search, X, CalendarDays, Filter } from 'lucide-react';
 import type { IClient } from '@contracts';
 
 export interface JobFilters {
@@ -68,7 +68,7 @@ export function applyJobFilters<
     client: string; clientId?: string; ref: string; id: string;
     created: string; summary?: string; specificType?: string | null;
   },
->(jobs: T[], f: JobFilters): T[] {
+>(jobs: T[], f: JobFilters, clients: IClient[] = []): T[] {
   let result = jobs;
   if (f.search) {
     const q = f.search.toLowerCase();
@@ -81,7 +81,14 @@ export function applyJobFilters<
   if (f.orderType) result = result.filter((j) => j.order === f.orderType);
   if (f.priority)  result = result.filter((j) => j.priority === f.priority);
   if (f.status)    result = result.filter((j) => j.status === f.status);
-  if (f.clientId)  result = result.filter((j) => j.clientId === f.clientId);
+  if (f.clientId) {
+    const targetClient = clients.find((c) => c.client_id === f.clientId || c.id === f.clientId);
+    result = result.filter((j) => {
+      if (j.clientId === f.clientId) return true;
+      if (targetClient && (j.clientId === targetClient.client_id || j.clientId === targetClient.id)) return true;
+      return false;
+    });
+  }
   if (f.dateFrom) {
     const from = new Date(f.dateFrom).getTime();
     result = result.filter((j) => new Date(j.created).getTime() >= from);
@@ -101,8 +108,15 @@ function toDraft(f: JobFilters): Draft {
 
 
 export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPTIONS, clients = [], className = '' }: JobFilterBarProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => !isFiltersEmpty(filters));
   const [draft, setDraft] = useState<Draft>(() => toDraft(filters));
+
+  useEffect(() => {
+    setDraft(toDraft(filters));
+    if (!isFiltersEmpty(filters)) {
+      setOpen(true);
+    }
+  }, [filters]);
 
   function closePanel() { setOpen(false); }
 
@@ -128,8 +142,8 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
     <div className={`fjb-root ${className}`}>
 
       {/* ── Top row: search + Filters button ── */}
-      <div className="fjb-top-row">
-        <div className="fjb-search-wrap">
+      <div className="fjb-top-row flex items-center gap-2">
+        <div className="fjb-search-wrap flex-1">
           <Search className="fjb-search-icon" aria-hidden />
           <input
             type="text"
@@ -146,6 +160,21 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
           )}
         </div>
 
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={`h-[38px] px-3.5 rounded-[10px] border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs ${
+            open || !isFiltersEmpty(filters)
+              ? 'border-blue-500 bg-blue-50 text-blue-600'
+              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          <span>Filters</span>
+          {!isFiltersEmpty(filters) && (
+            <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+          )}
+        </button>
       </div>
 
       {/* ── Expanded filter panel — single row ── */}

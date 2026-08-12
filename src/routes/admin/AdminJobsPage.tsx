@@ -11,6 +11,7 @@ import {
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { getDateRangeFromPreset } from '@lib/utils';
 
 const PER_PAGE = 20;
 
@@ -53,19 +54,12 @@ function mapStatusFilter(display: string): {
     case 'In Review':
       return { status: 'DRAFT' };
     case 'Quote Submitted':
-      // Quote sent to the client, awaiting their approval/rejection —
-      // JobStatus.QUOTE_SUBMITTED specifically, not the whole 'quote' stage
-      // (which would also pull in DRAFT/'In Review' rows).
       return { status: 'QUOTE_SUBMITTED' };
     case 'Order Placed':
       return { status: 'JOB_PLACED' };
     case 'Pending':
-      // JOB_PLACED jobs that haven't been acknowledged yet (display as "Pending" in the adapter)
       return { status: 'JOB_PLACED', unacknowledged: true };
     case 'In Production':
-      // Matches the adapter's "In Production" label: the non-JOB_PLACED junior
-      // stages, PLUS JOB_PLACED rows that HAVE been acknowledged (JOB_PLACED
-      // without acknowledgement displays as "Pending" instead — see below).
       return {
         statuses: 'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED',
         include_ack_placed: true,
@@ -103,16 +97,58 @@ export function AdminJobsPage() {
   const initialStatus = VALID_STATUS_VALUES.has(filterParam) ? filterParam : '';
 
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<JobFilters>({ ...EMPTY_FILTERS, status: initialStatus });
+  const [filters, setFilters] = useState<JobFilters>(() => {
+    const rawClientId = searchParams.get('clientId') || searchParams.get('client_id') || '';
+    let rawDateFrom = searchParams.get('dateFrom') || '';
+    let rawDateTo = searchParams.get('dateTo') || '';
+    const rawRange = searchParams.get('range') || '';
 
-  // Keep the filter bar's status in sync if the URL's ?filter= changes —
-  // e.g. navigating here again from a different dashboard stat card while
-  // this route is already mounted, which does not re-run the useState
-  // initializer above.
+    if (rawRange && !rawDateFrom) {
+      const computed = getDateRangeFromPreset(rawRange);
+      rawDateFrom = computed.dateFrom;
+      rawDateTo = computed.dateTo;
+    }
+
+    return {
+      ...EMPTY_FILTERS,
+      status: initialStatus,
+      clientId: rawClientId,
+      dateFrom: rawDateFrom,
+      dateTo: rawDateTo,
+    };
+  });
+
   useEffect(() => {
-    setFilters((prev) => ({ ...prev, status: initialStatus }));
-    setPage(1);
-  }, [initialStatus]);
+    const rawClientId = searchParams.get('clientId') || searchParams.get('client_id') || '';
+    let rawDateFrom = searchParams.get('dateFrom') || '';
+    let rawDateTo = searchParams.get('dateTo') || '';
+    const rawRange = searchParams.get('range') || '';
+
+    if (rawRange && !rawDateFrom) {
+      const computed = getDateRangeFromPreset(rawRange);
+      rawDateFrom = computed.dateFrom;
+      rawDateTo = computed.dateTo;
+    }
+
+    setFilters((prev) => {
+      const targetStatus = initialStatus || prev.status;
+      if (
+        prev.status === targetStatus &&
+        prev.clientId === rawClientId &&
+        prev.dateFrom === rawDateFrom &&
+        prev.dateTo === rawDateTo
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        status: targetStatus,
+        clientId: rawClientId,
+        dateFrom: rawDateFrom,
+        dateTo: rawDateTo,
+      };
+    });
+  }, [initialStatus, searchParams]);
 
   const debouncedSearch = useDebounced(filters.search, 300);
   // per_page: 500 — needed to populate the client filter dropdown with all client names.
@@ -121,8 +157,8 @@ export function AdminJobsPage() {
 
   const clientUuid = useMemo(() => {
     if (!filters.clientId) return undefined;
-    const found = clients.find((c) => c.client_id === filters.clientId);
-    return found ? found.id : undefined;
+    const found = clients.find((c) => c.client_id === filters.clientId || c.id === filters.clientId);
+    return found ? found.id : filters.clientId;
   }, [filters.clientId, clients]);
 
   const mappedStatus = useMemo(() => mapStatusFilter(filters.status), [filters.status]);

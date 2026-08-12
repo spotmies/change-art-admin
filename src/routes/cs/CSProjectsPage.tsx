@@ -13,7 +13,7 @@ import {
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
-import { isJobEtaExpired } from '@lib/utils';
+import { isJobEtaExpired, getDateRangeFromPreset } from '@lib/utils';
 
 const FETCH_SIZE = 200;
 const PER_PAGE   = 20;
@@ -37,23 +37,69 @@ export function CSProjectsPage() {
     [allJobs, projectParam],
   );
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<JobFilters>({ ...EMPTY_FILTERS, status: filterParam });
+  const [filters, setFilters] = useState<JobFilters>(() => {
+    const rawClientId = searchParams.get('clientId') || searchParams.get('client_id') || '';
+    let rawDateFrom = searchParams.get('dateFrom') || '';
+    let rawDateTo = searchParams.get('dateTo') || '';
+    const rawRange = searchParams.get('range') || '';
+
+    if (rawRange && !rawDateFrom) {
+      const computed = getDateRangeFromPreset(rawRange);
+      rawDateFrom = computed.dateFrom;
+      rawDateTo = computed.dateTo;
+    }
+
+    return {
+      ...EMPTY_FILTERS,
+      status: filterParam,
+      clientId: rawClientId,
+      dateFrom: rawDateFrom,
+      dateTo: rawDateTo,
+    };
+  });
 
   // per_page: 500 — needed to populate the client filter dropdown with all client names.
   const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
 
-  // Keep the filter bar's status in sync if the URL's ?filter= changes
-  // (e.g. navigating here again from a different dashboard stat card).
+  // Keep the filter bar in sync if URL search params change
   useEffect(() => {
-    setFilters((prev) => ({ ...prev, status: filterParam }));
-  }, [filterParam]);
+    const rawClientId = searchParams.get('clientId') || searchParams.get('client_id') || '';
+    let rawDateFrom = searchParams.get('dateFrom') || '';
+    let rawDateTo = searchParams.get('dateTo') || '';
+    const rawRange = searchParams.get('range') || '';
+
+    if (rawRange && !rawDateFrom) {
+      const computed = getDateRangeFromPreset(rawRange);
+      rawDateFrom = computed.dateFrom;
+      rawDateTo = computed.dateTo;
+    }
+
+    setFilters((prev) => {
+      const targetStatus = filterParam || prev.status;
+      if (
+        prev.status === targetStatus &&
+        prev.clientId === rawClientId &&
+        prev.dateFrom === rawDateFrom &&
+        prev.dateTo === rawDateTo
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        status: targetStatus,
+        clientId: rawClientId,
+        dateFrom: rawDateFrom,
+        dateTo: rawDateTo,
+      };
+    });
+  }, [filterParam, searchParams]);
 
   const open       = useMemo(() => allData.filter((j) => j.stage !== 'delivered' && !isJobEtaExpired(j)), [allData]);
   const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
   const amend      = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
 
-  const filteredData = useMemo(() => applyJobFilters(allData, filters), [allData, filters]);
+  const filteredData = useMemo(() => applyJobFilters(allData, filters, clients), [allData, filters, clients]);
 
   // Reset to page 1 whenever the active filters change.
   useEffect(() => {
@@ -68,19 +114,51 @@ export function CSProjectsPage() {
 
   function handleFiltersChange(next: JobFilters) {
     setFilters(next);
-    // The status filter no longer matches whatever ?filter= seeded it with
-    // once the user picks a different one from the dropdown — drop the URL
-    // param so the "Clear filter" pill in the header doesn't show stale text.
+    const nextParams = new URLSearchParams(searchParams);
     if (next.status !== filterParam) {
-      const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('filter');
-      setSearchParams(nextParams, { replace: true });
     }
+    if (!next.clientId) {
+      nextParams.delete('clientId');
+      nextParams.delete('client_id');
+    } else {
+      nextParams.set('clientId', next.clientId);
+    }
+    if (!next.dateFrom) {
+      nextParams.delete('dateFrom');
+      nextParams.delete('range');
+    } else {
+      nextParams.set('dateFrom', next.dateFrom);
+    }
+    if (!next.dateTo) {
+      nextParams.delete('dateTo');
+    } else {
+      nextParams.set('dateTo', next.dateTo);
+    }
+    setSearchParams(nextParams, { replace: true });
   }
 
-
-
   const activeFilterLabel = filterParam || projectParam;
+
+  const activeClient = useMemo(() => {
+    if (!filters.clientId) return null;
+    return clients.find((c) => c.client_id === filters.clientId || c.id === filters.clientId);
+  }, [filters.clientId, clients]);
+
+  const activeFilterSubtitle = useMemo(() => {
+    const clientName = activeClient ? (activeClient.company_name || activeClient.client_name) : null;
+    const rangeLabel = searchParams.get('range');
+    const dateRangeStr = rangeLabel || (filters.dateFrom ? `${filters.dateFrom} to ${filters.dateTo || 'Today'}` : null);
+
+    if (clientName && dateRangeStr) {
+      return `Showing jobs for ${clientName} (${dateRangeStr})`;
+    } else if (clientName) {
+      return `Showing jobs for ${clientName}`;
+    } else if (activeFilterLabel) {
+      return `Showing ${activeFilterLabel.toLowerCase()} jobs.`;
+    }
+    return 'Browse every active, delivered, and amendment job across the Client Servicing pipeline.';
+  }, [activeClient, filters.dateFrom, filters.dateTo, searchParams, activeFilterLabel]);
 
   if (isError) {
     return (
@@ -97,11 +175,7 @@ export function CSProjectsPage() {
     <div className="page">
       <GreetingHero
         title="All Projects"
-        subtitle={
-          activeFilterLabel
-            ? `Showing ${activeFilterLabel.toLowerCase()} jobs.`
-            : 'Browse every active, delivered, and amendment job across the Client Servicing pipeline.'
-        }
+        subtitle={activeFilterSubtitle}
       />
 
       <StatGrid

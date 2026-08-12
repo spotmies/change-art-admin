@@ -14,6 +14,7 @@ interface TopbarProps {
   title: string;
   subtitle?: string;
   onOpenMobileNav: () => void;
+  hideSearch?: boolean;
 }
 
 const EMAIL_INBOX_PATH: Partial<Record<UserRole, string>> = {
@@ -22,7 +23,7 @@ const EMAIL_INBOX_PATH: Partial<Record<UserRole, string>> = {
 };
 
 /** Top app bar — page title/greeting + search + mail + notifications + user menu. */
-export function Topbar({ title, subtitle, onOpenMobileNav }: TopbarProps) {
+export function Topbar({ title: _title, subtitle: _subtitle, onOpenMobileNav, hideSearch }: TopbarProps) {
   const isAuthenticated = useIsAuthenticated();
   const user = useSessionUser();
   const emailInboxPath = user ? EMAIL_INBOX_PATH[user.role] : undefined;
@@ -43,28 +44,32 @@ export function Topbar({ title, subtitle, onOpenMobileNav }: TopbarProps) {
         <Menu aria-hidden className="w-4 h-4" />
       </button>
 
-      <div className="min-w-0 flex-1">
-        <h1 className="text-[20px] font-semibold text-text-main leading-tight truncate tracking-wide">{title}</h1>
-        {subtitle ? (
-          <p className="text-[11.5px] text-text-muted mt-0.5 font-medium truncate">{subtitle}</p>
-        ) : null}
+      <div className="min-w-0 flex-1 flex items-center gap-3">
+        <img
+          src="/ch-logo.png"
+          alt="CHANGE! Inc"
+          className="h-8 w-auto shrink-0"
+          draggable={false}
+        />
       </div>
 
       {/* Search bar */}
-      <label className="hidden lg:flex items-center w-full max-w-[420px] relative" htmlFor="topbar-search">
-        <input
-          id="topbar-search"
-          type="search"
-          placeholder="Search by Job ID, Client, Project, or Keyword..."
-          className="w-full bg-[#f1f5f9] border border-slate-200/50 rounded-lg pl-4 pr-11 py-2 text-[12.5px] text-text-main placeholder-text-faint focus:outline-none transition-all"
-        />
-        <span
-          aria-hidden
-          className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#002868] text-white absolute right-1.5 top-1/2 -translate-y-1/2"
-        >
-          <Search aria-hidden className="w-3.5 h-3.5" />
-        </span>
-      </label>
+      {!hideSearch ? (
+        <label className="hidden lg:flex items-center w-full max-w-[420px] relative" htmlFor="topbar-search">
+          <input
+            id="topbar-search"
+            type="search"
+            placeholder="Search by Job ID, Client, Project, or Keyword..."
+            className="w-full bg-[#f1f5f9] border border-slate-200/50 rounded-lg pl-4 pr-11 py-2 text-[12.5px] text-text-main placeholder-text-faint focus:outline-none transition-all"
+          />
+          <span
+            aria-hidden
+            className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#002868] text-white absolute right-1.5 top-1/2 -translate-y-1/2"
+          >
+            <Search aria-hidden className="w-3.5 h-3.5" />
+          </span>
+        </label>
+      ) : null}
 
       <div className="h-6 w-[1px] bg-slate-200 mx-1 hidden md:block" />
 

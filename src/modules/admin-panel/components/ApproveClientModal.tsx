@@ -12,11 +12,22 @@ interface ApproveClientModalProps {
 export function ApproveClientModal({ client, onClose }: ApproveClientModalProps) {
   const [clientId, setClientId] = useState('');
   
-  // Update state when modal opens with a new client
+  // Update state when modal opens with a new client and lock background scroll
   useEffect(() => {
-    if (client) {
-      setClientId(client.client_id);
-    }
+    if (!client) return undefined;
+    setClientId(client.client_id);
+
+    const mainEl = document.getElementById('main-content');
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (mainEl) mainEl.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      if (mainEl) mainEl.style.overflow = '';
+    };
   }, [client]);
 
   const approve = useApproveClient();
@@ -33,121 +44,126 @@ export function ApproveClientModal({ client, onClose }: ApproveClientModalProps)
 
   function handleSubmit() {
     if (!canApprove) return;
-    
-    // Only send the override if it's different from the original auto-generated ID
-    const overrideId = clientId !== client?.client_id ? clientId : undefined;
-    
+
+    // Always send the confirmed/assigned 5-digit Client ID so the backend updates DB and emails the client with it
+    const finalClientId = clientId || client?.client_id;
+
     approve.mutate(
-      { id: client!.id, clientId: overrideId },
+      { id: client!.id, clientId: finalClientId },
       {
         onSuccess: () => onClose(),
-      }
+      },
     );
   }
 
   const modal = (
     <div
-      className="modal-overlay open"
-      onClick={undefined}
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
       role="dialog"
       aria-modal
       aria-label="Approve Client"
     >
-      <div className="modal" style={{ maxWidth: 520 }}>
-        <div className="modal-top">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="modal-title">Approve Client Registration</div>
-            <div className="modal-tags">
-              <span className="badge blue">Pending</span>
-            </div>
+      <div
+        className="bg-white rounded-[8px] border border-slate-200/90 shadow-2xl w-full max-w-md flex flex-col overflow-hidden text-slate-800 animate-in fade-in zoom-in-95 duration-150 my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">Approve Client Registration</h3>
+            <p className="text-[11.5px] text-slate-500 mt-0.5">
+              {client.client_name} {client.company_name ? `(${client.company_name})` : ''}
+            </p>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            <X className="w-3.5 h-3.5" aria-hidden />
+          <button
+            type="button"
+            className="w-8 h-8 rounded-[6px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+            onClick={onClose}
+            aria-label="Close"
+            disabled={approve.isPending}
+          >
+            <X className="w-4 h-4" aria-hidden />
           </button>
         </div>
 
-        <div className="modal-body">
-          <div className="m-sec-title">Client Information</div>
-          
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 mb-6 text-[13px]">
+        <div className="p-6 space-y-4 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
             <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Name</div>
-              <div>{client.client_name}</div>
+              <span className="block text-[11px] text-slate-400 font-semibold mb-0.5">Name</span>
+              <span className="font-bold text-slate-900">{client.client_name}</span>
             </div>
             <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Company</div>
-              <div>{client.company_name || '—'}</div>
+              <span className="block text-[11px] text-slate-400 font-semibold mb-0.5">Company</span>
+              <span className="font-bold text-slate-900">{client.company_name || '—'}</span>
             </div>
             <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Email</div>
-              <div>{client.email}</div>
+              <span className="block text-[11px] text-slate-400 font-semibold mb-0.5">Email</span>
+              <span className="font-bold text-slate-900">{client.email}</span>
             </div>
             <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Phone</div>
-              <div>{client.contact_number}</div>
-            </div>
-            <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Country</div>
-              <div>{client.country || '—'}</div>
-            </div>
-            <div>
-              <div className="text-text-faint text-[11px] uppercase tracking-wider mb-1">Currency</div>
-              <div>{client.currency || 'USD'}</div>
+              <span className="block text-[11px] text-slate-400 font-semibold mb-0.5">Phone</span>
+              <span className="font-bold text-slate-900 font-mono">{client.contact_number}</span>
             </div>
           </div>
 
-          <div className="m-sec-title">Assign Client ID</div>
-          <p className="text-[12px] text-text-faint mb-3">
-            An auto-generated 5-digit ID has been assigned. You can modify it before approval if needed.
-          </p>
-
           <div>
-            <label className="fl">Client ID</label>
+            <label className="block text-[11.5px] font-semibold text-slate-700 mb-1">
+              Assign Client ID
+            </label>
+            <p className="text-[11.5px] text-slate-500 mb-2">
+              An auto-generated 5-digit ID has been assigned. You can modify it before approval.
+            </p>
             <div className="relative">
               <input
-                className="fi pr-8 font-mono"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value.replace(/\D/g, '').slice(0, 5))}
                 placeholder="e.g. 84291"
                 maxLength={5}
-                style={!isValidFormat || (!isAvailable && clientId.length === 5) ? { borderColor: 'var(--color-crimson)' } : undefined}
+                style={!isValidFormat || (!isAvailable && clientId.length === 5) ? { borderColor: '#f87171' } : undefined}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 {isChecking ? (
-                  <Loader2 className="w-4 h-4 text-text-muted animate-spin" />
+                  <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
                 ) : isValidFormat && isAvailable ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-emerald-500" />
                 ) : clientId.length === 5 && !isAvailable ? (
-                  <X className="w-4 h-4 text-status-red" />
+                  <X className="w-4 h-4 text-rose-500" />
                 ) : null}
               </div>
             </div>
-            
+
             {clientId.length > 0 && !isValidFormat && (
-              <p className="text-[11px] mt-1" style={{ color: 'var(--color-crimson)' }}>
+              <p className="text-[11px] mt-1 text-rose-500 font-medium">
                 Client ID must be exactly 5 digits.
               </p>
             )}
             {clientId.length === 5 && !isAvailable && !isChecking && (
-              <p className="text-[11px] mt-1 flex items-center gap-1" style={{ color: 'var(--color-crimson)' }}>
-                <AlertCircle className="w-3 h-3" />
+              <p className="text-[11px] mt-1 text-rose-500 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
                 This Client ID is already in use.
               </p>
             )}
           </div>
         </div>
 
-        <div className="modal-actions">
-          <button type="button" className="btn btn-outline" onClick={onClose} disabled={approve.isPending}>
+        <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50 shrink-0">
+          <button
+            type="button"
+            className="px-4 py-2 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs shadow-2xs transition cursor-pointer"
+            onClick={onClose}
+            disabled={approve.isPending}
+          >
             Cancel
           </button>
-          <button 
-            type="button" 
-            className="btn btn-crimson" 
-            onClick={handleSubmit} 
+          <button
+            type="button"
+            className="px-4 py-2 rounded-[6px] bg-[#e11d48] hover:bg-[#be123c] text-white font-bold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            onClick={handleSubmit}
             disabled={!canApprove}
           >
-            {approve.isPending ? 'Approving…' : 'Approve Client'}
+            <Check className="w-4 h-4" />
+            <span>{approve.isPending ? 'Approving…' : 'Approve Client'}</span>
           </button>
         </div>
       </div>
