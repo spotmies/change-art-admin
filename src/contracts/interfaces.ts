@@ -25,6 +25,7 @@ import type {
   NotificationType,
   OrderType,
   PaymentMode,
+  PaymentTerms,
   Placement,
   Priority,
   ProcessType,
@@ -76,18 +77,29 @@ export interface IClient {
   company_name: string | null;
   contact_name: string;
   contact_number: string;
+  /** Business/contact email shown on the client record. Independent of the login email below. */
   email: string;
+  /** The email the client logs in with. Null when no portal account is linked. */
+  login_email: string | null;
   date: IsoDateTime;
+  /** Free-form "City, State, ZIP" summary string. Prefer `city`/`state`/`zipcode` below for structured display. */
   location: string | null;
+  /** Street-level business address. */
   address: string | null;
   country: string | null;
+  city: string | null;
+  state: string | null;
+  zipcode: string | null;
   currency: string | null;
   payment_mode: PaymentMode | null;
+  payment_terms: PaymentTerms | null;
   /** Opaque client-authored JSON blob from the self-reported Payment Settings page —
    *  the actual source of truth for card expiry, since `card_on_file` below is never
    *  set by any reachable UI flow. Contains an `expiry` field (MM/YY) when payment_mode
    *  is CREDIT_CARD/CARD_ON_FILE. */
   payment_details: string | null;
+  /** When the client accepted the Terms & Conditions at signup. Null for admin-created accounts. */
+  terms_accepted_at: IsoDateTime | null;
   card_on_file: ICardOnFile | null;
   user_id: string | null;
   approval_status: ClientApprovalStatus | null;
@@ -104,6 +116,7 @@ export interface IClient {
   /** When an admin last sent the Credit Card Authorization Form to this client. */
   cc_form_sent_at: IsoDateTime | null;
   cc_form_sent_by: string | null;
+  last_login_at?: IsoDateTime | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

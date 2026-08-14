@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertCircle,
-  ArrowUpDown,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -316,6 +316,39 @@ function truncateString(str: string | undefined | null, maxLen = 14): string {
   return str.slice(0, maxLen) + '...';
 }
 
+function TextWithTooltip({
+  text,
+  maxLen = 14,
+  className = '',
+}: {
+  text: string | undefined | null;
+  maxLen?: number;
+  className?: string;
+}) {
+  if (!text || text === '—') {
+    return <span className={className}>—</span>;
+  }
+
+  const isTruncated = text.length > maxLen;
+  const displayText = truncateString(text, maxLen);
+
+  if (!isTruncated) {
+    return <span className={className}>{displayText}</span>;
+  }
+
+  return (
+    <span className="relative group/tooltip inline-block max-w-full">
+      <span className={className}>{displayText}</span>
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:flex flex-col items-center z-[100] animate-in fade-in zoom-in-95 duration-100">
+        <span className="bg-slate-900 text-white text-[11px] font-medium px-2.5 py-1 rounded-[6px] shadow-xl whitespace-nowrap border border-slate-800 tracking-normal font-sans">
+          {text}
+        </span>
+        <span className="w-2 h-2 -mt-1 rotate-45 bg-slate-900 border-r border-b border-slate-800" />
+      </span>
+    </span>
+  );
+}
+
 export function ClientRecordsView({
   isAdminView = true,
   onNavigateToApprove,
@@ -509,6 +542,21 @@ export function ClientRecordsView({
     return sortedRecords.slice(startIndex, startIndex + pageSize);
   }, [sortedRecords, startIndex, pageSize]);
 
+  function renderSortIcon(field: keyof ClientDisplayRecord) {
+    const isSorted = sortField === field;
+    if (!isSorted) {
+      return <ChevronDown className="w-3 h-3 text-slate-400/70 shrink-0 transition-transform" />;
+    }
+    return (
+      <ChevronDown
+        className={cn(
+          'w-3 h-3 text-rose-600 font-bold shrink-0 transition-transform duration-150',
+          sortDir === 'asc' && 'rotate-180'
+        )}
+      />
+    );
+  }
+
   function handleSort(field: keyof ClientDisplayRecord) {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -552,15 +600,15 @@ export function ClientRecordsView({
 
         <div className="flex items-center gap-3">
           {/* Search Bar */}
-          <div className="relative w-full sm:w-[340px]">
+          <div className="relative w-full sm:w-[460px] md:w-[480px]">
             <input
               type="text"
-              className="w-full rounded-[6px] border border-slate-200 bg-white pl-3.5 pr-9 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 placeholder:text-slate-400 shadow-2xs transition"
+              className="w-full rounded-[6px] border border-slate-200 bg-white pl-4 pr-10 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 placeholder:text-slate-400 shadow-2xs transition"
               placeholder="Search by Client ID, Client Name, Business Name, Email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400 pointer-events-none" />
           </div>
 
           {/* Add New Client (Admin only) */}
@@ -775,14 +823,14 @@ export function ClientRecordsView({
       </div>
 
       {/* ── YELLOW ALERT BANNER ── */}
-      <div className="bg-[#fffbeb] border border-[#fde68a] rounded-[6px] p-2.5 flex items-center justify-between shadow-2xs gap-4">
-        <div className="flex items-center gap-2.5 text-xs font-bold text-[#92400e]">
-          <AlertCircle className="w-4 h-4 text-[#d97706] shrink-0" />
+      <div className="bg-[#fffbeb] border border-[#fde68a] rounded-[6px] px-3.5 py-1.5 flex items-center justify-between shadow-2xs gap-4 w-full">
+        <div className="flex items-center gap-2 text-xs font-bold text-[#92400e]">
+          <AlertCircle className="w-3.5 h-3.5 text-[#d97706] shrink-0" />
           <span>You have {signupRequestsCount} new signup requests from clients. Please review and activate their accounts.</span>
         </div>
         <button
           type="button"
-          className="bg-[#f59e0b] hover:bg-[#d97706] text-slate-900 text-xs font-bold px-4 py-1.5 rounded-[6px] shadow-2xs transition cursor-pointer whitespace-nowrap"
+          className="bg-[#f59e0b] hover:bg-[#d97706] text-slate-900 text-[11px] font-bold px-3 py-1 rounded-[4px] shadow-2xs transition cursor-pointer whitespace-nowrap"
           onClick={() => onNavigateToApprove?.()}
         >
           Review Requests
@@ -801,7 +849,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Client ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('client_id')}
                   </div>
                 </th>
 
@@ -811,7 +859,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Client Name</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('client_name')}
                   </div>
                 </th>
 
@@ -824,7 +872,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Contact Number</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('contact_number')}
                   </div>
                 </th>
 
@@ -834,7 +882,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Country</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('country')}
                   </div>
                 </th>
 
@@ -844,7 +892,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Joined On</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('joined_on')}
                   </div>
                 </th>
 
@@ -854,7 +902,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Last Updated</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('last_updated_date')}
                   </div>
                 </th>
 
@@ -864,7 +912,7 @@ export function ClientRecordsView({
                 >
                   <div className="flex items-center gap-1">
                     <span>Status</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    {renderSortIcon('status')}
                   </div>
                 </th>
 
@@ -912,27 +960,27 @@ export function ClientRecordsView({
                     </td>
 
                     {/* Client Name */}
-                    <td className="py-2.5 px-2.5 font-semibold text-slate-900 whitespace-nowrap max-w-[130px] truncate" title={rec.client_name}>
-                      {truncateString(rec.client_name, 14)}
+                    <td className="py-2.5 px-2.5 font-semibold text-slate-900 whitespace-nowrap">
+                      <TextWithTooltip text={rec.client_name} maxLen={14} className="font-semibold text-slate-900" />
                     </td>
 
                     {/* Business Name */}
-                    <td className="py-2.5 px-2.5 text-slate-700 font-medium whitespace-nowrap max-w-[130px] truncate" title={rec.company_name}>
-                      {truncateString(rec.company_name, 14)}
+                    <td className="py-2.5 px-2.5 text-slate-700 font-medium whitespace-nowrap">
+                      <TextWithTooltip text={rec.company_name} maxLen={14} className="text-slate-700 font-medium" />
                     </td>
 
                     {/* Email */}
-                    <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap max-w-[150px] truncate" title={rec.email}>
-                      {truncateString(rec.email, 15)}
+                    <td className="py-2.5 px-2.5 text-slate-600 whitespace-nowrap">
+                      <TextWithTooltip text={rec.email} maxLen={16} className="text-slate-600" />
                     </td>
 
                     {/* Contact Number */}
-                    <td className="py-2.5 px-2.5 text-slate-600 font-mono text-[11px] whitespace-nowrap max-w-[120px] truncate" title={rec.contact_number}>
-                      {truncateString(rec.contact_number, 14)}
+                    <td className="py-2.5 px-2.5 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                      <TextWithTooltip text={rec.contact_number} maxLen={14} className="text-slate-600 font-mono text-[11px]" />
                     </td>
 
                     {/* Country */}
-                    <td className="py-2.5 px-2.5 font-medium text-slate-700 whitespace-nowrap max-w-[125px] truncate" title={rec.country}>
+                    <td className="py-2.5 px-2.5 font-medium text-slate-700 whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5">
                         {getCountryFlagUrl(rec.country) ? (
                           <img
@@ -943,7 +991,7 @@ export function ClientRecordsView({
                         ) : (
                           <span className="text-[11px] leading-none shrink-0">🌐</span>
                         )}
-                        <span>{truncateString(rec.country, 13)}</span>
+                        <TextWithTooltip text={rec.country} maxLen={13} className="font-medium text-slate-700" />
                       </div>
                     </td>
 

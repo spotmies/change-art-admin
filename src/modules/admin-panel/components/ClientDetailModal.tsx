@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   Info,
   Tag,
-  Send,
+  Mail,
   Loader2,
   ChevronDown,
   Check,
@@ -20,16 +20,16 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '@modules/shared-ui';
 import type { IClient } from '@contracts';
-import { PaymentMode } from '@contracts';
+import type { PaymentMode } from '@contracts';
 import { getDateRangeFromPreset } from '@lib/utils';
 import {
-  useAdminClientPaymentMethods,
   useDeleteClient,
   useSendCcForm,
   useUpdateClient,
 } from '../hooks/use-admin-clients';
 import { useAdminJobCards } from '../hooks/use-admin-jobs';
 import type { UpdateClientBody } from '../services/admin.service';
+import { formatPaymentMode, formatPaymentTerms, parsePaymentDetails, PAYMENT_MODE_LABELS } from '../utils/payment-display';
 
 export type ClientModalMode = 'view' | 'edit';
 
@@ -155,10 +155,10 @@ function JobsRangeDropdown({ value, onChange }: JobsRangeDropdownProps) {
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="h-7 rounded-[6px] border border-blue-300 bg-white pl-2.5 pr-1.5 text-[11px] font-semibold text-slate-700 cursor-pointer shadow-2xs focus:outline-none flex items-center gap-1 shrink-0 whitespace-nowrap"
+        className="h-8 min-w-[130px] rounded-[6px] border border-blue-300 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs focus:outline-none flex items-center justify-between gap-2 shrink-0 whitespace-nowrap transition-colors"
       >
         <span>{value}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-blue-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3.5 h-3.5 text-[#2563eb] transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && pos
@@ -167,8 +167,8 @@ function JobsRangeDropdown({ value, onChange }: JobsRangeDropdownProps) {
               <div className="fixed inset-0 z-[59]" role="presentation" onClick={() => setOpen(false)} />
               <div
                 role="listbox"
-                className="fixed z-[60] rounded-[6px] border border-slate-200 bg-white shadow-xl py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100"
-                style={{ top: pos.top, left: pos.left, minWidth: pos.width }}
+                className="fixed z-[60] rounded-[6px] border border-blue-100 bg-white shadow-xl py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 min-w-[130px]"
+                style={{ top: pos.top, left: pos.left }}
               >
                 {JOBS_RANGE_OPTIONS.map((opt) => {
                   const active = opt === value;
@@ -200,18 +200,7 @@ function JobsRangeDropdown({ value, onChange }: JobsRangeDropdownProps) {
   );
 }
 
-const PAYMENT_OPTIONS: { value: PaymentMode; label: string }[] = [
-  { value: PaymentMode.CREDIT_CARD, label: 'Credit Card' },
-  { value: PaymentMode.CARD_ON_FILE, label: 'Card on File' },
-  { value: PaymentMode.ACH, label: 'ACH' },
-  { value: PaymentMode.PAYPAL, label: 'PayPal' },
-  { value: PaymentMode.CHECK, label: 'Check' },
-];
-
-function formatPaymentMode(mode: PaymentMode | null | string): string {
-  if (!mode) return '—';
-  return PAYMENT_OPTIONS.find((p) => p.value === mode)?.label ?? String(mode);
-}
+const PAYMENT_OPTIONS = PAYMENT_MODE_LABELS;
 
 const CURRENCY_NAMES: Record<string, string> = {
   USD: 'US Dollar', CAD: 'Canadian Dollar', GBP: 'British Pound', EUR: 'Euro',
@@ -273,6 +262,8 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [jobsRange, setJobsRange] = useState('Last 1 Month');
 
+
+
   const update = useUpdateClient();
   const remove = useDeleteClient();
   const sendCcForm = useSendCcForm();
@@ -304,9 +295,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
 
   const clientJobs = jobsData?.items ?? [];
 
-  const { data: paymentMethods, isLoading: isPaymentMethodsLoading } = useAdminClientPaymentMethods(
-    client?.id ?? null,
-  );
+
 
   // Filter jobs count dynamically based on date range dropdown
   const filteredJobsCount = useMemo(() => {
@@ -453,12 +442,19 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const displayId = client.client_id || '—';
   const displayCountry = client.country || '';
   const flagUrl = getCountryFlagUrl(displayCountry);
-  const { city, state, zip } = parseLocation(client.location);
+  // Prefer the dedicated city/state/zipcode columns; fall back to parsing the
+  // legacy free-text `location` string for older records created before those
+  // columns existed (migration 0020_client_signup_fields.sql).
+  const parsedLocation = parseLocation(client.location);
+  const city = client.city || parsedLocation.city;
+  const state = client.state || parsedLocation.state;
+  const zip = client.zipcode || parsedLocation.zip;
 
   const cardOnFile = client.card_on_file;
   const cardExpiry = cardOnFile
     ? `${String(cardOnFile.exp_month).padStart(2, '0')}/${String(cardOnFile.exp_year).slice(-2)}`
     : null;
+  const paymentDetailFields = parsePaymentDetails(client.payment_mode, client.payment_details);
 
   const approvalStatusLabel =
     client.approval_status === 'PENDING'
@@ -482,7 +478,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── MODAL HEADER ── */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+        <div className="px-6 py-3 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">Client Details</h2>
           <button
             type="button"
@@ -495,7 +491,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
         </div>
 
         {/* ── MODAL BODY (SCROLLABLE) ── */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+        <div className="px-6 pt-3 pb-6 overflow-y-auto space-y-6 flex-1 text-xs">
           {editing ? (
             /* EDIT FORM */
             <div className="space-y-4">
@@ -608,56 +604,45 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
 
                 <div className="flex-1 min-w-0 space-y-4">
                   {/* Upper Row: Client ID, Divider, Status, Accounting, Joined On, Record Created, Reset Password */}
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                    {/* Client ID */}
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-0.5">Client ID</span>
-                      <span className="text-2xl font-black text-[#e11d48] tracking-tight">{displayId}</span>
-                    </div>
+                  <div className="flex items-center justify-between gap-x-6 overflow-x-auto pb-1">
+                    <div className="grid grid-cols-[auto_1px_auto_auto_auto_auto] gap-x-6 gap-y-1 items-center min-w-0">
+                      {/* TOP LINE: LABELS */}
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Client ID</span>
+                      <div className="hidden sm:block w-[1px] h-7 bg-slate-200 row-span-2 self-center" />
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Status</span>
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Accounting</span>
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Joined On</span>
+                      <span className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Last Login</span>
 
-                    {/* Vertical Divider */}
-                    <div className="hidden sm:block w-[1px] h-10 bg-slate-200" />
-
-                    {/* Status */}
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1">Status</span>
-                      {client.is_active !== false ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-[6px] text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200/80">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-[6px] text-xs font-bold bg-rose-50 text-rose-500 border border-rose-200/80">
-                          Inactive
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Accounting */}
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1">Accounting</span>
-                      <span className="text-xs font-bold text-slate-700">
+                      {/* BOTTOM LINE: VALUES */}
+                      <span className="text-lg font-bold text-[#e11d48] font-mono tracking-tight leading-none whitespace-nowrap">{displayId}</span>
+                      {/* Column 2 divider handles vertical line */}
+                      <div>
+                        {client.is_active !== false ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-[6px] text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200/80">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-[6px] text-xs font-bold bg-rose-50 text-rose-500 border border-rose-200/80">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
                         {client.is_hotlisted ? 'Hotlisted' : client.cc_form_sent_at ? 'Updated CC Required' : '-'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{formatFullDate(client.date)}</span>
+                      <span className="text-xs font-bold text-slate-900 whitespace-nowrap">
+                        {formatFullDateTime(client.last_login_at ?? client.updated_at ?? client.created_at)}
                       </span>
                     </div>
 
-                    {/* Joined On (member-since date) */}
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1">Joined On</span>
-                      <span className="text-xs font-bold text-slate-900">{formatFullDate(client.date)}</span>
-                    </div>
-
-                    {/* Record Created */}
-                    <div>
-                      <span className="block text-[11px] font-semibold text-slate-500 mb-1">Record Created</span>
-                      <span className="text-xs font-bold text-slate-900">{formatFullDate(client.created_at)}</span>
-                    </div>
-
                     {/* Reset Password Button */}
-                    <div className="ml-auto">
+                    <div className="shrink-0">
                       <button
                         type="button"
                         onClick={handleResetPassword}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs font-semibold shadow-2xs cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs font-semibold shadow-2xs cursor-pointer whitespace-nowrap"
                       >
                         <Lock className="w-3.5 h-3.5 text-rose-500" />
                         <span>Reset Password</span>
@@ -683,39 +668,46 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                       </div>
                     </div>
 
-                    {/* Right Card: Total Jobs Given (REAL BACKEND DATA FETCHED VIA API) */}
-                    <div className="shrink-0 rounded-[6px] border border-blue-100 bg-[#f0f5ff] px-3 py-2.5 flex items-center gap-2.5 shadow-2xs">
-                      <div className="w-8 h-8 rounded-[6px] bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                        <Briefcase className="w-4 h-4" />
-                      </div>
-                      <div className="shrink-0">
-                        <span className="block text-[11px] font-semibold text-slate-700 leading-tight whitespace-nowrap">Total Jobs Given</span>
-                        {isJobsLoading ? (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
-                            <span className="text-xs text-blue-500 font-semibold">Loading...</span>
-                          </div>
-                        ) : (
-                          <span className="text-xl font-black text-blue-600 leading-none">{filteredJobsCount}</span>
-                        )}
+                    {/* Right Card: Total Jobs Given */}
+                    <div className="shrink-0 rounded-[8px] border border-blue-100 bg-[#f0f7ff] px-4 py-3 flex items-center gap-4 shadow-2xs">
+                      <div className="w-11 h-11 rounded-[8px] bg-blue-100/80 border border-blue-200/60 flex items-center justify-center text-blue-600 shrink-0">
+                        <Briefcase className="w-6 h-6 text-[#2563eb]" />
                       </div>
 
-                      <JobsRangeDropdown value={jobsRange} onChange={setJobsRange} />
-                      <button
-                        type="button"
-                        onClick={handleViewJobs}
-                        className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer whitespace-nowrap shrink-0"
-                      >
-                        <span>View Jobs</span>
-                        <span>→</span>
-                      </button>
+                      <div className="flex flex-col min-w-0">
+                        <span className="block text-[12px] font-bold text-slate-600 mb-1 leading-tight whitespace-nowrap">
+                          Total Jobs Given
+                        </span>
+
+                        <div className="flex items-center gap-3">
+                          {isJobsLoading ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                              <span className="text-xs text-blue-500 font-semibold">Loading...</span>
+                            </div>
+                          ) : (
+                            <span className="text-2xl font-black text-[#2563eb] leading-none">{filteredJobsCount}</span>
+                          )}
+
+                          <JobsRangeDropdown value={jobsRange} onChange={setJobsRange} />
+
+                          <button
+                            type="button"
+                            onClick={handleViewJobs}
+                            className="text-xs font-bold text-[#2563eb] hover:text-blue-700 flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0 ml-1 transition-colors hover:underline"
+                          >
+                            <span>View Jobs</span>
+                            <span className="text-sm font-bold">→</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* 2. SECTION 1: BUSINESS INFORMATION */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="space-y-3 pt-2 border-t border-slate-100">
                 <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                   <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
                     <Building2 className="w-3.5 h-3.5" />
@@ -723,26 +715,33 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   <span>Business Information</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-12 pt-1 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-12 text-xs pl-8">
                   {/* Left Column */}
                   <div className="space-y-2.5">
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Client Name</span>
+                      <span className="text-slate-900 font-medium">Client Name</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{clientName}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Business Name</span>
+                      <span className="text-slate-900 font-medium">Business Name</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{companyName}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Email</span>
+                      <span className="text-slate-900 font-medium">Business Email</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{client.email || '—'}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Phone Number</span>
+                      <span className="text-slate-900 font-medium">Login Email</span>
+                      <span className="font-semibold text-slate-900">:</span>
+                      <span className="font-semibold text-slate-900">
+                        {client.login_email || <span className="text-slate-400 font-medium italic">Not linked</span>}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
+                      <span className="text-slate-900 font-medium">Phone Number</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{client.contact_number || '—'}</span>
                     </div>
@@ -751,22 +750,22 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   {/* Right Column */}
                   <div className="space-y-2.5">
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Business Address</span>
+                      <span className="text-slate-900 font-medium">Business Address</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{client.address || '—'}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">City</span>
+                      <span className="text-slate-900 font-medium">City</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{city || '—'}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">State / Province</span>
+                      <span className="text-slate-900 font-medium">State / Province</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{state || '—'}</span>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2 items-center">
-                      <span className="text-slate-500 font-medium">Country</span>
+                      <span className="text-slate-900 font-medium">Country</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <div className="font-semibold text-slate-900 inline-flex items-center gap-1.5">
                         {flagUrl ? (
@@ -780,7 +779,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                       </div>
                     </div>
                     <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">ZIP / Postal Code</span>
+                      <span className="text-slate-900 font-medium">ZIP / Postal Code</span>
                       <span className="font-semibold text-slate-900">:</span>
                       <span className="font-semibold text-slate-900">{zip || '—'}</span>
                     </div>
@@ -799,88 +798,91 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start pt-1 text-xs">
                   <div className="grid grid-cols-[90px_12px_1fr] gap-x-2">
-                    <span className="text-slate-500 font-medium">Currency</span>
+                    <span className="text-slate-900 font-medium">Currency</span>
                     <span className="font-semibold text-slate-900">:</span>
                     <span className="font-semibold text-slate-900">{formatCurrency(client.currency)}</span>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
-                      <span className="text-slate-500 font-medium">Payment Mode</span>
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-[145px_16px_1fr] items-center">
+                      <span className="text-slate-900 font-medium">Payment Mode</span>
                       <span className="font-semibold text-slate-900">:</span>
-                      <span className="font-semibold text-slate-900">{formatPaymentMode(client.payment_mode)}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatPaymentMode(client.payment_mode)}
+                      </span>
                     </div>
                     {cardOnFile ? (
-                      <div className="p-2.5 rounded-lg border border-slate-200 bg-slate-50/60 space-y-1.5 text-[11px]">
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500 font-medium">Card Last Four Digits</span>
-                          <span className="font-semibold text-slate-800">: {cardOnFile.last4}</span>
+                      <div className="rounded-[8px] border border-slate-200/90 bg-white p-3 shadow-2xs space-y-2 text-xs w-full max-w-[280px]">
+                        <div className="grid grid-cols-[145px_16px_1fr] items-center">
+                          <span className="text-slate-700 font-medium">Card Last Four Digits</span>
+                          <span className="font-semibold text-slate-700">:</span>
+                          <span className="font-semibold text-slate-900">{cardOnFile.last4}</span>
                         </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-slate-500 font-medium">Card Expiry Date</span>
-                          <span className="font-semibold text-slate-800">: {cardExpiry}</span>
+                        <div className="grid grid-cols-[145px_16px_1fr] items-center">
+                          <span className="text-slate-700 font-medium">Card Expiry Date</span>
+                          <span className="font-semibold text-slate-700">:</span>
+                          <span className="font-semibold text-slate-900">{cardExpiry}</span>
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-[11px] text-slate-400">No card on file</div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-slate-500 font-medium">Payment Methods on File</span>
-                    {isPaymentMethodsLoading ? (
-                      <span className="text-[11px] text-slate-400">Loading…</span>
-                    ) : paymentMethods && paymentMethods.length > 0 ? (
-                      <div className="flex flex-col gap-1.5">
-                        {paymentMethods.map((pm) => (
-                          <div key={pm.id} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-800">
-                            <span>{formatPaymentMode(pm.type)}</span>
-                            {pm.is_default && (
-                              <span className="px-1.5 py-0.5 rounded-[4px] text-[9.5px] font-bold bg-rose-50 text-rose-600 border border-rose-200/80">
-                                Default
-                              </span>
-                            )}
+                    ) : paymentDetailFields.length > 0 ? (
+                      <div className="rounded-[8px] border border-slate-200/90 bg-white p-3 shadow-2xs space-y-2 text-xs w-full max-w-[280px]">
+                        {paymentDetailFields.map((f) => (
+                          <div key={f.label} className="grid grid-cols-[145px_16px_1fr] items-center">
+                            <span className="text-slate-700 font-medium">{f.label}</span>
+                            <span className="font-semibold text-slate-700">:</span>
+                            <span className="font-semibold text-slate-900">{f.value}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-slate-400">No payment methods on file</span>
+                      <div className="text-[11px] text-slate-400">No payment details on file</div>
                     )}
+                  </div>
+
+                  <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
+                    <span className="text-slate-900 font-medium">Payment Terms</span>
+                    <span className="font-semibold text-slate-900">:</span>
+                    <span className="font-semibold text-slate-900">{formatPaymentTerms(client.payment_terms)}</span>
                   </div>
                 </div>
               </div>
 
               {/* 4. SECTION 3: ACCOUNTING INFORMATION */}
-              <div className="pt-2 border-t border-slate-100">
-                <div className="rounded-[6px] border border-slate-200/90 bg-white p-3.5 shadow-2xs space-y-2.5">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                    </span>
-                    <span>Accounting Information</span>
-                  </div>
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                  </span>
+                  <span>Accounting Information</span>
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 font-medium">Accounting Status</span>
-                      <span className="font-semibold text-slate-900">:</span>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-bold border ${client.is_hotlisted
-                            ? 'bg-rose-50 text-rose-600 border-rose-200/80'
-                            : 'bg-emerald-50 text-emerald-600 border-emerald-200/80'
-                          }`}
-                      >
-                        {client.is_hotlisted ? 'Hotlisted' : 'Good Standing'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 font-medium">CC Form Sent</span>
-                      <span className="font-semibold text-slate-900">: {client.cc_form_sent_at ? formatFullDate(client.cc_form_sent_at) : 'Not sent'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 font-medium">Hotlisted Since</span>
-                      <span className="font-semibold text-slate-900">: {client.hotlisted_at ? formatFullDate(client.hotlisted_at) : '—'}</span>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs items-start pt-1">
+                  <div className="grid grid-cols-[120px_12px_1fr] gap-x-2 items-center">
+                    <span className="text-slate-900 font-medium">Accounting Status</span>
+                    <span className="font-semibold text-slate-900">:</span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-bold border w-fit ${
+                        client.is_hotlisted
+                          ? 'bg-rose-50 text-rose-600 border-rose-200/80'
+                          : 'bg-emerald-50 text-emerald-600 border-emerald-200/80'
+                      }`}
+                    >
+                      {client.is_hotlisted ? 'Hotlisted' : 'Good Standing'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
+                    <span className="text-slate-900 font-medium">CC Form Sent</span>
+                    <span className="font-semibold text-slate-900">:</span>
+                    <span className="font-semibold text-slate-900">
+                      {client.cc_form_sent_at ? formatFullDate(client.cc_form_sent_at) : 'Not sent'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
+                    <span className="text-slate-900 font-medium">Hotlisted Since</span>
+                    <span className="font-semibold text-slate-900">:</span>
+                    <span className="font-semibold text-slate-900">
+                      {client.hotlisted_at ? formatFullDate(client.hotlisted_at) : '—'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -892,31 +894,31 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   <div className="hidden md:block absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[1px] bg-slate-100 pointer-events-none" />
 
                   {/* Top Left: Default Instruction */}
-                  <div className="md:pr-6 pb-5 space-y-2.5">
+                  <div className="md:pr-6 pb-3 space-y-1.5">
                     <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                       <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
                         <FileText className="w-3.5 h-3.5" />
                       </span>
                       <span>Default Instruction</span>
                     </div>
-                    <div className="rounded-[6px] bg-[#f4f7fb] border border-slate-200/70 p-3.5 text-xs leading-relaxed text-slate-700">
+                    <div className="rounded-lg bg-[#f4f7fb] border border-slate-200/70 px-3.5 py-2 text-xs leading-snug text-slate-700">
                       {DEFAULT_INSTRUCTION_PLACEHOLDER}
                     </div>
                   </div>
 
                   {/* Top Right: Internal Notes */}
-                  <div className="md:pl-6 pb-5 space-y-2.5">
+                  <div className="md:pl-6 pb-3 space-y-1.5">
                     <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                       <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
                         <StickyNote className="w-3.5 h-3.5" />
                       </span>
                       <span>Internal Notes</span>
                     </div>
-                    <div className="rounded-[6px] bg-[#fffbeb] border border-[#fde68a] p-3.5 text-xs text-slate-800 space-y-3">
-                      <div className="space-y-1 leading-relaxed">
+                    <div className="rounded-lg bg-[#fff9eb] border border-[#fde68a] px-3.5 py-2 text-xs text-slate-800 space-y-1.5">
+                      <div className="leading-snug">
                         <p>{INTERNAL_NOTES_PLACEHOLDER}</p>
                       </div>
-                      <div className="text-[11px] text-slate-600 space-y-0.5 pt-1">
+                      <div className="text-[11px] text-slate-600 space-y-0.5 mt-1.5">
                         <div>Added by: <span className="font-semibold text-slate-900">{STAFF_NAME_PLACEHOLDER}</span></div>
                         <div>On: <span className="font-semibold text-slate-900">{formatFullDateTime(client.created_at)}</span></div>
                       </div>
@@ -998,9 +1000,9 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
             <button
               type="button"
               onClick={handleSendCcForm}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs shadow-2xs transition cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-[6px] border border-blue-200 bg-[#f0f7ff] hover:bg-blue-100/80 text-[#2563eb] font-semibold text-xs shadow-2xs transition cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5 text-purple-600" />
+              <Mail className="w-4 h-4 text-[#2563eb]" />
               <span>Send CC Form</span>
             </button>
           </div>

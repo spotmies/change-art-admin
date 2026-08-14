@@ -113,6 +113,12 @@ export enum PaymentMode {
   CHECK = 'CHECK',
 }
 
+export enum PaymentTerms {
+  NET_7 = 'NET_7',
+  NET_15 = 'NET_15',
+  NET_30 = 'NET_30',
+}
+
 export enum QCRejectionReason {
   COLOUR = 'COLOUR',
   ALIGNMENT = 'ALIGNMENT',
