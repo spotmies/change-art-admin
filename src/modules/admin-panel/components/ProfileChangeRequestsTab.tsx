@@ -213,9 +213,9 @@ export function ProfileChangeRequestsTab({ search: propSearch }: Props) {
               </div>
             </div>
           ) : null}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-slate-200/80 shadow-2xs">
             <table className="data-table">
-              <thead>
+              <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th>Client ID</th>
                   <th>Name</th>

@@ -55,7 +55,7 @@ export function AdminClientsPage() {
   }
 
   return (
-    <div className="w-full min-h-screen px-1 py-1">
+    <div className="w-full px-0.5 py-0">
       {/* Main Tab Content */}
       {tab === 'clients' && (
         <ClientRecordsView
@@ -66,46 +66,46 @@ export function AdminClientsPage() {
       )}
 
       {tab === 'approve' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-0">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Signup Requests</h1>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Client Signup Requests</h1>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">
                 Review, approve, or reject new self-registered client account applications.
               </p>
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3.5 py-2 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition cursor-pointer self-start sm:self-auto shrink-0"
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition cursor-pointer self-start sm:self-auto shrink-0"
               onClick={() => setTab('clients')}
             >
               ← Back to Clients Directory
             </button>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm">
             <ClientApproveTab />
           </div>
         </div>
       )}
 
       {tab === 'requests' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+        <div className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-0">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Profile Change Requests</h1>
-              <p className="text-xs text-slate-500 mt-1 font-medium">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Profile Change Requests</h1>
+              <p className="text-xs text-slate-500 mt-0.5 font-medium">
                 Review and approve profile information update requests submitted by clients.
               </p>
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3.5 py-2 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition cursor-pointer self-start sm:self-auto shrink-0"
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-white px-3.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs hover:bg-slate-50 transition cursor-pointer self-start sm:self-auto shrink-0"
               onClick={() => setTab('clients')}
             >
               ← Back to Clients Directory
             </button>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm">
             <ProfileChangeRequestsTab search="" />
           </div>
         </div>
