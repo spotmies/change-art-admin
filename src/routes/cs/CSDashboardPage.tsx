@@ -63,10 +63,6 @@ export function CSDashboardPage() {
   const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
 
-  const newRequests = useMemo(
-    () => allJobs.filter((j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j)),
-    [allJobs],
-  );
   const live = useMemo(() => allJobs.filter((j) => j.project === 'Live'), [allJobs]);
   const liveQuote = useMemo(() => allJobs.filter((j) => j.project === 'Live Quote'), [allJobs]);
   const quote = useMemo(() => allJobs.filter((j) => j.project === 'Quote'), [allJobs]);
@@ -76,11 +72,7 @@ export function CSDashboardPage() {
     () => allJobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)),
     [allJobs],
   );
-  const overdue = useMemo(() => allJobs.filter((j) => isJobEtaExpired(j)), [allJobs]);
-  const waitingClientReply = useMemo(
-    () => allJobs.filter((j) => j.status === 'Quote Submitted' || j.status === 'Quote Approved'),
-    [allJobs],
-  );
+  const missedDeadlines = useMemo(() => allJobs.filter((j) => isJobEtaExpired(j)).length, [allJobs]);
 
   const pills: PillItem[] = [
     { id: 'all', label: 'All', count: allJobs.length },
@@ -184,12 +176,12 @@ export function CSDashboardPage() {
   ];
 
   const overviewItems: OverviewItem[] = [
-    { id: 'new-requests', label: 'New Requests', value: newRequests.length, href: '/cs/new-jobs', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
+    { id: 'new-requests', label: 'New Requests', value: quote.length, href: '/cs/new-quotes', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
     { id: 'waiting-assignment', label: 'Waiting Assignment', value: live.length + liveQuote.length, href: '/cs/projects?project=Live', icon: <Briefcase className="w-3.5 h-3.5" />, accent: '#22c55e' },
-    { id: 'waiting-reply', label: 'Waiting Client Reply', value: waitingClientReply.length, href: '/cs/new-quotes', icon: <MessageSquareText className="w-3.5 h-3.5" />, accent: '#a855f7' },
+    { id: 'waiting-reply', label: 'Waiting Client Reply', value: quote.length, href: '/cs/new-quotes', icon: <MessageSquareText className="w-3.5 h-3.5" />, accent: '#a855f7' },
     { id: 'in-production', label: 'In Production', value: inProduction.length, href: '/cs/projects?filter=In+Production', icon: <Cog className="w-3.5 h-3.5" />, accent: '#f97316' },
     { id: 'ready-to-dispatch', label: 'Ready to Dispatch', value: readyToDispatch.length, href: '/cs/deliver', icon: <Send className="w-3.5 h-3.5" />, accent: '#14b8a6' },
-    { id: 'overdue', label: 'Overdue Jobs', value: overdue.length, tone: overdue.length > 0 ? 'danger' : 'default', href: '/cs/deliver', icon: <Clock className="w-3.5 h-3.5" /> },
+    { id: 'overdue', label: 'Overdue Jobs', value: missedDeadlines, tone: missedDeadlines > 0 ? 'danger' : 'default', href: '/cs/projects', icon: <Clock className="w-3.5 h-3.5" /> },
   ];
 
   const recentActivity: ActivityItem[] = useMemo(
@@ -203,7 +195,7 @@ export function CSDashboardPage() {
             id: job.id,
             icon,
             accent,
-            title: activityLabel(job.status),
+            title: job.status,
             subtitle: job.design,
             time: relativeTime(job.created),
           };
@@ -274,13 +266,6 @@ export function CSDashboardPage() {
       </div>
     </div>
   );
-}
-
-function activityLabel(status: string): string {
-  if (status === 'Quote Submitted') return 'Quote request received';
-  if (status === 'Order Placed') return 'New request received';
-  if (status === 'Dispatched') return 'Job dispatched to client';
-  return 'Job updated';
 }
 
 function activityIcon(status: string): { icon: ReactNode; accent: string } {

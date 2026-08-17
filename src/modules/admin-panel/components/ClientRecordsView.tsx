@@ -30,6 +30,7 @@ import {
   usePendingClients,
   useSendCcForm,
   useSetClientActive,
+  useSetClientAccountingStatus,
   useSetClientHotlisted,
 } from '../hooks/use-admin-clients';
 import { useProfileChangeRequests } from '../hooks/use-profile-change-requests';
@@ -380,6 +381,7 @@ export function ClientRecordsView({
   const sendCcForm = useSendCcForm();
   const setClientHotlisted = useSetClientHotlisted();
   const setClientActive = useSetClientActive();
+  const setAccountingStatus = useSetClientAccountingStatus();
 
   function handleToggleHotlist(rec: ClientDisplayRecord) {
     if (!rec.id) return;
@@ -409,7 +411,7 @@ export function ClientRecordsView({
     return apiItems.map((c, idx) => {
       const isHotlisted = c.is_hotlisted;
       const ccSent = !!c.cc_form_sent_at;
-      let accountingVal: ClientDisplayRecord['accounting'] = '-';
+      let accountingVal: ClientDisplayRecord['accounting'] = 'Others';
       if (isHotlisted) accountingVal = 'Hotlisted';
       else if (ccSent) accountingVal = 'Updated CC Required';
 
@@ -628,106 +630,193 @@ export function ClientRecordsView({
       {/* ── STAT CARDS ROW (8 CARDS) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 items-stretch">
         {/* Card 1: Total Clients */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setStatusFilter('all');
+            setAccountingFilter('all');
+          }}
+          title="Click to view all clients"
+          className="bg-white border border-slate-200/90 hover:border-slate-300 rounded-[4px] p-2.5 shadow-2xs hover:shadow-xs flex items-center gap-2.5 text-left cursor-pointer transition-all active:scale-[0.98]"
+        >
           <div className="w-9 h-9 rounded-[4px] bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
             <Users className="w-4.5 h-4.5 text-rose-500" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Total Clients</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Total Clients</span>
             <span className="text-[20px] font-extrabold text-rose-500 tracking-tight leading-none mt-0.5">{totalCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 2: Active Clients */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setStatusFilter('active');
+            setAccountingFilter('all');
+          }}
+          title="Click to filter by Active Clients"
+          className={cn(
+            'rounded-[4px] border p-2.5 shadow-2xs flex items-center gap-2.5 text-left cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all active:scale-[0.98]',
+            statusFilter === 'active' && accountingFilter === 'all'
+              ? 'bg-emerald-50/50 border-emerald-300 shadow-xs'
+              : 'bg-white border-slate-200/90',
+          )}
+        >
           <div className="w-9 h-9 rounded-[4px] bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
             <UserCheck className="w-4.5 h-4.5 text-emerald-500" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Active Clients</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Active Clients</span>
             <span className="text-[20px] font-extrabold text-emerald-500 tracking-tight leading-none mt-0.5">{activeCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 3: Inactive Clients */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setStatusFilter('inactive');
+            setAccountingFilter('all');
+          }}
+          title="Click to filter by Inactive Clients"
+          className={cn(
+            'rounded-[4px] border p-2.5 shadow-2xs flex items-center gap-2.5 text-left cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all active:scale-[0.98]',
+            statusFilter === 'inactive' && accountingFilter === 'all'
+              ? 'bg-amber-50/50 border-amber-300 shadow-xs'
+              : 'bg-white border-slate-200/90',
+          )}
+        >
           <div className="w-9 h-9 rounded-[4px] bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
             <UserX className="w-4.5 h-4.5 text-amber-500" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Inactive Clients</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Inactive Clients</span>
             <span className="text-[20px] font-extrabold text-amber-500 tracking-tight leading-none mt-0.5">{inactiveCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 4: Updated CC Required */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setAccountingFilter('updated_cc');
+            setStatusFilter('all');
+          }}
+          title="Click to filter by Updated CC Required"
+          className={cn(
+            'rounded-[4px] border p-2.5 shadow-2xs flex items-center gap-2.5 text-left cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all active:scale-[0.98]',
+            accountingFilter === 'updated_cc'
+              ? 'bg-purple-50/50 border-purple-300 shadow-xs'
+              : 'bg-white border-slate-200/90',
+          )}
+        >
           <div className="w-9 h-9 rounded-[4px] bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">
             <CreditCard className="w-4.5 h-4.5 text-purple-600" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Updated CC Required</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Updated CC Required</span>
             <span className="text-[20px] font-extrabold text-purple-600 tracking-tight leading-none mt-0.5">{updatedCcCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 5: Accounting - Hotlisted */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setAccountingFilter('hotlisted');
+            setStatusFilter('all');
+          }}
+          title="Click to filter by Accounting Hotlisted"
+          className={cn(
+            'rounded-[4px] border p-2.5 shadow-2xs flex items-center gap-2.5 text-left cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all active:scale-[0.98]',
+            accountingFilter === 'hotlisted'
+              ? 'bg-violet-50/50 border-violet-300 shadow-xs'
+              : 'bg-white border-slate-200/90',
+          )}
+        >
           <div className="w-9 h-9 rounded-[4px] bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
             <Ban className="w-4.5 h-4.5 text-violet-600" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Accounting - Hotlisted</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Accounting - Hotlisted</span>
             <span className="text-[20px] font-extrabold text-violet-600 tracking-tight leading-none mt-0.5">{hotlistedCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 6: Accounting - Others */}
-        <div className="bg-white rounded-[4px] border border-slate-200/90 p-2.5 shadow-2xs flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setAccountingFilter('others');
+            setStatusFilter('all');
+          }}
+          title="Click to filter by Accounting Others"
+          className={cn(
+            'rounded-[4px] border p-2.5 shadow-2xs flex items-center gap-2.5 text-left cursor-pointer hover:border-slate-300 hover:shadow-xs transition-all active:scale-[0.98]',
+            accountingFilter === 'others'
+              ? 'bg-sky-50/50 border-sky-300 shadow-xs'
+              : 'bg-white border-slate-200/90',
+          )}
+        >
           <div className="w-9 h-9 rounded-[4px] bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
             <MoreHorizontal className="w-4.5 h-4.5 text-sky-500" />
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="text-[10.5px] font-bold text-slate-700 leading-tight truncate">Accounting - Others</span>
+            <span className="text-[10.5px] font-bold text-slate-700 leading-[1.15] line-clamp-2">Accounting - Others</span>
             <span className="text-[20px] font-extrabold text-sky-500 tracking-tight leading-none mt-0.5">{othersCount}</span>
           </div>
-        </div>
+        </button>
 
         {/* Card 7: New Signup Requests (Featured Gold Card) */}
-        <div className="bg-[#fffbeb] rounded-[4px] border border-[#fde68a] p-2.5 shadow-2xs flex flex-col justify-between">
+        <div
+          onClick={() => onNavigateToApprove?.()}
+          title="Click to review pending signup requests"
+          className="bg-[#fffbeb] rounded-[4px] border border-[#fde68a] hover:border-amber-400 p-2.5 shadow-2xs flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+        >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-[4px] bg-amber-100/80 border border-amber-200 flex items-center justify-center shrink-0">
               <UserPlus className="w-4.5 h-4.5 text-amber-600" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10.5px] font-bold text-slate-800 leading-tight truncate">Signup Requests</span>
+              <span className="text-[10.5px] font-bold text-slate-800 leading-[1.15] line-clamp-2">Signup Requests</span>
               <span className="text-[20px] font-extrabold text-amber-600 tracking-tight leading-none mt-0.5">{signupRequestsCount}</span>
             </div>
           </div>
           <button
             type="button"
             className="w-full bg-[#f59e0b] hover:bg-[#d97706] text-slate-900 font-bold text-[10px] py-1 px-2 rounded-[4px] shadow-2xs mt-1.5 transition cursor-pointer flex items-center justify-center"
-            onClick={() => onNavigateToApprove?.()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToApprove?.();
+            }}
           >
             Approve
           </button>
         </div>
 
         {/* Card 8: Profile Modification Requests (Featured Emerald Card) */}
-        <div className="bg-[#f0fdf4] rounded-[4px] border border-[#bbf7d0] p-2.5 shadow-2xs flex flex-col justify-between">
+        <div
+          onClick={() => onNavigateToProfileRequests?.()}
+          title="Click to review profile modification requests"
+          className="bg-[#f0fdf4] rounded-[4px] border border-[#bbf7d0] hover:border-emerald-400 p-2.5 shadow-2xs flex flex-col justify-between cursor-pointer hover:shadow-md transition-all active:scale-[0.98]"
+        >
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-[4px] bg-emerald-100/80 border border-emerald-200 flex items-center justify-center shrink-0">
               <UserPlus className="w-4.5 h-4.5 text-emerald-600" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10.5px] font-bold text-slate-800 leading-tight truncate">Profile Requests</span>
+              <span className="text-[10.5px] font-bold text-slate-800 leading-[1.15] line-clamp-2">Profile Requests</span>
               <span className="text-[20px] font-extrabold text-emerald-600 tracking-tight leading-none mt-0.5">{pendingProfileRequestsCount}</span>
             </div>
           </div>
           <button
             type="button"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] py-1 px-2 rounded-[4px] shadow-2xs mt-1.5 transition cursor-pointer flex items-center justify-center"
-            onClick={() => onNavigateToProfileRequests?.()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToProfileRequests?.();
+            }}
           >
             Review
           </button>
@@ -1035,29 +1124,30 @@ export function ClientRecordsView({
                       )}
                     </td>
 
-                    {/* Accounting Badge */}
+                    {/* Accounting Dropdown */}
                     <td className="py-2.5 px-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      {rec.accounting === '-' ? (
-                        <span className="text-slate-400">-</span>
-                      ) : rec.accounting === 'Updated CC Required' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-[4px] text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
-                          Updated CC Required
-                        </span>
-                      ) : rec.accounting === 'Hotlisted' ? (
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10.5px] font-bold bg-rose-50 text-rose-600 border border-rose-200/80 hover:bg-rose-100 transition cursor-pointer"
-                          title="Click to remove hotlist status"
-                          onClick={() => handleToggleHotlist(rec)}
+                      <div className="relative inline-block">
+                        <select
+                          value={rec.rawClient?.is_hotlisted ? 'hotlisted' : rec.rawClient?.cc_form_sent_at ? 'send_cc_form' : 'others'}
+                          disabled={setAccountingStatus.isPending || setClientHotlisted.isPending || sendCcForm.isPending}
+                          onChange={(e) => {
+                            const val = e.target.value as 'hotlisted' | 'send_cc_form' | 'others';
+                            setAccountingStatus.mutate({ id: rec.id, status: val });
+                          }}
+                          className={`h-6 px-2 pr-6 rounded-[4px] text-[10.5px] font-bold border transition shadow-2xs appearance-none cursor-pointer focus:outline-none focus:ring-1 ${
+                            rec.rawClient?.is_hotlisted
+                              ? 'bg-rose-50 text-rose-600 border-rose-200 focus:ring-rose-400'
+                              : rec.rawClient?.cc_form_sent_at
+                              ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-400'
+                              : 'bg-emerald-50 text-emerald-600 border-emerald-200 focus:ring-emerald-400'
+                          }`}
                         >
-                          <Ban className="w-3 h-3 text-rose-600" />
-                          <span>Hotlisted</span>
-                        </button>
-                      ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-[4px] text-[10.5px] font-bold bg-blue-50 text-blue-600 border border-blue-200/80">
-                          Others
-                        </span>
-                      )}
+                          <option value="hotlisted" className="bg-white text-rose-600 font-semibold">Hotlisted</option>
+                          <option value="send_cc_form" className="bg-white text-purple-700 font-semibold">Send CC Form</option>
+                          <option value="others" className="bg-white text-slate-700 font-semibold">Others</option>
+                        </select>
+                        <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                      </div>
                     </td>
 
                     {/* Action Quick Button */}

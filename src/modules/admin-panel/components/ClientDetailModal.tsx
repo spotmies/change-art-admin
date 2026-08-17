@@ -15,6 +15,7 @@ import {
   Check,
   FileText,
   StickyNote,
+  Pencil,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -25,11 +26,14 @@ import { getDateRangeFromPreset } from '@lib/utils';
 import {
   useDeleteClient,
   useSendCcForm,
+  useSetClientAccountingStatus,
+  useSetClientHotlisted,
   useUpdateClient,
 } from '../hooks/use-admin-clients';
 import { useAdminJobCards } from '../hooks/use-admin-jobs';
 import type { UpdateClientBody } from '../services/admin.service';
 import { formatPaymentMode, formatPaymentTerms, parsePaymentDetails, PAYMENT_MODE_LABELS } from '../utils/payment-display';
+import { useSessionUser } from '../../auth/stores/auth-store';
 
 export type ClientModalMode = 'view' | 'edit';
 
@@ -45,7 +49,6 @@ const DEFAULT_INSTRUCTION_PLACEHOLDER =
 const INTERNAL_NOTES_PLACEHOLDER =
   'Client prefers email communication. High priority client — ensure quick turnaround.';
 const NOTES_PLACEHOLDER = 'Preferred contact via email.';
-const STAFF_NAME_PLACEHOLDER = 'Admin User';
 
 const COUNTRY_ISO_MAP: Record<string, string> = {
   'united states': 'us', 'usa': 'us', 'us': 'us',
@@ -200,6 +203,194 @@ function JobsRangeDropdown({ value, onChange }: JobsRangeDropdownProps) {
   );
 }
 
+interface DepartmentDropdownProps {
+  value: 'Artwork' | 'Digitizing';
+  onChange: (value: 'Artwork' | 'Digitizing') => void;
+}
+
+function DepartmentDropdown({ value, onChange }: DepartmentDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 120) });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    window.addEventListener('keydown', onEsc);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  const options: ('Artwork' | 'Digitizing')[] = ['Artwork', 'Digitizing'];
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="h-8 min-w-[120px] rounded-[3px] border border-slate-300 bg-white px-3 text-[12px] font-bold text-slate-900 hover:border-slate-400 hover:bg-slate-50 cursor-pointer shadow-2xs focus:outline-none flex items-center justify-between gap-2.5 shrink-0 whitespace-nowrap transition-all"
+      >
+        <span>{value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-150 ${open ? 'rotate-180 text-rose-600' : ''}`} />
+      </button>
+
+      {open && pos
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-[59]" role="presentation" onClick={() => setOpen(false)} />
+              <div
+                role="listbox"
+                className="fixed z-[60] rounded-[3px] border border-slate-200 bg-white shadow-xl py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 min-w-[120px]"
+                style={{ top: pos.top, left: pos.left }}
+              >
+                {options.map((opt) => {
+                  const active = opt === value;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        onChange(opt);
+                        setOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 text-[12px] text-left cursor-pointer transition-colors ${
+                        active ? 'bg-rose-50 text-rose-600 font-bold' : 'text-slate-700 font-semibold hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{opt}</span>
+                      {active && <Check className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+interface AccountingStatusDropdownProps {
+  value: 'hotlisted' | 'send_cc_form' | 'others';
+  onChange: (value: 'hotlisted' | 'send_cc_form' | 'others') => void;
+  disabled?: boolean;
+}
+
+function AccountingStatusDropdown({ value, onChange, disabled }: AccountingStatusDropdownProps) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 130) });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    window.addEventListener('keydown', onEsc);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  const labelMap: Record<'hotlisted' | 'send_cc_form' | 'others', string> = {
+    hotlisted: 'Hotlisted',
+    send_cc_form: 'Send CC Form',
+    others: 'Others',
+  };
+
+  const styleMap: Record<'hotlisted' | 'send_cc_form' | 'others', string> = {
+    hotlisted: 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100/70',
+    send_cc_form: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70',
+    others: 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100/70',
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className={`h-8 w-[150px] px-3 rounded-[6px] text-[11.5px] font-bold border transition shadow-2xs cursor-pointer flex items-center justify-between gap-2 shrink-0 ${styleMap[value]}`}
+      >
+        <span>{labelMap[value]}</span>
+        <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? 'rotate-180 text-slate-700' : 'text-slate-400'}`} />
+      </button>
+
+      {open && pos
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-[59]" role="presentation" onClick={() => setOpen(false)} />
+              <div
+                role="listbox"
+                className="fixed z-[60] rounded-[6px] border border-slate-200 bg-white shadow-xl py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 min-w-[130px]"
+                style={{ top: pos.top, left: pos.left }}
+              >
+                {(['hotlisted', 'send_cc_form', 'others'] as const).map((opt) => {
+                  const active = opt === value;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        onChange(opt);
+                        setOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 text-[11.5px] text-left cursor-pointer transition-colors ${
+                        active
+                          ? opt === 'hotlisted'
+                            ? 'bg-rose-50 text-rose-600 font-bold'
+                            : opt === 'send_cc_form'
+                            ? 'bg-purple-50 text-purple-700 font-bold'
+                            : 'bg-emerald-50 text-emerald-600 font-bold'
+                          : 'text-slate-700 font-semibold hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{labelMap[opt]}</span>
+                      {active && <Check className="w-3.5 h-3.5 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 const PAYMENT_OPTIONS = PAYMENT_MODE_LABELS;
 
 const CURRENCY_NAMES: Record<string, string> = {
@@ -211,7 +402,7 @@ const CURRENCY_NAMES: Record<string, string> = {
 function formatCurrency(code?: string | null): string {
   if (!code) return '—';
   const name = CURRENCY_NAMES[code.toUpperCase()];
-  return name ? `${code.toUpperCase()} - ${name}` : code.toUpperCase();
+  return name ? `${code.toUpperCase()} (${name})` : code.toUpperCase();
 }
 
 interface ClientDetailModalProps {
@@ -261,13 +452,125 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [jobsRange, setJobsRange] = useState('Last 1 Month');
+  const [defaultDepartment, setDefaultDepartment] = useState<'Artwork' | 'Digitizing'>('Artwork');
 
 
 
   const update = useUpdateClient();
   const remove = useDeleteClient();
   const sendCcForm = useSendCcForm();
+  const setClientHotlisted = useSetClientHotlisted();
+  const setAccountingStatus = useSetClientAccountingStatus();
   const saving = update.isPending;
+
+  const sessionUser = useSessionUser();
+  const currentUserName = sessionUser?.name || 'Admin User';
+  const lastUpdatedBy = client?.updated_by_name || currentUserName;
+
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [accountingNotes, setAccountingNotes] = useState(client?.accounting_notes ?? '');
+
+  useEffect(() => {
+    setAccountingNotes(client?.accounting_notes ?? '');
+  }, [client?.accounting_notes]);
+
+  function handleSaveAccountingNotes() {
+    if (!client) return;
+    const valToSave = accountingNotes.trim() || null;
+    const currentVal = client.accounting_notes ?? null;
+    if (valToSave !== currentVal) {
+      update.mutate({ id: client.id, body: { accounting_notes: valToSave, updated_by_name: currentUserName } });
+    }
+    setIsEditingNotes(false);
+  }
+
+  function handleCancelNotes() {
+    setAccountingNotes(client?.accounting_notes ?? '');
+    setIsEditingNotes(false);
+  }
+
+  const [isEditingInstruction, setIsEditingInstruction] = useState(false);
+  const [defaultInstruction, setDefaultInstruction] = useState(client?.default_instruction ?? '');
+
+  const [isEditingInternalNotes, setIsEditingInternalNotes] = useState(false);
+  const [internalNotesText, setInternalNotesText] = useState(client?.internal_notes ?? '');
+
+  useEffect(() => {
+    setDefaultInstruction(client?.default_instruction ?? '');
+    setInternalNotesText(client?.internal_notes ?? '');
+  }, [client?.default_instruction, client?.internal_notes]);
+
+  function handleSaveDefaultInstruction() {
+    if (!client) return;
+    const valToSave = defaultInstruction.trim() || null;
+    const currentVal = client.default_instruction ?? null;
+    if (valToSave !== currentVal) {
+      update.mutate({ id: client.id, body: { default_instruction: valToSave, updated_by_name: currentUserName } });
+    }
+    setIsEditingInstruction(false);
+  }
+
+  function handleCancelDefaultInstruction() {
+    setDefaultInstruction(client?.default_instruction ?? '');
+    setIsEditingInstruction(false);
+  }
+
+  function handleSaveInternalNotes() {
+    if (!client) return;
+    const valToSave = internalNotesText.trim() || null;
+    const currentVal = client.internal_notes ?? null;
+    if (valToSave !== currentVal) {
+      update.mutate({ id: client.id, body: { internal_notes: valToSave, updated_by_name: currentUserName } });
+    }
+    setIsEditingInternalNotes(false);
+  }
+
+  function handleCancelInternalNotes() {
+    setInternalNotesText(client?.internal_notes ?? '');
+    setIsEditingInternalNotes(false);
+  }
+
+  const [isEditingAdditionalInfo, setIsEditingAdditionalInfo] = useState(false);
+  const [additionalNotes, setAdditionalNotes] = useState(client?.notes ?? '');
+  const [additionalInfoText, setAdditionalInfoText] = useState(client?.additional_info ?? '');
+
+  useEffect(() => {
+    setAdditionalNotes(client?.notes ?? '');
+    setAdditionalInfoText(client?.additional_info ?? '');
+  }, [client?.notes, client?.additional_info]);
+
+  function handleSaveAdditionalInfo() {
+    if (!client) return;
+    const notesVal = additionalNotes.trim() || null;
+    const infoVal = additionalInfoText.trim() || null;
+    update.mutate({
+      id: client.id,
+      body: {
+        notes: notesVal,
+        additional_info: infoVal,
+        updated_by_name: currentUserName,
+      },
+    });
+    setIsEditingAdditionalInfo(false);
+  }
+
+  function handleCancelAdditionalInfo() {
+    setAdditionalNotes(client?.notes ?? '');
+    setAdditionalInfoText(client?.additional_info ?? '');
+    setIsEditingAdditionalInfo(false);
+  }
+
+  let currentAccountingStatus = 'others';
+  if (client?.is_hotlisted) {
+    currentAccountingStatus = 'hotlisted';
+  } else if (client?.cc_form_sent_at) {
+    currentAccountingStatus = 'send_cc_form';
+  }
+
+  function handleAccountingStatusChange(selectedVal: 'hotlisted' | 'send_cc_form' | 'others') {
+    if (!client) return;
+    setAccountingStatus.mutate({ id: client.id, status: selectedVal });
+  }
 
   function handleViewJobs() {
     if (!client) return;
@@ -455,15 +758,8 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
     ? `${String(cardOnFile.exp_month).padStart(2, '0')}/${String(cardOnFile.exp_year).slice(-2)}`
     : null;
   const paymentDetailFields = parsePaymentDetails(client.payment_mode, client.payment_details);
-
-  const approvalStatusLabel =
-    client.approval_status === 'PENDING'
-      ? 'Pending Approval'
-      : client.approval_status === 'REJECTED'
-        ? 'Rejected'
-        : client.approval_status === 'APPROVED'
-          ? 'Approved'
-          : 'Manually Created';
+  const isCreatedByUser = Boolean(client.approval_status || client.terms_accepted_at);
+  const createdByLabel = isCreatedByUser ? 'Portal Login' : 'Admin User';
 
   const modal = (
     <div
@@ -494,7 +790,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
         <div className="px-6 pt-3 pb-6 overflow-y-auto space-y-6 flex-1 text-xs">
           {editing ? (
             /* EDIT FORM */
-            <div className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
               <h3 className="text-sm font-bold text-slate-900 pb-2 border-b border-slate-100">Edit Client Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -591,7 +887,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   {error}
                 </div>
               )}
-            </div>
+            </form>
           ) : (
             /* VIEW MODE */
             <>
@@ -651,20 +947,20 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   </div>
 
                   {/* Lower Row: 2 Separate Cards (Left: Account Overview, Right: Total Jobs) */}
-                  <div className="flex flex-wrap items-stretch gap-4">
+                  <div className="flex flex-nowrap items-stretch gap-4 overflow-x-auto pb-0.5">
                     {/* Left Card: Account Overview */}
-                    <div className="flex-1 min-w-0 rounded-[6px] border border-slate-200/90 bg-white p-3.5 flex items-center justify-between gap-x-3 shadow-2xs">
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-medium text-slate-400 mb-0.5 whitespace-nowrap">Contact Person</span>
-                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{client.contact_name || '—'}</span>
+                    <div className="flex-1 min-w-0 rounded-[4px] border border-slate-200/90 bg-white px-4 py-3 flex items-center justify-between gap-x-6 shrink-0 shadow-2xs">
+                      <div className="min-w-0 flex flex-col justify-center">
+                        <span className="block text-[11px] font-semibold text-slate-400 mb-1 whitespace-nowrap">Client Group</span>
+                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap h-8 flex items-center">Standard</span>
                       </div>
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-medium text-slate-400 mb-0.5 whitespace-nowrap">Signup Source</span>
-                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{approvalStatusLabel}</span>
+                      <div className="min-w-0 flex flex-col justify-center">
+                        <span className="block text-[11px] font-semibold text-slate-400 mb-1 whitespace-nowrap">Default Department</span>
+                        <DepartmentDropdown value={defaultDepartment} onChange={setDefaultDepartment} />
                       </div>
-                      <div className="min-w-0">
-                        <span className="block text-[11px] font-medium text-slate-400 mb-0.5 whitespace-nowrap">Portal Login</span>
-                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{client.user_id ? 'Linked' : 'Not linked'}</span>
+                      <div className="min-w-0 flex flex-col justify-center">
+                        <span className="block text-[11px] font-semibold text-slate-400 mb-1 whitespace-nowrap">Created By</span>
+                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap h-8 flex items-center">{createdByLabel}</span>
                       </div>
                     </div>
 
@@ -856,33 +1152,77 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   <span>Accounting Information</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs items-start pt-1">
-                  <div className="grid grid-cols-[120px_12px_1fr] gap-x-2 items-center">
-                    <span className="text-slate-900 font-medium">Accounting Status</span>
+                <div className="flex flex-wrap md:flex-nowrap items-center gap-6 text-xs pt-1 w-full">
+                  {/* Left Box: Accounting Status */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-900 font-medium whitespace-nowrap">Accounting Status</span>
                     <span className="font-semibold text-slate-900">:</span>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-[6px] text-[11px] font-bold border w-fit ${
-                        client.is_hotlisted
-                          ? 'bg-rose-50 text-rose-600 border-rose-200/80'
-                          : 'bg-emerald-50 text-emerald-600 border-emerald-200/80'
-                      }`}
-                    >
-                      {client.is_hotlisted ? 'Hotlisted' : 'Good Standing'}
-                    </span>
+                    <AccountingStatusDropdown
+                      value={currentAccountingStatus as 'hotlisted' | 'send_cc_form' | 'others'}
+                      disabled={setAccountingStatus.isPending || setClientHotlisted.isPending || sendCcForm.isPending}
+                      onChange={handleAccountingStatusChange}
+                    />
                   </div>
-                  <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
-                    <span className="text-slate-900 font-medium">CC Form Sent</span>
+
+                  {/* Right Box: Accounting Notes */}
+                  <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+                    <span className="text-slate-900 font-medium whitespace-nowrap">Accounting Notes</span>
                     <span className="font-semibold text-slate-900">:</span>
-                    <span className="font-semibold text-slate-900">
-                      {client.cc_form_sent_at ? formatFullDate(client.cc_form_sent_at) : 'Not sent'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-[100px_12px_1fr] gap-x-2">
-                    <span className="text-slate-900 font-medium">Hotlisted Since</span>
-                    <span className="font-semibold text-slate-900">:</span>
-                    <span className="font-semibold text-slate-900">
-                      {client.hotlisted_at ? formatFullDate(client.hotlisted_at) : '—'}
-                    </span>
+
+                    {isEditingNotes ? (
+                      <div className="flex items-start gap-1.5 flex-1 min-h-[46px] max-h-[70px]">
+                        <textarea
+                          placeholder="Add accounting notes..."
+                          value={accountingNotes}
+                          onChange={(e) => setAccountingNotes(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveAccountingNotes();
+                            } else if (e.key === 'Escape') {
+                              handleCancelNotes();
+                            }
+                          }}
+                          autoFocus
+                          rows={2}
+                          className="flex-1 min-h-[46px] max-h-[70px] bg-white border border-slate-300 rounded-[6px] px-3 py-1.5 text-[11.5px] text-slate-800 font-medium placeholder-slate-400 outline-none focus:border-[#e11d48] focus:ring-1 focus:ring-[#e11d48]/30 transition shadow-2xs resize-none overflow-y-auto leading-snug"
+                        />
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleSaveAccountingNotes}
+                            title="Save note"
+                            className="w-6 h-6 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelNotes}
+                            title="Cancel"
+                            className="w-6 h-6 rounded-[5px] bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <div className="flex-1 min-h-[36px] max-h-[46px] bg-slate-50 border border-slate-200/90 rounded-[6px] px-3 py-1.5 text-[11.5px] font-medium shadow-2xs overflow-y-auto">
+                          <div className={client?.accounting_notes ? 'text-slate-800 break-words whitespace-pre-wrap leading-snug' : 'text-slate-400 italic font-normal'}>
+                            {client?.accounting_notes || 'No accounting notes added.'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingNotes(true)}
+                          title="Edit note"
+                          className="w-7 h-7 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-300 text-slate-500 hover:text-[#e11d48] flex items-center justify-center transition cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -894,35 +1234,139 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                   <div className="hidden md:block absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[1px] bg-slate-100 pointer-events-none" />
 
                   {/* Top Left: Default Instruction */}
-                  <div className="md:pr-6 pb-3 space-y-1.5">
-                    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                      <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
-                        <FileText className="w-3.5 h-3.5" />
-                      </span>
-                      <span>Default Instruction</span>
+                  <div className="md:pr-6 pb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                        <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                          <FileText className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Default Instruction</span>
+                      </div>
+                      {!isEditingInstruction && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingInstruction(true)}
+                          title="Edit instruction"
+                          className="w-7 h-7 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 hover:text-[#e11d48] flex items-center justify-center transition cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <div className="rounded-lg bg-[#f4f7fb] border border-slate-200/70 px-3.5 py-2 text-xs leading-snug text-slate-700">
-                      {DEFAULT_INSTRUCTION_PLACEHOLDER}
-                    </div>
+
+                    {isEditingInstruction ? (
+                      <div className="space-y-2">
+                        <textarea
+                          placeholder="Add default instruction..."
+                          value={defaultInstruction}
+                          onChange={(e) => setDefaultInstruction(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveDefaultInstruction();
+                            } else if (e.key === 'Escape') {
+                              handleCancelDefaultInstruction();
+                            }
+                          }}
+                          autoFocus
+                          rows={3}
+                          className="w-full min-h-[64px] max-h-[100px] bg-white border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 font-medium placeholder-slate-400 outline-none focus:border-[#e11d48] focus:ring-1 focus:ring-[#e11d48]/30 transition shadow-2xs resize-none overflow-y-auto leading-relaxed"
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={handleCancelDefaultInstruction}
+                            className="px-2.5 py-1 rounded-[5px] bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancel</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveDefaultInstruction}
+                            className="px-2.5 py-1 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition cursor-pointer shadow-2xs flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-[#f4f7fb] border border-slate-200/90 px-3.5 py-2.5 text-xs leading-relaxed text-slate-700 min-h-[64px] max-h-[78px] overflow-y-auto shadow-2xs break-words whitespace-pre-wrap">
+                        {client.default_instruction || DEFAULT_INSTRUCTION_PLACEHOLDER}
+                      </div>
+                    )}
                   </div>
 
                   {/* Top Right: Internal Notes */}
-                  <div className="md:pl-6 pb-3 space-y-1.5">
-                    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                      <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
-                        <StickyNote className="w-3.5 h-3.5" />
-                      </span>
-                      <span>Internal Notes</span>
-                    </div>
-                    <div className="rounded-lg bg-[#fff9eb] border border-[#fde68a] px-3.5 py-2 text-xs text-slate-800 space-y-1.5">
-                      <div className="leading-snug">
-                        <p>{INTERNAL_NOTES_PLACEHOLDER}</p>
+                  <div className="md:pl-6 pb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                        <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                          <StickyNote className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Internal Notes</span>
                       </div>
-                      <div className="text-[11px] text-slate-600 space-y-0.5 mt-1.5">
-                        <div>Added by: <span className="font-semibold text-slate-900">{STAFF_NAME_PLACEHOLDER}</span></div>
-                        <div>On: <span className="font-semibold text-slate-900">{formatFullDateTime(client.created_at)}</span></div>
-                      </div>
+                      {!isEditingInternalNotes && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingInternalNotes(true)}
+                          title="Edit internal notes"
+                          className="w-7 h-7 rounded-[6px] border border-amber-200/90 bg-white hover:bg-amber-50 text-slate-500 hover:text-[#e11d48] flex items-center justify-center transition cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
+
+                    {isEditingInternalNotes ? (
+                      <div className="space-y-2">
+                        <textarea
+                          placeholder="Add internal notes..."
+                          value={internalNotesText}
+                          onChange={(e) => setInternalNotesText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSaveInternalNotes();
+                            } else if (e.key === 'Escape') {
+                              handleCancelInternalNotes();
+                            }
+                          }}
+                          autoFocus
+                          rows={3}
+                          className="w-full min-h-[64px] max-h-[100px] bg-white border border-amber-300 rounded-lg p-2.5 text-xs text-slate-800 font-medium placeholder-slate-400 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition shadow-2xs resize-none overflow-y-auto leading-relaxed"
+                        />
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={handleCancelInternalNotes}
+                            className="px-2.5 py-1 rounded-[5px] bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancel</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveInternalNotes}
+                            className="px-2.5 py-1 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition cursor-pointer shadow-2xs flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg bg-[#fff9eb] border border-[#fde68a] px-3.5 py-2.5 text-xs text-slate-800 space-y-1.5 shadow-2xs min-h-[64px] max-h-[78px] overflow-y-auto">
+                        <div className="leading-relaxed break-words whitespace-pre-wrap">
+                          <p>{client.internal_notes || INTERNAL_NOTES_PLACEHOLDER}</p>
+                        </div>
+                        <div className="text-[11px] text-slate-600 space-y-0.5 mt-1.5 border-t border-amber-200/50 pt-1.5">
+                          <div>Added by: <span className="font-semibold text-slate-900">{lastUpdatedBy}</span></div>
+                          <div>On: <span className="font-semibold text-slate-900">{formatFullDateTime(client.updated_at || client.created_at)}</span></div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Horizontal Center Divider Line */}
@@ -930,31 +1374,96 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
 
                   {/* Bottom Left: Additional Information */}
                   <div className="md:pr-6 pt-5 space-y-2.5">
-                    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                      <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
-                        <Info className="w-3.5 h-3.5" />
-                      </span>
-                      <span>Additional Information</span>
-                    </div>
-                    <div className="space-y-2 text-xs pt-0.5">
-                      <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                        <span className="text-slate-500 font-medium">Notes</span>
-                        <span className="font-semibold text-slate-900">:</span>
-                        <span className="font-semibold text-slate-900">{NOTES_PLACEHOLDER}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                        <span className="w-6 h-6 rounded-[5px] bg-[#fff0f3] border border-[#e11d48]/40 text-[#e11d48] flex items-center justify-center shrink-0 shadow-2xs">
+                          <Info className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Additional Information</span>
                       </div>
-                      <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                        <span className="text-slate-500 font-medium">Additional Info</span>
-                        <span className="font-semibold text-slate-900">:</span>
-                        <span className="font-semibold text-slate-900">—</span>
-                      </div>
-                      {client.approval_status === 'REJECTED' && client.rejection_note && (
-                        <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
-                          <span className="text-slate-500 font-medium">Rejection Note</span>
-                          <span className="font-semibold text-slate-900">:</span>
-                          <span className="font-semibold text-slate-900">{client.rejection_note}</span>
-                        </div>
+                      {!isEditingAdditionalInfo && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingAdditionalInfo(true)}
+                          title="Edit additional information"
+                          className="w-7 h-7 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 hover:text-[#e11d48] flex items-center justify-center transition cursor-pointer shrink-0 shadow-2xs"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
+
+                    {isEditingAdditionalInfo ? (
+                      <div className="space-y-2 pt-1">
+                        <div>
+                          <label className="text-[11px] font-medium text-slate-500 block mb-0.5">Notes</label>
+                          <input
+                            type="text"
+                            placeholder="Enter notes..."
+                            value={additionalNotes}
+                            onChange={(e) => setAdditionalNotes(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveAdditionalInfo();
+                              if (e.key === 'Escape') handleCancelAdditionalInfo();
+                            }}
+                            autoFocus
+                            className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#e11d48] shadow-2xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-medium text-slate-500 block mb-0.5">Additional Info</label>
+                          <input
+                            type="text"
+                            placeholder="Enter additional info..."
+                            value={additionalInfoText}
+                            onChange={(e) => setAdditionalInfoText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveAdditionalInfo();
+                              if (e.key === 'Escape') handleCancelAdditionalInfo();
+                            }}
+                            className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#e11d48] shadow-2xs"
+                          />
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleCancelAdditionalInfo}
+                            className="px-2.5 py-1 rounded-[5px] bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancel</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveAdditionalInfo}
+                            className="px-2.5 py-1 rounded-[5px] bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold transition cursor-pointer shadow-2xs flex items-center gap-1"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>Save</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 text-xs pt-0.5">
+                        <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
+                          <span className="text-slate-500 font-medium">Notes</span>
+                          <span className="font-semibold text-slate-900">:</span>
+                          <span className="font-semibold text-slate-900">{client.notes || NOTES_PLACEHOLDER}</span>
+                        </div>
+                        <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
+                          <span className="text-slate-500 font-medium">Additional Info</span>
+                          <span className="font-semibold text-slate-900">:</span>
+                          <span className="font-semibold text-slate-900">{client.additional_info || '—'}</span>
+                        </div>
+                        {client.approval_status === 'REJECTED' && client.rejection_note && (
+                          <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
+                            <span className="text-slate-500 font-medium">Rejection Note</span>
+                            <span className="font-semibold text-slate-900">:</span>
+                            <span className="font-semibold text-slate-900">{client.rejection_note}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom Right: System Information */}
@@ -974,7 +1483,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                       <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
                         <span className="text-slate-500 font-medium">Created By</span>
                         <span className="font-semibold text-slate-900">:</span>
-                        <span className="font-semibold text-slate-900">{STAFF_NAME_PLACEHOLDER}</span>
+                        <span className="font-semibold text-slate-900">{createdByLabel}</span>
                       </div>
                       <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
                         <span className="text-slate-500 font-medium">Last Updated On</span>
@@ -984,7 +1493,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                       <div className="grid grid-cols-[128px_12px_1fr] gap-x-2">
                         <span className="text-slate-500 font-medium">Last Updated By</span>
                         <span className="font-semibold text-slate-900">:</span>
-                        <span className="font-semibold text-slate-900">{STAFF_NAME_PLACEHOLDER}</span>
+                        <span className="font-semibold text-slate-900">{lastUpdatedBy}</span>
                       </div>
                     </div>
                   </div>

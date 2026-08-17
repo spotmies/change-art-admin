@@ -118,32 +118,12 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
  * Dispatch / Email Inbox). Pass `enabled = false` for non-CS roles.
  */
 export function useCsNavBadges(enabled: boolean): Record<string, number> {
-  const { data } = useQuery({
-    queryKey: queryKeys.jobs.list(CS_BADGE_FILTERS),
-    queryFn: () => adminService.getJobCards(CS_BADGE_FILTERS),
-    staleTime: 30 * 1000,
-    enabled,
-  });
-
-  const pendingEmailCount = usePendingEmailCount(enabled);
-
+  const adminBadges = useAdminNavBadges(enabled);
   return useMemo(() => {
-    const badges: Record<string, number> = {};
-    if (data) {
-      const jobs = data.items.map((card) => adaptJobCard(card, new Map(), new Map()));
-      badges['new-jobs'] = jobs.filter(
-        (j) => j.stage !== 'quote' && j.stage !== 'delivered' && j.status !== 'Ready to Deliver' && !isJobEtaExpired(j),
-      ).length;
-      badges['live'] = jobs.filter((j) => j.project === 'Live').length;
-      badges['live-quote'] = jobs.filter((j) => j.project === 'Live Quote').length;
-      badges['quote'] = jobs.filter((j) => j.project === 'Quote').length;
-      badges['amend'] = jobs.filter((j) => j.project === 'Amend').length;
-      badges['in-production'] = jobs.filter((j) => j.status === 'In Production').length;
-      badges['deliver'] = jobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)).length;
-    }
-    if (pendingEmailCount !== undefined) {
-      badges['email-inbox'] = pendingEmailCount;
-    }
-    return badges;
-  }, [data, pendingEmailCount]);
+    return {
+      ...adminBadges,
+      quote: adminBadges['new-quotes'] ?? 0,
+      amend: adminBadges['amendments'] ?? 0,
+    };
+  }, [adminBadges]);
 }

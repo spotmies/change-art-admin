@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { queryKeys } from '@lib/query-keys';
 import { toastApiError, ValidationError } from '@lib/toast-error';
 import { truncate } from '@lib/utils';
+import type { IClient } from '@contracts';
 import { adminService, type ClientFilters, type CreateClientBody, type CreateJobCardBody, type ProvisionClientBody, type SendQuotePriceBody, type UpdateClientBody } from '../services/admin.service';
 
 export function useAdminClients(filters: ClientFilters = {}) {
@@ -72,12 +73,45 @@ export function useProvisionClient() {
   });
 }
 
+function updateClientInCache(qc: ReturnType<typeof useQueryClient>, updatedClient: IClient) {
+  if (!updatedClient || !updatedClient.id) return;
+
+  qc.setQueryData(queryKeys.clients.byId(updatedClient.id), (old: IClient | undefined) => {
+    return old ? { ...old, ...updatedClient } : updatedClient;
+  });
+
+  qc.setQueriesData<any>(
+    { queryKey: ['clients'] },
+    (oldData: any) => {
+      if (!oldData) return oldData;
+
+      if (oldData && Array.isArray(oldData.items)) {
+        return {
+          ...oldData,
+          items: oldData.items.map((c: IClient) =>
+            c.id === updatedClient.id ? { ...c, ...updatedClient } : c
+          ),
+        };
+      }
+
+      if (Array.isArray(oldData)) {
+        return oldData.map((c: IClient) =>
+          c.id === updatedClient.id ? { ...c, ...updatedClient } : c
+        );
+      }
+
+      return oldData;
+    },
+  );
+}
+
 export function useUpdateClient() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateClientBody }) =>
       adminService.updateClient(id, body),
     onSuccess: (client) => {
+      updateClientInCache(qc, client);
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
       toast.success(`${client.company_name ?? client.client_name} updated`);
     },
@@ -92,6 +126,7 @@ export function useSetClientHotlisted() {
     mutationFn: ({ id, hotlisted }: { id: string; hotlisted: boolean }) =>
       adminService.setClientHotlisted(id, hotlisted),
     onSuccess: (client) => {
+      updateClientInCache(qc, client);
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
       toast.success(
         client.is_hotlisted
@@ -110,6 +145,7 @@ export function useSetClientActive() {
     mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
       adminService.setClientActive(id, is_active),
     onSuccess: (client) => {
+      updateClientInCache(qc, client);
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
       toast.success(
         client.is_active
@@ -127,10 +163,59 @@ export function useSendCcForm() {
   return useMutation({
     mutationFn: (id: string) => adminService.sendCcForm(id),
     onSuccess: (client) => {
+      updateClientInCache(qc, client);
       void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
       toast.success(`CC Form sent to ${client.company_name ?? client.client_name}`);
     },
     onError: (err) => toastApiError(err),
+  });
+}
+
+/** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
+export function useSetClientAccountingStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'hotlisted' | 'send_cc_form' | 'others' }) =>
+      adminService.setClientAccountingStatus(id, status),
+    onMutate: async ({ id, status }) => {
+      await qc.cancelQueries({ queryKey: ['clients'] });
+
+      const isHotlisted = status === 'hotlisted';
+      const isCcForm = status === 'send_cc_form';
+
+      qc.setQueriesData<any>(
+        { queryKey: ['clients'] },
+        (oldData: any) => {
+          if (!oldData) return oldData;
+          const patch = (c: IClient) => {
+            if (c.id !== id) return c;
+            return {
+              ...c,
+              is_hotlisted: isHotlisted,
+              hotlisted_at: isHotlisted ? new Date().toISOString() : null,
+              cc_form_sent_at: isCcForm ? new Date().toISOString() : null,
+            };
+          };
+
+          if (oldData && Array.isArray(oldData.items)) {
+            return { ...oldData, items: oldData.items.map(patch) };
+          }
+          if (Array.isArray(oldData)) {
+            return oldData.map(patch);
+          }
+          return oldData;
+        },
+      );
+    },
+    onSuccess: (client) => {
+      updateClientInCache(qc, client);
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toast.success(`Accounting status updated for ${client.company_name ?? client.client_name}`);
+    },
+    onError: (err) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients.all() });
+      toastApiError(err);
+    },
   });
 }
 

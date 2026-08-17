@@ -116,6 +116,12 @@ export interface IClient {
   /** When an admin last sent the Credit Card Authorization Form to this client. */
   cc_form_sent_at: IsoDateTime | null;
   cc_form_sent_by: string | null;
+  accounting_notes: string | null;
+  default_instruction?: string | null;
+  internal_notes?: string | null;
+  notes?: string | null;
+  additional_info?: string | null;
+  updated_by_name?: string | null;
   last_login_at?: IsoDateTime | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;

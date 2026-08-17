@@ -108,6 +108,12 @@ export interface UpdateClientBody {
   email?: string;
   location?: string;
   payment_mode?: string;
+  accounting_notes?: string | null;
+  default_instruction?: string | null;
+  internal_notes?: string | null;
+  notes?: string | null;
+  additional_info?: string | null;
+  updated_by_name?: string | null;
 }
 
 /**
@@ -316,6 +322,13 @@ export const adminService = {
   /** Admin: send the Credit Card Authorization Form to a client's registered email. */
   sendCcForm(id: string): Promise<IClient> {
     return apiClient.post<IClient, Record<string, never>>(`/api/v1/clients/${id}/send-cc-form`, {});
+  },
+
+  /** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
+  setClientAccountingStatus(id: string, status: 'hotlisted' | 'send_cc_form' | 'others'): Promise<IClient> {
+    return apiClient.patch<IClient, { status: string }>(`/api/v1/clients/${id}/accounting-status`, {
+      status,
+    });
   },
 
   /** List self-registered clients awaiting admin approval. */
