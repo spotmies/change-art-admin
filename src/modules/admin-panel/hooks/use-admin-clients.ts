@@ -171,6 +171,17 @@ export function useSendCcForm() {
   });
 }
 
+/** Admin: send a password reset email to a client's registered login email. */
+export function useResetClientPassword() {
+  return useMutation({
+    mutationFn: (id: string) => adminService.resetClientPassword(id),
+    onSuccess: (client) => {
+      toast.success(`Password reset email sent to ${client.login_email ?? 'client'}`);
+    },
+    onError: (err) => toastApiError(err),
+  });
+}
+
 /** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
 export function useSetClientAccountingStatus() {
   const qc = useQueryClient();

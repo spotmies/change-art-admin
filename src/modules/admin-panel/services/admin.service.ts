@@ -324,6 +324,10 @@ export const adminService = {
     return apiClient.post<IClient, Record<string, never>>(`/api/v1/clients/${id}/send-cc-form`, {});
   },
 
+  resetClientPassword(id: string): Promise<IClient> {
+    return apiClient.post<IClient, Record<string, never>>(`/api/v1/clients/${id}/reset-password`, {});
+  },
+
   /** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
   setClientAccountingStatus(id: string, status: 'hotlisted' | 'send_cc_form' | 'others'): Promise<IClient> {
     return apiClient.patch<IClient, { status: string }>(`/api/v1/clients/${id}/accounting-status`, {

@@ -25,6 +25,7 @@ import type { PaymentMode } from '@contracts';
 import { getDateRangeFromPreset } from '@lib/utils';
 import {
   useDeleteClient,
+  useResetClientPassword,
   useSendCcForm,
   useSetClientAccountingStatus,
   useSetClientHotlisted,
@@ -459,6 +460,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const update = useUpdateClient();
   const remove = useDeleteClient();
   const sendCcForm = useSendCcForm();
+  const resetClientPassword = useResetClientPassword();
   const setClientHotlisted = useSetClientHotlisted();
   const setAccountingStatus = useSetClientAccountingStatus();
   const saving = update.isPending;
@@ -663,7 +665,11 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   }
 
   function handleResetPassword() {
-    toast.success(`Password reset email sent to ${client?.email ?? 'client'}`);
+    if (client?.id) {
+      resetClientPassword.mutate(client.id);
+    } else {
+      toast.success(`Password reset email sent to ${client?.email ?? 'client'}`);
+    }
   }
 
   function handleNameChange(raw: string) {
@@ -938,10 +944,11 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                       <button
                         type="button"
                         onClick={handleResetPassword}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs font-semibold shadow-2xs cursor-pointer whitespace-nowrap"
+                        disabled={resetClientPassword.isPending}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[6px] border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition text-xs font-semibold shadow-2xs cursor-pointer whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <Lock className="w-3.5 h-3.5 text-rose-500" />
-                        <span>Reset Password</span>
+                        <span>{resetClientPassword.isPending ? 'Sending…' : 'Reset Password'}</span>
                       </button>
                     </div>
                   </div>
