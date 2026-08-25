@@ -1,8 +1,8 @@
 
 import { useMemo, useState, useCallback, useEffect, type ReactNode } from 'react';
+import toast from 'react-hot-toast';
 import { JobDetailModal } from './JobDetailModal';
 import { EditJobModal } from './EditJobModal';
-import { AssignJobModal } from './AssignJobModal';
 import { RowActionsMenu, type RowAction } from './RowActionsMenu';
 import {
   Inbox,
@@ -53,6 +53,20 @@ import { CompletedStatusBadge, isCompletedStatus } from './StatusBadge';
 function statusDisplay(status: string): string {
   if (status === 'Pending Client Confirm' || status === 'Quote Approved') return 'Awaiting Client';
   return status;
+}
+
+/**
+ * True when a job is JOB_PLACED with no acknowledgement sent yet — the TL
+ * hasn't set an ETA, so dispatching isn't possible and there's no ETA to show.
+ * Checks the raw backend enum + acknowledgedAt directly (mirroring the
+ * adapter's own derivation in job-view.ts) instead of comparing against the
+ * 'Pending' display label, which is just one UI rendering of that state and
+ * can drift out of sync with the label used elsewhere. Falls back to the
+ * label for mock fixtures that don't carry rawStatus.
+ */
+function isPendingAcknowledgement(j: Job): boolean {
+  if (j.rawStatus) return j.rawStatus.toUpperCase() === 'JOB_PLACED' && !j.acknowledgedAt;
+  return j.status === 'Pending';
 }
 
 type JobView = 'grid' | 'list' | 'table';
@@ -138,26 +152,27 @@ export function JobTable({
   const { data: detailJob } = useAdminJobById(viewJobId ?? '');
   const viewJob = detailJob ?? listJob;
   const [editJob, setEditJob] = useState<Job | null>(null);
-  const [assignJob, setAssignJob] = useState<Job | null>(null);
 
   const handleOpen = useCallback((job: Job) => {
     if (onOpen) { onOpen(job); } else { setViewJobId(job.uuid ?? job.id); }
   }, [onOpen]);
 
   const builtInActions = useCallback((j: Job) => {
-    const showAssign = !j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote';
     const isReadyToDispatch = j.status === 'Ready to Deliver';
     const needsQuotePrep = j.status === 'Quote Submitted';
     const isQuoteAwaiting = j.project === 'Quote' || j.status === 'Quote Submitted';
-    const showDispatch = j.stage !== 'delivered' && j.stage !== 'quote';
+    // 'Pending' = JOB_PLACED with no acknowledgement sent yet — the TL hasn't
+    // set an ETA, so dispatching isn't possible until that happens.
+    const needsAcknowledgement = isPendingAcknowledgement(j);
+    const showDispatch = j.stage !== 'delivered' && j.stage !== 'quote' && !needsAcknowledgement;
     return (
       <div className="job-actions flex gap-1 flex-nowrap flex-1 items-center w-full min-w-0" onClick={(e) => e.stopPropagation()}>
-        {showAssign ? (
+        {(!j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote') ? (
           <button
             type="button"
             className="btn font-bold flex-1 min-w-0"
             style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
-            onClick={() => setAssignJob(j)}
+            onClick={() => toast('Assigning jobs is coming soon in Phase 2.')}
             aria-label={`Assign ${j.id}`}
           >
             Assign
@@ -183,6 +198,17 @@ export function JobTable({
             aria-label={`Upload files for ${j.id}`}
           >
             Upload
+          </button>
+        ) : null}
+        {needsAcknowledgement ? (
+          <button
+            type="button"
+            className="btn font-bold flex-1 min-w-0"
+            style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
+            onClick={() => setViewJobId(j.uuid ?? j.id)}
+            aria-label={`Send ETA for ${j.id}`}
+          >
+            Send ETA
           </button>
         ) : null}
         {showDispatch ? (
@@ -220,7 +246,7 @@ export function JobTable({
               { key: 'view', label: 'View Details', icon: <Eye className="w-3.5 h-3.5" aria-hidden />, onSelect: () => setViewJobId(j.uuid ?? j.id) },
               { key: 'edit', label: 'Edit Job', icon: <Pencil className="w-3.5 h-3.5" aria-hidden />, onSelect: () => setEditJob(j) },
               ...(!j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote'
-                ? [{ key: 'assign', label: 'Assign Job', icon: <UserPlus className="w-3.5 h-3.5" aria-hidden />, onSelect: () => setAssignJob(j) }]
+                ? [{ key: 'assign', label: 'Assign Job', icon: <UserPlus className="w-3.5 h-3.5" aria-hidden />, onSelect: () => toast('Assigning jobs is coming soon in Phase 2.') }]
                 : []),
             ] satisfies RowAction[]
           }
@@ -338,7 +364,6 @@ export function JobTable({
           job={viewJob}
           onClose={() => setViewJobId(null)}
           onEdit={(j) => { setViewJobId(null); setEditJob(j); }}
-          onAssign={(j) => { setViewJobId(null); setAssignJob(j); }}
           quoteView={quoteView}
         />
       )}
@@ -347,12 +372,6 @@ export function JobTable({
           job={editJob}
           onClose={() => setEditJob(null)}
           onBack={(j) => { setEditJob(null); setViewJobId(j.uuid ?? j.id); }}
-        />
-      )}
-      {assignJob && (
-        <AssignJobModal
-          job={assignJob}
-          onClose={() => setAssignJob(null)}
         />
       )}
     </div>
@@ -752,6 +771,10 @@ function GridView({
 
           const isInProd = j.status === 'In Production' || j.stage === 'junior' || j.stage === 'senior' || j.stage === 'qc' || j.stage === 'sewout';
           const isReadyDispatch = j.status === 'Ready to Deliver';
+          // 'Pending' = JOB_PLACED with no acknowledgement sent yet — no ETA
+          // exists to dispatch against, so show "Send ETA" instead. Excludes
+          // stage 'quote', where 'Pending' means something else (see below).
+          const needsAcknowledgement = isPendingAcknowledgement(j) && j.stage !== 'quote';
           const titleClass = getTitleColorClass(j.project, j.status);
           const stageCardClass = getStageCardClass(j.project, j.status);
           const progress = stageProgressPercent(j.stage, j.status);
@@ -839,10 +862,12 @@ function GridView({
                   </div>
                 ) : null}
 
-                {/* ETA Completion Time row */}
-                {isInProd && (
+                {/* ETA Completion Time row — only once acknowledgement has actually
+                    been sent; before that there's no real ETA to show (see
+                    needsAcknowledgement above). */}
+                {isInProd && !needsAcknowledgement && (j.effectiveAcknowledgedAt ?? j.acknowledgedAt) && (
                   <div className="text-[9.5px] font-semibold text-slate-700 dark:text-slate-300 -mt-0.5">
-                    ETA: <span className="font-bold text-slate-900 dark:text-slate-100">{formatEtaDisplay(j.effectiveAcknowledgedAt ?? j.acknowledgedAt ?? j.created, j.etaHours)}</span>
+                    ETA: <span className="font-bold text-slate-900 dark:text-slate-100">{formatEtaDisplay(j.effectiveAcknowledgedAt ?? j.acknowledgedAt, j.etaHours)}</span>
                   </div>
                 )}
 
@@ -885,13 +910,12 @@ function GridView({
               <div className="jc-footer flex gap-1 p-1.5 border-t border-[rgba(0,0,0,0.06)]" onClick={(e) => e.stopPropagation()}>
                 {renderRowActions ? renderRowActions(j) : (
                   <div className="flex gap-1 flex-nowrap flex-1 items-center w-full min-w-0">
-                    {/* Assign button */}
                     {!j.assignedTo && j.stage !== 'delivered' && j.stage !== 'quote' && (
                       <button
                         type="button"
                         className="btn font-bold flex-1 min-w-0"
                         style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
-                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                        onClick={(e) => { e.stopPropagation(); toast('Assigning jobs is coming soon in Phase 2.'); }}
                       >
                         Assign
                       </button>
@@ -907,8 +931,19 @@ function GridView({
                         Upload
                       </button>
                     )}
+                    {/* Send ETA button — job placed, awaiting acknowledgement */}
+                    {needsAcknowledgement && (
+                      <button
+                        type="button"
+                        className="btn font-bold flex-1 min-w-0"
+                        style={{ fontSize: 10, padding: '0 5px', background: stageAccentColor(j.project), color: '#fff', border: 'none', height: 25, borderRadius: 5, whiteSpace: 'nowrap' }}
+                        onClick={(e) => { e.stopPropagation(); onOpen?.(j); }}
+                      >
+                        Send ETA
+                      </button>
+                    )}
                     {/* Dispatch button */}
-                    {j.stage !== 'delivered' && j.stage !== 'quote' && (
+                    {j.stage !== 'delivered' && j.stage !== 'quote' && !needsAcknowledgement && (
                       <button
                         type="button"
                         className={isReadyDispatch ? 'btn font-bold flex-1 min-w-0' : 'btn btn-outline font-bold flex-1 min-w-0'}

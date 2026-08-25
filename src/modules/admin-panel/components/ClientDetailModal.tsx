@@ -34,6 +34,8 @@ import {
 import { useAdminJobCards } from '../hooks/use-admin-jobs';
 import type { UpdateClientBody } from '../services/admin.service';
 import { formatPaymentMode, formatPaymentTerms, parsePaymentDetails, PAYMENT_MODE_LABELS } from '../utils/payment-display';
+import { useClientGroups } from '../hooks/use-client-groups';
+import type { IClientGroup } from '@contracts';
 import { useSessionUser } from '../../auth/stores/auth-store';
 
 export type ClientModalMode = 'view' | 'edit';
@@ -463,6 +465,7 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   const resetClientPassword = useResetClientPassword();
   const setClientHotlisted = useSetClientHotlisted();
   const setAccountingStatus = useSetClientAccountingStatus();
+  const { data: clientGroupsData } = useClientGroups();
   const saving = update.isPending;
 
   const sessionUser = useSessionUser();
@@ -959,7 +962,14 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                     <div className="flex-1 min-w-0 rounded-[4px] border border-slate-200/90 bg-white px-4 py-3 flex items-center justify-between gap-x-6 shrink-0 shadow-2xs">
                       <div className="min-w-0 flex flex-col justify-center">
                         <span className="block text-[11px] font-semibold text-slate-400 mb-1 whitespace-nowrap">Client Group</span>
-                        <span className="text-xs font-bold text-slate-900 whitespace-nowrap h-8 flex items-center">Standard</span>
+                        <ClientGroupDropdown
+                          value={client.client_group?.id || client.client_group_id || null}
+                          groupName={client.client_group?.name || 'Standard'}
+                          groups={clientGroupsData || []}
+                          onChange={(groupId) => {
+                            update.mutate({ id: client.id, body: { client_group_id: groupId, updated_by_name: currentUserName } });
+                          }}
+                        />
                       </div>
                       <div className="min-w-0 flex flex-col justify-center">
                         <span className="block text-[11px] font-semibold text-slate-400 mb-1 whitespace-nowrap">Default Department</span>
@@ -1583,4 +1593,101 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   );
 
   return createPortal(modal, document.body);
+}
+
+function ClientGroupDropdown({
+  value,
+  groupName,
+  groups,
+  onChange,
+}: {
+  value: string | null;
+  groupName: string;
+  groups: IClientGroup[];
+  onChange: (groupId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    window.addEventListener('keydown', onEsc);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('keydown', onEsc);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 font-bold text-xs shadow-2xs transition cursor-pointer h-8 whitespace-nowrap"
+      >
+        <span>{groupName}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? 'rotate-180 text-rose-500' : ''}`} />
+      </button>
+
+      {open && pos
+        ? createPortal(
+            <>
+              <div className="fixed inset-0 z-[59]" onClick={() => setOpen(false)} />
+              <div
+                className="fixed z-[60] rounded-[6px] border border-slate-200 bg-white shadow-xl py-1 overflow-hidden min-w-[140px] max-h-48 overflow-y-auto text-xs"
+                style={{ top: pos.top, left: pos.left }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-1.5 text-left font-medium hover:bg-slate-50 cursor-pointer ${
+                    !value ? 'text-rose-600 font-bold bg-rose-50' : 'text-slate-700'
+                  }`}
+                >
+                  <span>Standard</span>
+                  {!value && <Check className="w-3.5 h-3.5 text-rose-600" />}
+                </button>
+
+                {groups.map((g) => {
+                  const active = g.id === value;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => {
+                        onChange(g.id);
+                        setOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 text-left font-medium hover:bg-slate-50 cursor-pointer ${
+                        active ? 'text-rose-600 font-bold bg-rose-50' : 'text-slate-700'
+                      }`}
+                    >
+                      <span>{g.name}</span>
+                      {active && <Check className="w-3.5 h-3.5 text-rose-600" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+    </>
+  );
 }

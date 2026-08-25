@@ -95,7 +95,10 @@ export const NAV_CONFIG = {
       {
         id: 'records',
         label: 'Records',
-        items: [{ id: 'clients', label: 'Client Records', to: '/cs/clients', icon: Users }],
+        items: [
+          { id: 'clients', label: 'Client Records', to: '/cs/clients', icon: Users },
+          { id: 'client-groups', label: 'Client Groups', to: '/cs/client-groups', icon: Users },
+        ],
       },
     ],
     mobile: [
@@ -248,7 +251,10 @@ export const NAV_CONFIG = {
       {
         id: 'records',
         label: 'Records',
-        items: [{ id: 'clients', label: 'Client Records', to: '/admin/clients', icon: Users }],
+        items: [
+          { id: 'clients', label: 'Client Records', to: '/admin/clients', icon: Users },
+          { id: 'client-groups', label: 'Client Groups', to: '/admin/client-groups', icon: Users },
+        ],
       },
     ],
     mobile: [

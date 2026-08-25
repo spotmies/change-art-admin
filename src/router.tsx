@@ -65,6 +65,8 @@ import { AdminCreateQuotePage } from '@routes/admin/AdminCreateQuotePage';
 import { AdminPlaceOrderPage } from '@routes/admin/AdminPlaceOrderPage';
 import { AdminSettingsPage } from '@routes/admin/AdminSettingsPage';
 import { AdminProfilePage } from '@routes/admin/AdminProfilePage';
+import { ClientGroupsListPage } from '@routes/admin/ClientGroupsListPage';
+import { CreateClientGroupPage } from '@routes/admin/CreateClientGroupPage';
 
 import { NotFoundPage } from '@routes/NotFoundPage';
 
@@ -112,6 +114,8 @@ export const router = createBrowserRouter([
       { path: 'create-quote', element: <CSCreateQuotePage /> },
       { path: 'place-order', element: <CSPlaceOrderPage /> },
       { path: 'clients', element: <CSClientsPage /> },
+      { path: 'client-groups', element: <ClientGroupsListPage /> },
+      { path: 'client-groups/create', element: <CreateClientGroupPage /> },
       { path: 'email-inbox', element: <CSEmailInboxPage /> },
       { path: 'profile', element: <CSProfilePage /> },
     ],
@@ -223,6 +227,8 @@ export const router = createBrowserRouter([
       { path: 'new-jobs', element: <AdminNewJobsPage /> },
       { path: 'new-quotes', element: <AdminNewQuotesPage /> },
       { path: 'clients', element: <AdminClientsPage /> },
+      { path: 'client-groups', element: <ClientGroupsListPage /> },
+      { path: 'client-groups/create', element: <CreateClientGroupPage /> },
       { path: 'users', element: <AdminUsersPage /> },
       { path: 'email-inbox', element: <AdminEmailInboxPage /> },
       { path: 'notifications', element: <AdminNotificationsPage /> },

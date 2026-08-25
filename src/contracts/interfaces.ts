@@ -69,6 +69,25 @@ export interface IUser {
   updated_at: IsoDateTime;
 }
 
+export interface IClientGroup {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  show_in_quote: boolean;
+  show_in_orders: boolean;
+  created_by: string | null;
+  client_count?: number;
+  clients?: Array<{
+    id: string;
+    client_id: string;
+    client_name: string;
+    email: string;
+  }>;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
+
 export interface IClient {
   id: string;
   tenant_id: string;
@@ -102,6 +121,8 @@ export interface IClient {
   terms_accepted_at: IsoDateTime | null;
   card_on_file: ICardOnFile | null;
   user_id: string | null;
+  client_group_id?: string | null;
+  client_group?: IClientGroup | null;
   approval_status: ClientApprovalStatus | null;
   /** Admin's stated reason when approval_status = REJECTED. Null otherwise. */
   rejection_note: string | null;
@@ -247,6 +268,12 @@ export interface IJobCard {
      *  payment_mode is CREDIT_CARD/CARD_ON_FILE it contains an `expiry` field (MM/YY). */
     payment_mode: string | null;
     payment_details: string | null;
+    client_group?: {
+      id: string;
+      name: string;
+      show_in_quote: boolean;
+      show_in_orders: boolean;
+    } | null;
   } | null;
   /** Notes from the latest client modification request — populated when status is MODIFICATION_REQUESTED. */
   modification_notes?: string | null;

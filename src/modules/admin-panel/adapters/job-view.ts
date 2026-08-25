@@ -222,5 +222,6 @@ export function adaptJobCard(
     clientPaymentMode: card.client_info?.payment_mode ?? null,
     clientPreviousOrderAt: card.client_previous_order_at ?? null,
     isRead: card.is_read ?? false,
+    clientGroup: card.client_info?.client_group ?? null,
   };
 }

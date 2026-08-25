@@ -953,6 +953,7 @@ export function ClientRecordsView({
                 </th>
 
                 <th className="py-2.5 px-2.5 font-bold whitespace-nowrap">Business Name</th>
+                <th className="py-2.5 px-2.5 font-bold whitespace-nowrap">Client Group</th>
                 <th className="py-2.5 px-2.5 font-bold whitespace-nowrap">Email</th>
 
                 <th
@@ -1056,6 +1057,17 @@ export function ClientRecordsView({
                     {/* Business Name */}
                     <td className="py-2.5 px-2.5 text-slate-700 font-medium whitespace-nowrap">
                       <TextWithTooltip text={rec.company_name} maxLen={14} className="text-slate-700 font-medium" />
+                    </td>
+
+                    {/* Client Group */}
+                    <td className="py-2.5 px-2.5 whitespace-nowrap">
+                      {rec.rawClient?.client_group?.name ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
+                          {rec.rawClient.client_group.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs font-normal">Standard</span>
+                      )}
                     </td>
 
                     {/* Email */}

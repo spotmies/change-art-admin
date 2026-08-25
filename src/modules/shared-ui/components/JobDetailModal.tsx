@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { JobQueriesSection } from './JobQueriesSection';
-import { X, Download, Send, AlertCircle, Timer, CheckCircle2, FileText, Upload, Loader2, Copy, CreditCard, ShoppingCart, Pencil, Search, Play, Info, DollarSign, Check, Clock, Image as ImageIcon } from 'lucide-react';
+import { X, Download, Send, AlertCircle, Timer, CheckCircle2, FileText, Upload, Loader2, Copy, CreditCard, ShoppingCart, Pencil, Search, Play, Info, DollarSign, Check, Clock, Image as ImageIcon, User, Building2 } from 'lucide-react';
 import { getCardExpiryStatus } from '@lib/card-expiry';
 import { MarkCompleteModal } from '@modules/cs-panel/components/MarkCompleteModal';
 import { useQueryClient } from '@tanstack/react-query';
@@ -259,7 +259,7 @@ function OrderSummaryRow({
   );
 }
 
-export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAssign, quoteView: _quoteView = false }: JobDetailModalProps) {
+export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteView: _quoteView = false }: JobDetailModalProps) {
   const user = useSessionUser();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'requirements' | 'messages' | 'notes' | 'activity'>('overview');
@@ -968,9 +968,16 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAss
               },
               {
                 label: 'IN PRODUCTION',
-                date: (job.effectiveAcknowledgedAt || job.acknowledgedAt)
-                  ? formatDateTime((job.effectiveAcknowledgedAt ?? job.acknowledgedAt)!)
-                  : job.etaHours ? `ETA: ${job.etaHours}h` : 'Upcoming',
+                // Only show an estimate once acknowledgement has actually been sent —
+                // the countdown starts from that moment, not from when the ETA was
+                // merely quoted/locked. Before that, there's nothing to show yet.
+                date: (() => {
+                  const ackAt = job.effectiveAcknowledgedAt ?? job.acknowledgedAt;
+                  if (!ackAt) return 'Upcoming';
+                  if (!job.etaHours) return formatDateTime(ackAt);
+                  const estCompletionIso = computeExpectedCompletionIso(ackAt, job.etaHours);
+                  return estCompletionIso ? formatDateTime(estCompletionIso) : formatDateTime(ackAt);
+                })(),
                 icon: Pencil,
                 circleBg: 'bg-[#eff6ff]',
                 iconColor: 'text-[#2563eb]',
@@ -1024,7 +1031,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAss
 
           {/* Sub-Header Metadata Strip */}
           <div className="mt-1.5 px-1 py-1 flex items-center justify-between gap-4 text-[10px]">
-            {/* Left Group: JOB ID + Status Tag */}
+            {/* Left Group: JOB ID + Status Tag + Client Group */}
             <div className="flex items-center gap-2.5">
               <span className="font-bold text-purple-700 text-[11px] tracking-wide">
                 JOB ID : {job.ref || job.id}
@@ -1032,6 +1039,19 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAss
               <span className="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200/80 text-purple-700 font-bold text-[9.5px] tracking-wider uppercase shadow-xs">
                 {displayStatus(job.status)}
               </span>
+              {(() => {
+                const clientGroup = job.clientGroup || (job as any).client_info?.client_group;
+                const isQuote = Boolean(_quoteView || job.stage === 'quote' || job.rawStatus?.includes('QUOTE'));
+                const shouldShowGroup = clientGroup && (
+                  isQuote ? clientGroup.show_in_quote : clientGroup.show_in_orders
+                );
+                if (!shouldShowGroup) return null;
+                return (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 font-bold text-[10px] tracking-wide shadow-2xs flex items-center gap-1">
+                    <span className="text-blue-500 font-medium">Client Group:</span> {clientGroup.name}
+                  </span>
+                );
+              })()}
             </div>
 
             {/* Right Group: Service Type | Priority | Due Date */}
@@ -1503,6 +1523,15 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAss
                     )}
                     <JobDetailInfoRow icon={AssignedUserIcon} label="Assigned To" value={job.assignedTo || 'Not Assigned'} />
                     <JobDetailInfoRow icon={CreatedCalendarIcon} label="Created Date" value={formatDate(job.created) || 'Jul 08, 2026'} />
+                    {(() => {
+                      const cg = job.clientGroup || (job as any).client_info?.client_group;
+                      const isQuote = Boolean(_quoteView || job.stage === 'quote' || job.rawStatus?.includes('QUOTE'));
+                      const shouldShow = cg && (isQuote ? cg.show_in_quote : cg.show_in_orders);
+                      if (!shouldShow) return null;
+                      return (
+                        <JobDetailInfoRow icon={Building2} label="Client Group" value={cg.name} />
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -2145,16 +2174,16 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign: _onAss
                 <span>Send Acknowledgement</span>
               </button>
             )}
-            {/* Phase 2: Assign
-            <button
-              type="button"
-              className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
-              onClick={() => onAssign ? onAssign(job) : toast.success('Assigning job...')}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Assign</span>
-            </button>
-            */}
+            {!job.assignedTo && job.stage !== 'delivered' && job.stage !== 'quote' && (
+              <button
+                type="button"
+                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
+                onClick={() => onAssign ? onAssign(job) : toast('Assigning jobs is coming soon in Phase 2.')}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Assign</span>
+              </button>
+            )}
             {!isDelivered && !canAcknowledge && !quoteSent && (
               <button
                 type="button"

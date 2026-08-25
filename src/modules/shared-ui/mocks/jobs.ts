@@ -130,6 +130,13 @@ export interface Job {
   clientPreviousOrderAt?: string | null;
   /** Whether the current viewer has opened this job card (per-viewer, from backend `job_card_reads`). */
   isRead?: boolean;
+  /** Client group metadata if assigned */
+  clientGroup?: {
+    id: string;
+    name: string;
+    show_in_quote: boolean;
+    show_in_orders: boolean;
+  } | null;
 }
 
 export const JOBS: Job[] = [

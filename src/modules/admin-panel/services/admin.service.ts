@@ -108,6 +108,7 @@ export interface UpdateClientBody {
   email?: string;
   location?: string;
   payment_mode?: string;
+  client_group_id?: string | null;
   accounting_notes?: string | null;
   default_instruction?: string | null;
   internal_notes?: string | null;
