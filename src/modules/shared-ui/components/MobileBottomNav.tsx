@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
 import { NAV_CONFIG } from '@modules/shared-ui/nav-config';
 import { cn } from '@lib/utils';
@@ -10,9 +10,10 @@ import { cn } from '@lib/utils';
  */
 export function MobileBottomNav() {
   const user = useSessionUser();
+  const location = useLocation();
   if (!user) return null;
 
-  const items = NAV_CONFIG[user.role].mobile.slice(0, 5);
+  const items = NAV_CONFIG[user.role]?.mobile?.slice(0, 5) ?? [];
 
   return (
     <nav
@@ -21,28 +22,42 @@ export function MobileBottomNav() {
     >
       {items.map((item) => {
         const Icon = item.icon;
+        const currentPath = location.pathname;
+        const targetPath = item.to.split('?')[0];
+
+        // Base dashboard path exact match check (e.g., /admin, /cs, /qc, etc.)
+        const isBaseRoute = ['/admin', '/cs', '/qc', '/designer', '/sewout', '/digitator', '/team-lead'].includes(targetPath);
+
+        let isActive = false;
+        if (isBaseRoute) {
+          isActive = currentPath === targetPath || currentPath === targetPath + '/';
+        } else {
+          isActive = currentPath === targetPath || currentPath.startsWith(targetPath + '/');
+        }
+
         return (
-          <NavLink
+          <Link
             key={item.id}
             to={item.to}
-            end={item.to.split('/').length <= 2}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition',
-                isActive ? 'text-white' : 'text-text-muted',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  aria-hidden
-                  className={cn('w-5 h-5', isActive && 'text-crimson')}
-                />
-                <span>{item.label}</span>
-              </>
+            aria-current={isActive ? 'page' : undefined}
+            className={cn(
+              'flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl text-[10.5px] font-semibold transition-all duration-200',
+              isActive
+                ? 'bg-[var(--color-crimson-glow)] text-[var(--color-crimson)] font-bold shadow-xs'
+                : 'text-text-muted hover:text-text-main hover:bg-white/5',
             )}
-          </NavLink>
+          >
+            <Icon
+              aria-hidden
+              className={cn(
+                'w-5 h-5 transition-transform duration-200',
+                isActive ? 'text-[var(--color-crimson)] scale-110' : 'text-text-muted',
+              )}
+            />
+            <span className={cn('leading-none', isActive ? 'text-[var(--color-crimson)] font-bold' : 'text-text-muted')}>
+              {item.label}
+            </span>
+          </Link>
         );
       })}
     </nav>

@@ -312,7 +312,7 @@ export function JobTable({
                   aria-selected={view === v}
                   className={cn(
                     view === v && 'on',
-                    v === 'table' && 'hidden md:inline-block'
+                    v === 'table' && 'view-toggle-table-btn'
                   )}
                   onClick={() => setView(v)}
                 >

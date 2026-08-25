@@ -31,24 +31,24 @@ export function Pagination({
   const pages = buildPages(page, totalPages);
 
   return (
-    <div className={cn('flex items-center justify-between gap-4 mt-4 flex-wrap', className)}>
+    <div className={cn('flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 w-full px-1', className)}>
       {/* Range info */}
-      <span className="text-[11.5px] text-text-muted tabular-nums">
-        Showing {from}–{to} of {total}
+      <span className="text-xs text-text-muted tabular-nums text-center sm:text-left font-medium">
+        Showing <span className="text-text-main font-semibold">{from}–{to}</span> of <span className="text-text-main font-semibold">{total}</span>
       </span>
 
       {/* Controls */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-center gap-1 max-w-full overflow-x-auto py-1 scrollbar-none shrink-0">
         <PageBtn
           label="Previous"
-          icon={<ChevronLeft className="w-3.5 h-3.5" />}
+          icon={<ChevronLeft className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         />
 
         {pages.map((p, i) =>
           p === '…' ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-text-faint text-[12px] select-none">
+            <span key={`ellipsis-${i}`} className="px-1 text-text-faint text-[12px] select-none shrink-0">
               …
             </span>
           ) : (
@@ -58,10 +58,10 @@ export function Pagination({
               onClick={() => onPageChange(p as number)}
               aria-current={p === page ? 'page' : undefined}
               className={cn(
-                'min-w-[28px] h-7 px-2 rounded text-[12px] font-medium transition-colors',
+                'min-w-[32px] h-8 sm:min-w-[28px] sm:h-7 px-2.5 sm:px-2 rounded-lg sm:rounded text-[12px] font-semibold transition-all shrink-0 flex items-center justify-center cursor-pointer',
                 p === page
-                  ? 'bg-[var(--color-blue)] text-white'
-                  : 'text-text-muted hover:text-text-main hover:bg-white/5',
+                  ? 'bg-[var(--color-blue)] text-white shadow-xs'
+                  : 'text-text-muted hover:text-text-main hover:bg-white/10 active:scale-95',
               )}
             >
               {p}
@@ -71,7 +71,7 @@ export function Pagination({
 
         <PageBtn
           label="Next"
-          icon={<ChevronRight className="w-3.5 h-3.5" />}
+          icon={<ChevronRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         />
@@ -98,10 +98,10 @@ function PageBtn({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'w-7 h-7 flex items-center justify-center rounded transition-colors',
+        'w-8 h-8 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg sm:rounded transition-all shrink-0',
         disabled
-          ? 'text-text-faint cursor-not-allowed'
-          : 'text-text-muted hover:text-text-main hover:bg-white/5',
+          ? 'text-text-faint cursor-not-allowed opacity-35'
+          : 'text-text-muted hover:text-text-main hover:bg-white/10 active:scale-95 cursor-pointer',
       )}
     >
       {icon}

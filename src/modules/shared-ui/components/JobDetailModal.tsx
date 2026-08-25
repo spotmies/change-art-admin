@@ -16,9 +16,9 @@ import { uploadCompletedFile } from '@modules/cs-panel/services/cs-quote.service
 import { useJobRoom } from '@lib/use-job-room';
 import { useAdminJobById, useAdminJobFiles, useAdminJobImageUrls, isAdminViewableImage } from '@modules/admin-panel/hooks/use-admin-jobs';
 import { useJobQueries } from '@modules/admin-panel/hooks/use-job-queries';
+import { useJobNotes, useAddJobNote } from '@modules/admin-panel/hooks/use-job-notes';
 import { adminService } from '@modules/admin-panel/services/admin.service';
 import { FileCategory, JobStatus, type IFileVersion } from '@contracts';
-import { useSessionUser } from '@modules/auth/stores/auth-store';
 import { FilePreviewModal } from './FilePreviewModal';
 import { resolveServiceBucket, resolveServiceFieldFlags } from '@lib/service-fields';
 
@@ -260,11 +260,9 @@ function OrderSummaryRow({
 }
 
 export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteView: _quoteView = false }: JobDetailModalProps) {
-  const user = useSessionUser();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'overview' | 'requirements' | 'messages' | 'notes' | 'activity'>('overview');
   const [additionalInstructions, setAdditionalInstructions] = useState('');
-  const [internalNotesList, setInternalNotesList] = useState<{ id: string; author: string; date: string; text: string }[]>([]);
   const [newInternalNote, setNewInternalNote] = useState('');
   const [isIn, setIsIn] = useState(false);
   const [agencyPrice, setAgencyPrice] = useState('');
@@ -428,6 +426,24 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
   const canonicalRoomId = (job?.isAdminCopy && job?.parentJobId) ? job.parentJobId : (job?.uuid ?? null);
   useJobRoom(canonicalRoomId);
 
+  // Notes are scoped to this specific job_cards row (not the canonical/original
+  // job used for queries+socket) — an admin copy has its own notes, distinct
+  // from the original client job's, so reusing canonicalRoomId here would
+  // read/write notes against the wrong job record.
+  const { data: internalNotesList = [] } = useJobNotes(job?.uuid ?? null);
+  const addJobNoteMutation = useAddJobNote(job?.uuid ?? null);
+  const handleAddInternalNote = useCallback(() => {
+    const text = newInternalNote.trim();
+    if (!text) return;
+    addJobNoteMutation.mutate(text, {
+      onSuccess: () => {
+        setNewInternalNote('');
+        toast.success('Internal note added');
+      },
+      onError: (err) => toastApiError(err),
+    });
+  }, [newInternalNote, addJobNoteMutation]);
+
   useEffect(() => {
     if (job) {
       // When the job is already priced (QUOTE_APPROVED), prefill the form
@@ -440,14 +456,6 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
       setNoteToClient(sent ? (job.adminPriceNote ?? '') : '');
       const rawInst = job.notes || job.summary || '';
       setAdditionalInstructions(rawInst.replace(/\[[^\]]*\]/g, '').trim());
-      setInternalNotesList([
-        {
-          id: '1',
-          author: 'Admin',
-          date: `${formatDate(job.created)} 10:15 AM`,
-          text: `Order received on ${formatDate(job.created)}. Waiting for assignment.\n\n- Ensure to check all requirements before starting the production.`,
-        },
-      ]);
       setPriceInvalid(false);
       setEtaInvalid(false);
       setCarPage(0);
@@ -955,88 +963,95 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
           </div>
 
           {/* Stepper Timeline */}
-          <div className="mt-2 px-4 py-3 bg-white rounded-xl border border-slate-200/80 flex items-center justify-between shadow-xs">
-            {[
-              {
-                label: 'ORDER RECEIVED',
-                date: formatDateTime(job.created),
-                icon: ShoppingCart,
-                circleBg: 'bg-[#f3e8ff]',
-                iconColor: 'text-[#7c3aed]',
-                labelColor: stepIdx === 0 ? 'text-[#7c3aed]' : 'text-slate-800',
-                stageIdx: 0,
-              },
-              {
-                label: 'IN PRODUCTION',
-                // Only show an estimate once acknowledgement has actually been sent —
-                // the countdown starts from that moment, not from when the ETA was
-                // merely quoted/locked. Before that, there's nothing to show yet.
-                date: (() => {
-                  const ackAt = job.effectiveAcknowledgedAt ?? job.acknowledgedAt;
-                  if (!ackAt) return 'Upcoming';
-                  if (!job.etaHours) return formatDateTime(ackAt);
-                  const estCompletionIso = computeExpectedCompletionIso(ackAt, job.etaHours);
-                  return estCompletionIso ? formatDateTime(estCompletionIso) : formatDateTime(ackAt);
-                })(),
-                icon: Pencil,
-                circleBg: 'bg-[#eff6ff]',
-                iconColor: 'text-[#2563eb]',
-                labelColor: stepIdx === 1 ? 'text-[#2563eb]' : 'text-slate-800',
-                stageIdx: 1,
-              },
-              {
-                label: 'QC',
-                date: stepIdx >= 2 ? formatDateTime((job as any).updatedAt || job.created) : 'Upcoming',
-                icon: Search,
-                circleBg: 'bg-[#fffbeb]',
-                iconColor: 'text-[#d97706]',
-                labelColor: stepIdx === 2 ? 'text-[#d97706]' : 'text-slate-800',
-                stageIdx: 2,
-              },
-              {
-                label: 'COMPLETED',
-                date: stepIdx >= 3 ? formatDateTime((job as any).updatedAt || job.created) : 'Upcoming',
-                icon: Check,
-                circleBg: 'bg-[#ecfdf5]',
-                iconColor: 'text-[#059669]',
-                labelColor: stepIdx >= 3 ? 'text-[#059669]' : 'text-slate-800',
-                stageIdx: 3,
-              },
-            ].map((st, i, arr) => {
-              const Icon = st.icon;
-              return (
-                <div key={st.label} className="flex items-center flex-1 min-w-0 last:flex-initial">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all', st.circleBg)}>
-                      <Icon className={cn('w-4 h-4', st.iconColor)} strokeWidth={2.2} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className={cn('text-[11px] font-bold tracking-tight uppercase truncate', st.labelColor)}>
-                        {st.label}
+          <div className="mt-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-white rounded-xl border border-slate-200/80 shadow-xs w-full max-w-full overflow-hidden">
+            <div className="flex items-start justify-between w-full">
+              {[
+                {
+                  label: 'ORDER RECEIVED',
+                  shortLabel: 'ORDER',
+                  date: formatDateTime(job.created),
+                  icon: ShoppingCart,
+                  circleBg: 'bg-[#f3e8ff]',
+                  iconColor: 'text-[#7c3aed]',
+                  labelColor: stepIdx === 0 ? 'text-[#7c3aed]' : 'text-slate-800',
+                  stageIdx: 0,
+                },
+                {
+                  label: 'IN PRODUCTION',
+                  shortLabel: 'PRODUCTION',
+                  // Only show an estimate once acknowledgement has actually been sent —
+                  // the countdown starts from that moment, not from when the ETA was
+                  // merely quoted/locked. Before that, there's nothing to show yet.
+                  date: (() => {
+                    const ackAt = job.effectiveAcknowledgedAt ?? job.acknowledgedAt;
+                    if (!ackAt) return 'Upcoming';
+                    if (!job.etaHours) return formatDateTime(ackAt);
+                    const estCompletionIso = computeExpectedCompletionIso(ackAt, job.etaHours);
+                    return estCompletionIso ? formatDateTime(estCompletionIso) : formatDateTime(ackAt);
+                  })(),
+                  icon: Pencil,
+                  circleBg: 'bg-[#eff6ff]',
+                  iconColor: 'text-[#2563eb]',
+                  labelColor: stepIdx === 1 ? 'text-[#2563eb]' : 'text-slate-800',
+                  stageIdx: 1,
+                },
+                {
+                  label: 'QC',
+                  shortLabel: 'QC',
+                  date: stepIdx >= 2 ? formatDateTime((job as any).updatedAt || job.created) : 'Upcoming',
+                  icon: Search,
+                  circleBg: 'bg-[#fffbeb]',
+                  iconColor: 'text-[#d97706]',
+                  labelColor: stepIdx === 2 ? 'text-[#d97706]' : 'text-slate-800',
+                  stageIdx: 2,
+                },
+                {
+                  label: 'COMPLETED',
+                  shortLabel: 'COMPLETED',
+                  date: stepIdx >= 3 ? formatDateTime((job as any).updatedAt || job.created) : 'Upcoming',
+                  icon: Check,
+                  circleBg: 'bg-[#ecfdf5]',
+                  iconColor: 'text-[#059669]',
+                  labelColor: stepIdx >= 3 ? 'text-[#059669]' : 'text-slate-800',
+                  stageIdx: 3,
+                },
+              ].map((st, i, arr) => {
+                const Icon = st.icon;
+                return (
+                  <div key={st.label} className="flex-1 flex flex-col sm:flex-row items-center sm:items-center min-w-0">
+                    <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2.5 min-w-0 w-full sm:w-auto text-center sm:text-left">
+                      <div className={cn('w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center shrink-0 transition-all', st.circleBg)}>
+                        <Icon className={cn('w-3.5 h-3.5 sm:w-4 sm:h-4', st.iconColor)} strokeWidth={2.2} />
                       </div>
-                      <div className="text-[9.5px] text-slate-400 font-medium truncate">{st.date}</div>
+                      <div className="min-w-0 w-full">
+                        <div className={cn('text-[9.5px] sm:text-[11px] font-bold tracking-tight uppercase truncate', st.labelColor)}>
+                          <span className="hidden sm:inline">{st.label}</span>
+                          <span className="sm:hidden">{st.shortLabel}</span>
+                        </div>
+                        <div className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-medium truncate">{st.date}</div>
+                      </div>
                     </div>
+                    {i < arr.length - 1 && (
+                      <div className="hidden sm:flex flex-1 items-center mx-2 sm:mx-3 min-w-[20px]">
+                        <div className="h-[1.5px] bg-slate-300 flex-1 relative flex items-center justify-end">
+                          <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-slate-300 rotate-45 -mr-[1px]" />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {i < arr.length - 1 && (
-                    <div className="flex-1 flex items-center mx-2 sm:mx-3 min-w-[20px]">
-                      <div className="h-[1.5px] bg-slate-300 flex-1 relative flex items-center justify-end">
-                        <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-slate-300 rotate-45 -mr-[1px]" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* Sub-Header Metadata Strip */}
-          <div className="mt-1.5 px-1 py-1 flex items-center justify-between gap-4 text-[10px]">
+          <div className="mt-1.5 px-1 py-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[10px]">
             {/* Left Group: JOB ID + Status Tag + Client Group */}
-            <div className="flex items-center gap-2.5">
-              <span className="font-bold text-purple-700 text-[11px] tracking-wide">
+            <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+              <span className="font-bold text-purple-700 text-[11px] tracking-wide break-all">
                 JOB ID : {job.ref || job.id}
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200/80 text-purple-700 font-bold text-[9.5px] tracking-wider uppercase shadow-xs">
+              <span className="px-2 py-0.5 rounded-md bg-purple-50 border border-purple-200/80 text-purple-700 font-bold text-[9.5px] tracking-wider uppercase shadow-xs shrink-0">
                 {displayStatus(job.status)}
               </span>
               {(() => {
@@ -1047,26 +1062,27 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                 );
                 if (!shouldShowGroup) return null;
                 return (
-                  <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 font-bold text-[10px] tracking-wide shadow-2xs flex items-center gap-1">
-                    <span className="text-blue-500 font-medium">Client Group:</span> {clientGroup.name}
+                  <span className="px-2 py-0.5 rounded-md bg-blue-50 border border-blue-200/80 text-blue-700 font-bold text-[10px] tracking-wide shadow-2xs flex items-center gap-1 shrink-0 max-w-full">
+                    <span className="text-blue-500 font-medium shrink-0">Client Group:</span>
+                    <span className="truncate">{clientGroup.name}</span>
                   </span>
                 );
               })()}
             </div>
 
             {/* Right Group: Service Type | Priority | Due Date */}
-            <div className="flex items-center gap-4 text-[10.5px] text-slate-600 font-medium">
-              <div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10.5px] text-slate-600 font-medium">
+              <div className="whitespace-nowrap">
                 <span className="text-slate-400">Service Type : </span>
                 <strong className="text-slate-800 font-semibold">{job.order}</strong>
               </div>
-              <div className="h-3.5 w-[1px] bg-slate-200" />
-              <div>
+              <div className="h-3.5 w-[1px] bg-slate-200 hidden sm:block" />
+              <div className="whitespace-nowrap">
                 <span className="text-slate-400">Priority : </span>
                 <strong className="text-slate-800 font-semibold">{job.priority}</strong>
               </div>
-              <div className="h-3.5 w-[1px] bg-slate-200" />
-              <div>
+              <div className="h-3.5 w-[1px] bg-slate-200 hidden sm:block" />
+              <div className="whitespace-nowrap">
                 <span className="text-slate-400">Due Date : </span>
                 <strong className="text-slate-800 font-semibold">
                   {computeExpectedCompletionIso((job.effectiveAcknowledgedAt ?? job.acknowledgedAt) || job.created, job.etaHours)
@@ -1917,8 +1933,8 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                       <div key={n.id} className="p-1.5 rounded-lg bg-white border border-slate-200/80 text-[9.5px] text-slate-800">
                         <div className="whitespace-pre-wrap">{n.text}</div>
                         <div className="mt-1 text-[8.5px] font-semibold text-slate-500 flex justify-between">
-                          <span>Added by {n.author}</span>
-                          <span>{n.date}</span>
+                          <span>Added by {n.author_name || 'Staff'}</span>
+                          <span>{formatDateTime(n.created_at)}</span>
                         </div>
                       </div>
                     ))}
@@ -1929,31 +1945,17 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                       value={newInternalNote}
                       onChange={(e) => setNewInternalNote(e.target.value)}
                       placeholder="Add an internal note..."
-                      className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] outline-none focus:border-purple-500"
+                      disabled={addJobNoteMutation.isPending}
+                      className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[10px] outline-none focus:border-purple-500 disabled:opacity-50"
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newInternalNote.trim()) {
-                          setInternalNotesList((prev) => [
-                            ...prev,
-                            { id: String(Date.now()), author: user?.name || 'Staff', date: new Date().toLocaleString(), text: newInternalNote.trim() },
-                          ]);
-                          setNewInternalNote('');
-                          toast.success('Internal note added');
-                        }
+                        if (e.key === 'Enter') handleAddInternalNote();
                       }}
                     />
                     <button
                       type="button"
-                      onClick={() => {
-                        if (newInternalNote.trim()) {
-                          setInternalNotesList((prev) => [
-                            ...prev,
-                            { id: String(Date.now()), author: user?.name || 'Staff', date: new Date().toLocaleString(), text: newInternalNote.trim() },
-                          ]);
-                          setNewInternalNote('');
-                          toast.success('Internal note added');
-                        }
-                      }}
-                      className="btn btn-outline text-[10px] px-2.5 py-1 text-purple-700 border-purple-200 hover:bg-purple-50"
+                      onClick={handleAddInternalNote}
+                      disabled={addJobNoteMutation.isPending}
+                      className="btn btn-outline text-[10px] px-2.5 py-1 text-purple-700 border-purple-200 hover:bg-purple-50 disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -1961,7 +1963,7 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                 </div>
 
                 {/* Client Queries */}
-                <div className="bg-white rounded-xl border border-slate-200 p-2 shadow-sm flex flex-col flex-1 min-h-[280px]">
+                <div className="bg-white rounded-xl border border-slate-200 p-2 shadow-sm flex flex-col shrink-0 overflow-hidden">
                   <h3 className="text-[9.5px] font-bold uppercase tracking-wider text-slate-500 mb-1 shrink-0">
                     Client Queries
                   </h3>
@@ -2021,11 +2023,32 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
                   <div key={n.id} className="p-3.5 rounded-xl bg-white border border-slate-200/80 text-[12px]">
                     <div className="font-medium text-slate-800 whitespace-pre-wrap">{n.text}</div>
                     <div className="mt-2 text-[10.5px] font-bold text-slate-500 flex justify-between">
-                      <span>Added by {n.author}</span>
-                      <span>{n.date}</span>
+                      <span>Added by {n.author_name || 'Staff'}</span>
+                      <span>{formatDateTime(n.created_at)}</span>
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <input
+                  type="text"
+                  value={newInternalNote}
+                  onChange={(e) => setNewInternalNote(e.target.value)}
+                  placeholder="Add an internal note..."
+                  disabled={addJobNoteMutation.isPending}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[12px] outline-none focus:border-purple-500 disabled:opacity-50"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddInternalNote();
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddInternalNote}
+                  disabled={addJobNoteMutation.isPending}
+                  className="btn btn-outline text-[12px] px-3.5 py-2 text-purple-700 border-purple-200 hover:bg-purple-50 shrink-0 disabled:opacity-50"
+                >
+                  {addJobNoteMutation.isPending ? 'Adding…' : 'Add'}
+                </button>
               </div>
             </div>
           )}
@@ -2139,55 +2162,46 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
 
         {/* ── FOOTER ── */}
         <div
-          className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-2.5 flex-wrap"
+          className="flex-shrink-0 flex items-center justify-between gap-1.5 sm:gap-3 px-3 sm:px-6 py-2.5 flex-nowrap w-full overflow-x-auto sm:overflow-visible"
           style={{ borderTop: '1px solid #E8EDF5', background: '#FAFBFD' }}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              className="btn btn-outline text-[11.5px] px-3.5 py-1.5"
+              className="btn btn-outline text-[10.5px] sm:text-[11.5px] px-2.5 sm:px-3.5 py-1.5 shrink-0 whitespace-nowrap"
               onClick={handleClose}
             >
-              Back to Dashboard
+              <span className="hidden sm:inline">Back to Dashboard</span>
+              <span className="sm:hidden">Back</span>
             </button>
-            {/* Phase 2: Save & Continue
-            <button
-              type="button"
-              className="btn btn-outline text-[11.5px] px-3.5 py-1.5 border-purple-200 text-purple-700 hover:bg-purple-50"
-              onClick={() => {
-                toast.success('Job changes saved');
-              }}
-            >
-              Save & Continue
-            </button>
-            */}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {canAcknowledge && (
               <button
                 type="button"
-                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
+                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[10.5px] sm:text-[11.5px] font-bold px-2.5 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1 sm:gap-1.5 shadow-sm whitespace-nowrap shrink-0"
                 onClick={() => setShowAckPopover(true)}
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Acknowledgement</span>
+                <Send className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline">Send Acknowledgement</span>
+                <span className="sm:hidden">Acknowledge</span>
               </button>
             )}
             {!job.assignedTo && job.stage !== 'delivered' && job.stage !== 'quote' && (
               <button
                 type="button"
-                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
+                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[10.5px] sm:text-[11.5px] font-bold px-2.5 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1 sm:gap-1.5 shadow-sm whitespace-nowrap shrink-0"
                 onClick={() => onAssign ? onAssign(job) : toast('Assigning jobs is coming soon in Phase 2.')}
               >
-                <User className="w-3.5 h-3.5" />
+                <User className="w-3.5 h-3.5 shrink-0" />
                 <span>Assign</span>
               </button>
             )}
             {!isDelivered && !canAcknowledge && !quoteSent && (
               <button
                 type="button"
-                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[11.5px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm"
+                className="btn bg-purple-600 hover:bg-purple-700 text-white text-[10.5px] sm:text-[11.5px] font-bold px-2.5 sm:px-3.5 py-1.5 rounded-lg flex items-center gap-1 sm:gap-1.5 shadow-sm whitespace-nowrap shrink-0"
                 onClick={() => {
                   if (job.stage === 'quote' || normalizedStatus(job) === 'QUOTE_SUBMITTED') {
                     handleStartProduction();
@@ -2198,12 +2212,12 @@ export function JobDetailModal({ job, onClose, onEdit: _onEdit, onAssign, quoteV
               >
                 {job.stage === 'quote' || normalizedStatus(job) === 'QUOTE_SUBMITTED' ? (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <Play className="w-3.5 h-3.5 fill-current shrink-0" />
                     <span>Submit Quote</span>
                   </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" />
+                    <Send className="w-3.5 h-3.5 shrink-0" />
                     <span>Dispatch Project</span>
                   </>
                 )}

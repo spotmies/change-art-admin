@@ -404,6 +404,16 @@ export interface IJobQuery {
   raised_by_name?: string;
 }
 
+export interface IJobNote {
+  id: string;
+  tenant_id: string;
+  job_card_id: string;
+  author_user_id: string;
+  author_name?: string;
+  text: string;
+  created_at: IsoDateTime;
+}
+
 export interface IAttendanceRecord {
   id: string;
   tenant_id: string;

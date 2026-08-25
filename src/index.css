@@ -851,9 +851,10 @@ html[data-theme='light'] .mb-track {
   /* ─ Section header ─ */
   /* (override the sec-header below to tighten demo-match spacing) */
 
-  @media (max-width: 900px) {
+  @media (max-width: 640px) {
     .stats-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 6px;
     }
   }
 
@@ -1430,8 +1431,8 @@ html[data-theme='light'] .mb-track {
     .tbl-top-row {
       grid-template-columns: 1fr;
       align-items: stretch;
-      gap: 8px;
-      padding: 8px;
+      gap: 6px;
+      padding: 6px;
     }
 
     .fjb-top-row {
@@ -1459,7 +1460,10 @@ html[data-theme='light'] .mb-track {
     }
 
     .tbl-toggle-right button {
-      flex: 1;
+      flex: 1 1 0%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       text-align: center;
     }
   }
@@ -1556,6 +1560,32 @@ html[data-theme='light'] .mb-track {
     height: 28px;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+  }
+
+  .view-toggle button:hover:not(.on) {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+  }
+
+  .view-toggle button.on {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  /* Table view doesn't fit small screens — hidden below the md breakpoint.
+     A prior Tailwind `hidden md:inline-block` was silently overridden here because this
+     stylesheet loads after `@tailwind utilities` and wins the display:none/inline-flex tie
+     on source order, so the button never actually hid. Own the display rule directly instead. */
+  .view-toggle-table-btn {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .view-toggle-table-btn {
+      display: inline-flex;
+    }
   }
 
   .job-actions {
@@ -3499,20 +3529,30 @@ html[data-theme='light'] .mb-track {
     width: 100%;
   }
 
-  .fjb-single-row::-webkit-scrollbar {
-    display: none;
-  }
+  @media (max-width: 640px) {
+    .fjb-panel {
+      padding: 10px 8px;
+    }
 
-  /* Mobile: selects grow/shrink, min 140px so 2 fit per row */
-  .fjb-single-row .fjb-select-inner {
-    flex: 1 1 140px;
-    min-width: 130px;
-    width: auto;
-  }
+    .fjb-single-row {
+      gap: 6px;
+    }
 
-  .fjb-single-row .fjb-select-inner .fjb-select {
-    width: 100%;
-    min-width: 0;
+    .fjb-single-row .fjb-select-inner {
+      flex: 1 1 45%;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .fjb-select {
+      font-size: 11.5px;
+      padding-left: 10px;
+      padding-right: 24px;
+    }
+
+    .fjb-chevron {
+      right: 7px;
+    }
   }
 
   /* desktop single-line layout handled in the consolidated @media (min-width: 1024px) block below */
@@ -3652,9 +3692,10 @@ html[data-theme='light'] .mb-track {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    flex: 1 1 280px;
-    min-width: 260px;
+    gap: 6px;
+    width: 100%;
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   /* legacy row helper (used by pill-style bar) */
@@ -3672,7 +3713,7 @@ html[data-theme='light'] .mb-track {
     padding: 0 2px;
   }
 
-  /* Mobile: actions own full-width row, right-aligned so Apply is never hidden */
+  /* Mobile: actions own full-width row */
   .fjb-inline-actions {
     display: flex;
     align-items: center;
@@ -3682,13 +3723,59 @@ html[data-theme='light'] .mb-track {
     justify-content: flex-end;
   }
 
+  @media (max-width: 640px) {
+    .fjb-date-group {
+      gap: 4px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .fjb-date-wrap {
+      flex: 1 1 0%;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .fjb-date-icon {
+      left: 6px;
+      width: 12px;
+      height: 12px;
+    }
+
+    .fjb-date-input {
+      font-size: 11px;
+      padding: 0 2px 0 22px;
+      height: 34px;
+    }
+
+    .fjb-date-input::-webkit-calendar-picker-indicator {
+      margin: 0;
+      padding: 0;
+      width: 10px;
+      height: 10px;
+    }
+
+    .fjb-date-arrow {
+      font-size: 10px;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .fjb-inline-actions .fjb-clear-btn,
+    .fjb-inline-actions .fjb-apply-btn {
+      flex: 1;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+
   .fjb-date-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1 1 120px;
-    min-width: 110px;
-    width: auto;
+    flex: 1 1 0%;
+    min-width: 0;
+    width: 100%;
   }
 
   /* ── md+ (≥ 1024px accounts for the ~240px sidebar) — single horizontal line ── */
@@ -3914,21 +4001,23 @@ html[data-theme='light'] .mb-track {
 
   .pills-segmented-bar,
   .pills {
-    display: flex;
+    display: inline-flex;
+    max-width: 100%;
     flex-wrap: nowrap;
     align-items: center;
     background: #ffffff;
     border: 1px solid rgba(15, 23, 42, 0.12);
     border-radius: 6px;
     padding: 0;
-    margin-bottom: 0 !important;
+    margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-    flex-shrink: 0;
     white-space: nowrap;
-    /* Size to actual pill content, not the wrapper's block width — otherwise
-       the box stays wrapper-width while its no-shrink children overflow past
-       its right border instead of the wrapper's horizontal scroll kicking in. */
-    width: max-content;
+    box-sizing: border-box;
+  }
+
+  .pills-control-bar .pills-segmented-bar,
+  .pills-control-bar .pills {
+    margin-bottom: 0;
   }
 
   html[data-theme='dark'] .pills-segmented-bar,
@@ -3942,7 +4031,6 @@ html[data-theme='light'] .mb-track {
     display: none;
   }
 
-  /* Items live inside one bar, each separated by a short vertical divider (not a full-height border, not separate pill chips) */
   .pill-segmented-item,
   .pills .pill {
     display: inline-flex;
@@ -3966,7 +4054,6 @@ html[data-theme='light'] .mb-track {
     text-align: center;
   }
 
-  /* Short divider — a centred line, not a full-height border */
   .pill-segmented-item:not(:last-child)::after,
   .pills .pill:not(:last-child)::after {
     content: '';
@@ -3989,14 +4076,12 @@ html[data-theme='light'] .mb-track {
     color: rgba(255, 255, 255, 0.7);
   }
 
-
   html[data-theme='dark'] .pill-segmented-item:hover,
   html[data-theme='dark'] .pills .pill:hover {
     background: rgba(192, 132, 252, 0.14);
     color: #c084fc;
   }
 
-  /* Hollow ring status dot, bolded up — hollow centre stays, thicker ring + soft glow makes it pop for every accent colour */
   .pill-dot {
     width: 7px;
     height: 7px;
@@ -4023,7 +4108,6 @@ html[data-theme='light'] .mb-track {
     white-space: nowrap;
   }
 
-  /* Active State: bold text + bottom indicator bar, within the single divided segment bar */
   .pill-segmented-item.active,
   .pills .pill.active {
     background: transparent;
@@ -4046,6 +4130,55 @@ html[data-theme='light'] .mb-track {
     height: 3px;
     border-radius: 3px 3px 0 0;
     background: currentColor;
+  }
+
+  @media (max-width: 640px) {
+    .pills-control-bar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .pills-scroll-wrapper {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    /* Long labels ("In Production (22)") don't fit 5-across on a phone —
+       scroll the segmented row instead of squeezing it, which used to clip text. */
+    .pills-segmented-bar,
+    .pills {
+      width: 100%;
+      max-width: 100%;
+      display: flex !important;
+      justify-content: flex-start;
+      box-sizing: border-box;
+      border-radius: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .pills-segmented-bar::-webkit-scrollbar,
+    .pills::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pill-segmented-item,
+    .pills .pill {
+      flex: 0 0 auto !important;
+      min-width: 0 !important;
+      font-size: 11px;
+      height: 32px;
+      padding: 0 10px;
+      gap: 3px;
+      text-align: center;
+      justify-content: center;
+    }
   }
 
   /* ─ Matching Filter Controls Action Bar (`Latest First` & `Filter` button) ─ */

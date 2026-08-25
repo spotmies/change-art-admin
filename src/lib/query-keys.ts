@@ -95,6 +95,10 @@ export const queryKeys = {
     forJob: (jobId: string) => ['queries', 'forJob', jobId] as const,
   },
 
+  jobNotes: {
+    forJob: (jobId: string) => ['job-notes', 'forJob', jobId] as const,
+  },
+
   settings: {
     ccForm: () => ['settings', 'cc-form'] as const,
   },

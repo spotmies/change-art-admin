@@ -52,7 +52,7 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
   const displayedQueries = queries ?? [];
 
   return (
-    <div className={`flex flex-col ${compact ? 'flex-1 min-h-0' : 'h-[440px]'} bg-slate-50/50 rounded-lg border border-slate-200/80 overflow-hidden`}>
+    <div className={`flex flex-col ${compact ? 'h-[360px]' : 'h-[460px]'} bg-slate-50/50 rounded-lg border border-slate-200/80 overflow-hidden`}>
       {/* Header (shown when not compact) */}
       {!compact && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200/80 shrink-0">
@@ -73,7 +73,7 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
       {/* Chat Messages List */}
       <div
         ref={threadRef}
-        className={`flex-1 overflow-y-auto bg-slate-50/40 ${compact ? 'p-1.5 space-y-1.5' : 'p-2.5 space-y-2'}`}
+        className={`flex-1 min-h-0 overflow-y-auto bg-slate-50/40 ${compact ? 'p-1.5 space-y-1.5' : 'p-2.5 space-y-2'}`}
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-slate-400 gap-2 text-xs">
@@ -95,7 +95,9 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
                         : 'bg-white text-slate-800 border border-slate-200/80'
                       }`}
                   >
-                    <div className="whitespace-pre-wrap leading-normal break-words">{q.message}</div>
+                    <div className="whitespace-pre-wrap leading-normal break-words select-text">
+                      {q.message}
+                    </div>
                     <div className={`text-right mt-0.5 ${compact ? 'text-[7.5px]' : 'text-[9px]'} ${isAdmin ? 'text-purple-200/80' : 'text-slate-400'}`}>
                       {formatTime(q.created_at as unknown as string)}
                     </div>

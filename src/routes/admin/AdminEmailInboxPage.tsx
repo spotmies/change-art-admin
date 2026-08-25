@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { EmailIngestionStatus, JobStatus, type IIngestedEmail, type IContactSubmissionAiData } from '@contracts';
 import { queryKeys } from '@lib/query-keys';
+import { cn } from '@lib/utils';
 import {
   useContactSubmissions,
   useContactSubmission,
@@ -127,13 +128,16 @@ export function AdminEmailInboxPage({ jobsPath = '/admin/jobs' }: { jobsPath?: s
 
         <Panel title={`Email Submissions${filtered.length ? ` (${filtered.length})` : ''}`}>
           {/* Filter bar */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 w-full">
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-glass-border overflow-x-auto w-full sm:w-auto scrollbar-none shrink-0">
               {STATUS_FILTERS.map((f) => (
                 <button
                   key={f.id}
                   type="button"
-                  className={`btn ${statusFilter === f.id ? 'btn-crimson' : 'btn-outline'}`}
+                  className={cn(
+                    'btn text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 shrink-0 whitespace-nowrap',
+                    statusFilter === f.id ? 'btn-crimson' : 'btn-outline'
+                  )}
                   onClick={() => { setStatusFilter(f.id); setPage(1); }}
                 >
                   {f.label}
@@ -141,14 +145,14 @@ export function AdminEmailInboxPage({ jobsPath = '/admin/jobs' }: { jobsPath?: s
               ))}
             </div>
 
-            <div className="relative flex-1 min-w-[200px] max-w-md ml-auto">
+            <div className="relative w-full sm:flex-1 sm:max-w-md sm:ml-auto">
               <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint pointer-events-none"
                 aria-hidden
               />
               <input
                 type="text"
-                className="fi"
+                className="fi w-full text-xs sm:text-sm"
                 style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
                 placeholder="Search sender or subject…"
                 value={search}

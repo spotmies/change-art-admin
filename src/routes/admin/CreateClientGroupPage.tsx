@@ -276,13 +276,13 @@ export function CreateClientGroupPage() {
             </div>
 
             {/* Table Footer / Pagination */}
-            <div className="pt-1 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 font-medium text-center sm:text-left">
               <div>
                 Showing {totalSelected === 0 ? 0 : startIndex + 1} to{' '}
                 {Math.min(startIndex + rowsPerPage, totalSelected)} of {totalSelected} clients
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
                 <div className="flex items-center gap-1.5">
                   <span>Rows per page:</span>
                   <select
@@ -299,7 +299,7 @@ export function CreateClientGroupPage() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-center gap-1">
                   <button
                     type="button"
                     disabled={currentPage === 1}

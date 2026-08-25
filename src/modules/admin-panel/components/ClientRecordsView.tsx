@@ -1209,7 +1209,7 @@ export function ClientRecordsView({
         {/* ── PAGINATION FOOTER BAR ── */}
         <div className="bg-slate-50/80 border-t border-slate-200 px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs select-none">
           {/* Left: Entries summary */}
-          <div className="flex items-center gap-4 text-slate-600 font-medium">
+          <div className="flex items-center gap-4 text-slate-600 font-medium text-center sm:text-left">
             <span>
               Showing <strong className="font-bold text-slate-900">{totalItems > 0 ? startIndex + 1 : 0}</strong> to{' '}
               <strong className="font-bold text-slate-900">{endIndex}</strong> of{' '}
@@ -1218,7 +1218,7 @@ export function ClientRecordsView({
           </div>
 
           {/* Right: Page navigation controls */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-center gap-1 max-w-full overflow-x-auto py-1 scrollbar-none shrink-0">
             {/* First Page */}
             <button
               type="button"

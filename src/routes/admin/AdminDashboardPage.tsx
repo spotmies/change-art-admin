@@ -24,7 +24,7 @@ import {
   useAdminJobViews,
 } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
-import { useUnreadCount } from '@modules/notifications/hooks/use-notifications';
+import { usePendingEmailCount } from '../../modules/admin-panel/hooks/use-admin-badges';
 import { getCardExpiryStatus, resolveClientCardExpiry } from '@lib/card-expiry';
 
 const PER_PAGE = 12;
@@ -40,7 +40,7 @@ export function AdminDashboardPage() {
   const [page, setPage] = useState(1);
 
   const { jobs, isLoading } = useAdminJobViews({ per_page: 200 });
-  const { data: unreadData } = useUnreadCount();
+  const pendingEmailCount = usePendingEmailCount(true);
   // per_page: 500 — needed to populate the filter drawer's client dropdown with all client names.
   const filterClientsQuery = useAdminClients({ per_page: 500 });
   const filterClients = filterClientsQuery.data?.items ?? [];
@@ -259,7 +259,7 @@ export function AdminDashboardPage() {
         <div className="flex flex-col gap-3">
           <TodaysOverviewPanel items={overviewItems} viewAllHref="/admin/jobs" />
           <RecentActivityPanel items={recentActivity} />
-          <EmailInboxCta href="/admin/email-inbox" unreadCount={unreadData?.count ?? 0} />
+          <EmailInboxCta href="/admin/email-inbox" unreadCount={pendingEmailCount ?? 0} />
 
           {expiringCards.length > 0 ? (
             <Callout tone={expiredCount > 0 ? 'crimson' : 'amber'}>

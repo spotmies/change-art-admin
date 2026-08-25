@@ -3,6 +3,7 @@ import { Check, CheckCheck, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { NotificationType, type INotification } from '@contracts';
+import { cn } from '@lib/utils';
 import {
   useMarkAllRead,
   useMarkRead,
@@ -135,62 +136,66 @@ export function AdminNotificationsPage() {
         }
       >
         {/* Filters + search */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div className="flex items-center gap-1 p-0.5 rounded-md border border-glass-border">
-            {READ_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className={`btn ${readFilter === f.id ? 'btn-crimson' : 'btn-outline'}`}
-                onClick={() => {
-                  setReadFilter(f.id);
-                  setPage(1);
-                }}
-              >
-                {f.label}
-                {f.id === 'unread' && unread > 0 ? (
-                  <span
-                    className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
-                    style={{
-                      background: 'var(--color-crimson)',
-                      color: 'white',
-                      minWidth: 16,
-                      height: 16,
-                    }}
-                  >
-                    {unread}
-                  </span>
-                ) : null}
-              </button>
-            ))}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 w-full">
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-glass-border overflow-x-auto w-full sm:w-auto scrollbar-none shrink-0">
+              {READ_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={cn(
+                    'btn text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 shrink-0 whitespace-nowrap',
+                    readFilter === f.id ? 'btn-crimson' : 'btn-outline'
+                  )}
+                  onClick={() => {
+                    setReadFilter(f.id);
+                    setPage(1);
+                  }}
+                >
+                  {f.label}
+                  {f.id === 'unread' && unread > 0 ? (
+                    <span
+                      className="ml-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full px-1.5"
+                      style={{
+                        background: 'var(--color-crimson)',
+                        color: 'white',
+                        minWidth: 16,
+                        height: 16,
+                      }}
+                    >
+                      {unread}
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+
+            <select
+              className="fi w-full sm:w-auto sm:min-w-[140px] text-xs sm:text-sm shrink-0"
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value as NotificationType | 'ALL');
+                setPage(1);
+              }}
+              aria-label="Filter by type"
+            >
+              <option value="ALL">All types</option>
+              {Object.values(NotificationType).map((t) => (
+                <option key={t} value={t}>
+                  {TYPE_LABEL[t]}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <select
-            className="fi"
-            style={{ width: 'auto', minWidth: 140 }}
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value as NotificationType | 'ALL');
-              setPage(1);
-            }}
-            aria-label="Filter by type"
-          >
-            <option value="ALL">All types</option>
-            {Object.values(NotificationType).map((t) => (
-              <option key={t} value={t}>
-                {TYPE_LABEL[t]}
-              </option>
-            ))}
-          </select>
-
-          <div className="relative flex-1 min-w-[200px] max-w-md ml-auto">
+          <div className="relative w-full sm:flex-1 sm:max-w-md sm:ml-auto">
             <Search
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-faint pointer-events-none"
               aria-hidden
             />
             <input
               type="text"
-              className="fi"
+              className="fi w-full text-xs sm:text-sm"
               style={{ paddingLeft: 28, paddingRight: search ? 32 : undefined }}
               placeholder="Search title or body…"
               value={search}

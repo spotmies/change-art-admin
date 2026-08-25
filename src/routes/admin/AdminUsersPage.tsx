@@ -51,10 +51,10 @@ export function AdminUsersPage() {
 
   const allUsers = useMemo<IUser[]>(() => data?.items ?? [], [data]);
 
-  const total        = allUsers.length;
-  const activeCount  = allUsers.filter((u) => u.is_active).length;
+  const total = allUsers.length;
+  const activeCount = allUsers.filter((u) => u.is_active).length;
   const inactiveCount = total - activeCount;
-  const adminCount   = allUsers.filter((u) => u.role === UserRole.ADMIN).length;
+  const adminCount = allUsers.filter((u) => u.role === UserRole.ADMIN).length;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -87,64 +87,64 @@ export function AdminUsersPage() {
 
       <StatGrid
         stats={[
-          { accent: 'blue',    label: 'Total Users', value: isLoading ? '…' : total },
-          { accent: 'green',   label: 'Active',      value: isLoading ? '…' : activeCount },
-          { accent: 'amber',   label: 'Inactive',    value: isLoading ? '…' : inactiveCount },
-          { accent: 'crimson', label: 'Admins',      value: isLoading ? '…' : adminCount },
+          { accent: 'blue', label: 'Total Users', value: isLoading ? '…' : total },
+          { accent: 'green', label: 'Active', value: isLoading ? '…' : activeCount },
+          { accent: 'amber', label: 'Inactive', value: isLoading ? '…' : inactiveCount },
+          { accent: 'crimson', label: 'Admins', value: isLoading ? '…' : adminCount },
         ]}
       />
 
-      <div className="flex flex-wrap items-center gap-2.5 mb-4">
-        <div className="relative flex-1 min-w-[220px]">
-          <Search
-            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none"
-            aria-hidden
-          />
-          <input
-            className="fi"
-            style={{ paddingLeft: 36, paddingRight: search ? 32 : undefined }}
-            placeholder="Search by name or email…"
-            value={search}
-            maxLength={500}
-            onChange={(e) => resetToFirstPage(setSearch)(e.target.value)}
-            aria-label="Search users"
-          />
-          {search && (
-            <button
-              type="button"
-              className="fjb-search-x"
-              onClick={() => resetToFirstPage(setSearch)('')}
-              aria-label="Clear search"
-            >
-              <X className="w-3.5 h-3.5" aria-hidden />
-            </button>
-          )}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-4">
+        <div className="flex items-center gap-2 w-full sm:flex-1 sm:min-w-0">
+          <div className="relative flex-1 min-w-0 sm:min-w-[220px]">
+            <Search
+              className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-faint pointer-events-none"
+              aria-hidden
+            />
+            <input
+              className="fi w-full text-xs sm:text-sm truncate"
+              style={{ paddingLeft: 36, paddingRight: search ? 32 : undefined }}
+              placeholder="Search by name or email…"
+              value={search}
+              maxLength={500}
+              onChange={(e) => resetToFirstPage(setSearch)(e.target.value)}
+              aria-label="Search users"
+            />
+            {search && (
+              <button
+                type="button"
+                className="fjb-search-x"
+                onClick={() => resetToFirstPage(setSearch)('')}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden />
+              </button>
+            )}
+          </div>
+          <select
+            className="fi w-auto shrink-0 text-xs sm:text-sm px-2 sm:px-3 sm:min-w-[150px]"
+            value={roleFilter}
+            onChange={(e) => resetToFirstPage(setRoleFilter)(e.target.value)}
+            aria-label="Filter by role"
+          >
+            {ROLE_FILTERS.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+          <select
+            className="fi w-auto shrink-0 text-xs sm:text-sm px-2 sm:px-3 sm:min-w-[130px]"
+            value={statusFilter}
+            onChange={(e) => resetToFirstPage(setStatusFilter)(e.target.value)}
+            aria-label="Filter by status"
+          >
+            <option value="all">All status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </div>
-        <select
-          className="fi"
-          style={{ width: 'auto', minWidth: 150 }}
-          value={roleFilter}
-          onChange={(e) => resetToFirstPage(setRoleFilter)(e.target.value)}
-          aria-label="Filter by role"
-        >
-          {ROLE_FILTERS.map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
-        <select
-          className="fi"
-          style={{ width: 'auto', minWidth: 130 }}
-          value={statusFilter}
-          onChange={(e) => resetToFirstPage(setStatusFilter)(e.target.value)}
-          aria-label="Filter by status"
-        >
-          <option value="all">All status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
         <button
           type="button"
-          className="btn btn-crimson"
+          className="btn btn-crimson w-full sm:w-auto shrink-0 justify-center"
           onClick={() => setModal({ mode: 'create', user: null })}
         >
           <Plus className="w-3.5 h-3.5" aria-hidden />

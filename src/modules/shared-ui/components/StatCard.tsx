@@ -57,8 +57,17 @@ interface StatGridProps {
 }
 
 export function StatGrid({ stats, className }: StatGridProps) {
+  const count = stats.length;
   return (
-    <section className={cn('stats-grid', className)} aria-label="Stats">
+    <section
+      className={cn(
+        'stats-grid',
+        count === 3 && 'max-sm:!grid-cols-3',
+        count === 4 && 'max-sm:!grid-cols-2',
+        className
+      )}
+      aria-label="Stats"
+    >
       {stats.map((s) => (
         <StatCard key={s.label} {...s} />
       ))}

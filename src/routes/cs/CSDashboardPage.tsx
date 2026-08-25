@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
-import { useUnreadCount } from '@modules/notifications/hooks/use-notifications';
+import { usePendingEmailCount } from '../../modules/admin-panel/hooks/use-admin-badges';
 import { isJobEtaExpired } from '@lib/utils';
 
 const PER_PAGE = 12;
@@ -58,7 +58,7 @@ export function CSDashboardPage() {
   const [page, setPage] = useState(1);
 
   const { jobs: allJobs } = useAdminJobViews({ per_page: 200 });
-  const { data: unreadData } = useUnreadCount();
+  const pendingEmailCount = usePendingEmailCount(true);
   // per_page: 500 — needed to populate the filter drawer's client dropdown with all client names.
   const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
@@ -261,7 +261,7 @@ export function CSDashboardPage() {
         <div className="flex flex-col gap-3">
           <TodaysOverviewPanel items={overviewItems} viewAllHref="/cs/projects" />
           <RecentActivityPanel items={recentActivity} />
-          <EmailInboxCta href="/cs/email-inbox" unreadCount={unreadData?.count ?? 0} />
+          <EmailInboxCta href="/cs/email-inbox" unreadCount={pendingEmailCount ?? 0} />
         </div>
       </div>
     </div>
