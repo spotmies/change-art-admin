@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Plus, Trash2, Users as UsersIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCreateClientGroup } from '@modules/admin-panel/hooks/use-client-groups';
@@ -27,6 +27,22 @@ export function CreateClientGroupPage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Fetch directory clients for adding to group
   const { data: clientsData } = useAdminClients({
@@ -77,18 +93,18 @@ export function CreateClientGroupPage() {
   const paginatedSelectedClients = selectedClients.slice(startIndex, startIndex + rowsPerPage);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-2 space-y-2.5">
+    <div className="max-w-6xl xl:max-w-[1400px] 2xl:max-w-[1680px] mx-auto px-4 py-2 min-h-[calc(100vh-92px)] flex flex-col">
       {/* ── PAGE TITLE ── */}
-      <div>
+      <div className="shrink-0">
         <h1 className="text-lg font-bold text-slate-900 tracking-tight">Create Client Group</h1>
         <p className="text-[11.5px] text-slate-500 mt-0.5 font-medium">
           Create a new client group and define rules and display options.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-2.5">
+      <form onSubmit={handleSubmit} className="mt-2.5 flex-1 flex flex-col min-h-0">
         {/* ── SINGLE MAIN CARD CONTAINER ── */}
-        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 space-y-3">
+        <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs p-5 flex-1 flex flex-col justify-between gap-4">
           {/* SECTION 1: BASIC INFORMATION */}
           <div className="space-y-2">
             <h2 className="text-[13px] font-extrabold text-blue-700 tracking-wide pb-1.5 border-b border-slate-200">
@@ -96,12 +112,16 @@ export function CreateClientGroupPage() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-0.5">
               <div>
-                <label className="block text-xs font-extrabold text-slate-900 mb-1">
-                  Client Group Name <span className="text-rose-600">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-extrabold text-slate-900">
+                    Client Group Name <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">{name.length}/80</span>
+                </div>
                 <input
                   type="text"
                   required
+                  maxLength={80}
                   placeholder="Enter client group name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -110,11 +130,15 @@ export function CreateClientGroupPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-extrabold text-slate-900 mb-1">
-                  Description <span className="text-slate-500 font-medium">(Optional)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-extrabold text-slate-900">
+                    Description <span className="text-slate-500 font-medium">(Optional)</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">{description.length}/250</span>
+                </div>
                 <textarea
                   rows={1.5}
+                  maxLength={250}
                   placeholder="Enter description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -182,7 +206,7 @@ export function CreateClientGroupPage() {
             </div>
 
             {/* Search & Add Bar */}
-            <div className="relative flex items-center gap-2.5">
+            <div className="relative flex items-center gap-2.5" ref={searchContainerRef}>
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <input
@@ -194,6 +218,11 @@ export function CreateClientGroupPage() {
                     setSearchQuery(e.target.value);
                     setIsDropdownOpen(true);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setIsDropdownOpen(false);
+                    }
+                  }}
                   className="w-full h-9 pl-9 pr-3 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium text-slate-900 placeholder:text-slate-400 placeholder:font-normal transition-colors shadow-2xs"
                 />
 
@@ -204,7 +233,10 @@ export function CreateClientGroupPage() {
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => handleAddClient(c)}
+                        onClick={() => {
+                          handleAddClient(c);
+                          setIsDropdownOpen(false);
+                        }}
                         className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center justify-between text-xs transition border-b border-slate-100 last:border-0 cursor-pointer"
                       >
                         <div>

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Users, Edit, Trash2, CheckCircle2, XCircle, Search } from 'lucide-react';
+import { Plus, Users, Edit, Trash2, CheckCircle2, XCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useClientGroups, useDeleteClientGroup, useUpdateClientGroup } from '@modules/admin-panel/hooks/use-client-groups';
 import { useAdminClients } from '@modules/admin-panel/hooks/use-admin-clients';
 import type { IClientGroup, IClient } from '@contracts';
@@ -18,10 +18,18 @@ export function ClientGroupsListPage() {
   const [editingGroup, setEditingGroup] = useState<IClientGroup | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalGroups = groups?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalGroups / rowsPerPage));
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const paginatedGroups = (groups ?? []).slice(startIndex, startIndex + rowsPerPage);
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-6xl xl:max-w-[1400px] 2xl:max-w-[1680px] mx-auto px-4 py-6 min-h-[calc(100vh-92px)] flex flex-col space-y-6">
       {/* ── HEADER ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Groups</h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
@@ -40,13 +48,13 @@ export function ClientGroupsListPage() {
       </div>
 
       {/* ── TABLE / LIST ── */}
-      <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden flex-1 flex flex-col">
         {isLoading ? (
-          <div className="p-12 text-center text-slate-400 text-xs font-medium">
+          <div className="flex-1 flex items-center justify-center p-12 text-center text-slate-400 text-xs font-medium">
             Loading client groups...
           </div>
         ) : !groups || groups.length === 0 ? (
-          <div className="p-12 text-center space-y-3">
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3">
             <Users className="w-10 h-10 text-slate-300 mx-auto" />
             <div className="text-slate-700 font-bold text-sm">No Client Groups Created</div>
             <p className="text-xs text-slate-400 max-w-sm mx-auto font-medium">
@@ -62,28 +70,28 @@ export function ClientGroupsListPage() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="flex-1 overflow-x-auto">
+            <table className="w-full text-left border-collapse table-fixed min-w-[900px]">
               <thead>
                 <tr className="bg-slate-100/70 border-b border-slate-200 text-[11.5px] font-bold text-slate-700">
-                  <th className="py-3.5 px-5">Group Name</th>
+                  <th className="py-3.5 px-5 w-[180px]">Group Name</th>
                   <th className="py-3.5 px-5">Description</th>
-                  <th className="py-3.5 px-5">Show in Quote</th>
-                  <th className="py-3.5 px-5">Show in Orders</th>
-                  <th className="py-3.5 px-5 text-center">Total Clients</th>
-                  <th className="py-3.5 px-5 text-right">Actions</th>
+                  <th className="py-3.5 px-5 w-[150px]">Show in Quote</th>
+                  <th className="py-3.5 px-5 w-[150px]">Show in Orders</th>
+                  <th className="py-3.5 px-5 w-[130px] text-center">Total Clients</th>
+                  <th className="py-3.5 px-5 w-[100px] text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {groups.map((group) => (
+                {paginatedGroups.map((group) => (
                   <tr key={group.id} className="hover:bg-slate-50/70 transition">
                     {/* Name */}
-                    <td className="py-3.5 px-5 font-bold text-slate-900">
+                    <td className="py-3.5 px-5 font-bold text-slate-900 truncate" title={group.name}>
                       {group.name}
                     </td>
 
                     {/* Description */}
-                    <td className="py-3.5 px-5 text-slate-500 max-w-xs truncate font-medium">
+                    <td className="py-3.5 px-5 text-slate-500 truncate font-medium" title={group.description || undefined}>
                       {group.description || <span className="text-slate-300 italic">—</span>}
                     </td>
 
@@ -149,6 +157,56 @@ export function ClientGroupsListPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* ── PAGINATION ── */}
+        {!isLoading && groups && groups.length > 0 && (
+          <div className="shrink-0 border-t border-slate-200/80 px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500 font-medium text-center sm:text-left">
+            <div>
+              Showing {totalGroups === 0 ? 0 : startIndex + 1} to{' '}
+              {Math.min(startIndex + rowsPerPage, totalGroups)} of {totalGroups} groups
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <div className="flex items-center gap-1.5">
+                <span>Rows per page:</span>
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => {
+                    setRowsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-6 border border-slate-200 rounded-lg px-1.5 text-[11px] bg-white focus:outline-none cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="w-6 h-6 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-[11px]">
+                  {currentPage}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="w-6 h-6 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -223,6 +281,22 @@ function EditClientGroupModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
   const { data: clientsData } = useAdminClients({
     page: 1,
     per_page: 250,
@@ -271,10 +345,14 @@ function EditClientGroupModal({
 
         <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
           <div>
-            <label className="block font-bold text-slate-800 mb-1">Group Name *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-slate-800">Group Name *</label>
+              <span className="text-[11px] text-slate-400 font-medium">{name.length}/80</span>
+            </div>
             <input
               type="text"
               required
+              maxLength={80}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full h-9 px-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -282,9 +360,13 @@ function EditClientGroupModal({
           </div>
 
           <div>
-            <label className="block font-bold text-slate-800 mb-1">Description</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block font-bold text-slate-800">Description</label>
+              <span className="text-[11px] text-slate-400 font-medium">{description.length}/250</span>
+            </div>
             <textarea
               rows={2}
+              maxLength={250}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -324,7 +406,7 @@ function EditClientGroupModal({
               </span>
             </div>
 
-            <div className="relative">
+            <div className="relative" ref={searchContainerRef}>
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -334,6 +416,11 @@ function EditClientGroupModal({
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setIsDropdownOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setIsDropdownOpen(false);
+                  }
                 }}
                 className="w-full h-9 pl-8 pr-3 text-xs rounded-lg border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
               />
