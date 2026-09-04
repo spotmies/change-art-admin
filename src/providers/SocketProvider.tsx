@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -37,6 +37,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
   const isAuthenticated = useIsAuthenticated();
   const user = useSessionUser();
   const queryClient = useQueryClient();
+  const hasConnectedBefore = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -45,6 +46,25 @@ export function SocketProvider({ children }: SocketProviderProps) {
     }
 
     const socket = connectSocket();
+
+    // Proxies between us and the browser (Railway/Vercel edge) periodically
+    // drop idle WebSocket connections. Socket.IO auto-reconnects, but any
+    // event broadcast during that gap (e.g. a client placing an order) was
+    // previously lost — nothing here replays it, so the board silently went
+    // stale until a manual refresh. Resync every list-shaped query on every
+    // reconnect (not the very first connect, which already fetches fresh
+    // data on mount) so a missed event self-heals within seconds.
+    const onConnect = () => {
+      if (!hasConnectedBefore.current) {
+        hasConnectedBefore.current = true;
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clients.all() });
+    };
+    socket.on('connect', onConnect);
 
     socket.on(SOCKET_EVENTS.JOB_STATUS_CHANGED, (event: JobStatusChangedEvent) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.jobs.byId(event.jobId) });
@@ -213,6 +233,7 @@ export function SocketProvider({ children }: SocketProviderProps) {
       // the console and duplicate toasts per event. The socket lifecycle is
       // governed by the auth gate above: when `isAuthenticated` flips to
       // false, that branch calls `disconnectSocket()`.
+      socket.off('connect', onConnect);
       socket.off(SOCKET_EVENTS.JOB_STATUS_CHANGED);
       socket.off(SOCKET_EVENTS.JOB_CREATED);
       socket.off(SOCKET_EVENTS.JOB_ASSIGNED);

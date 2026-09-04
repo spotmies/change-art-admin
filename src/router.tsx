@@ -59,6 +59,7 @@ import { AdminNewJobsPage } from '@routes/admin/AdminNewJobsPage';
 import { AdminNewQuotesPage } from '@routes/admin/AdminNewQuotesPage';
 import { AdminClientsPage } from '@routes/admin/AdminClientsPage';
 import { AdminUsersPage } from '@routes/admin/AdminUsersPage';
+import { AddStaffPage } from '@routes/admin/AddStaffPage';
 import { AdminEmailInboxPage } from '@routes/admin/AdminEmailInboxPage';
 import { AdminNotificationsPage } from '@routes/admin/AdminNotificationsPage';
 import { AdminCreateQuotePage } from '@routes/admin/AdminCreateQuotePage';
@@ -230,6 +231,7 @@ export const router = createBrowserRouter([
       { path: 'client-groups', element: <ClientGroupsListPage /> },
       { path: 'client-groups/create', element: <CreateClientGroupPage /> },
       { path: 'users', element: <AdminUsersPage /> },
+      { path: 'users/create', element: <AddStaffPage /> },
       { path: 'email-inbox', element: <AdminEmailInboxPage /> },
       { path: 'notifications', element: <AdminNotificationsPage /> },
       { path: 'amendments', element: <CSAmendmentsPage /> },
