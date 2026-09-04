@@ -65,6 +65,19 @@ export interface IUser {
   sub_type: UserSubType | null;
   is_active: boolean;
   avatar_url: string | null;
+  phone: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  employee_id: string | null;
+  joining_date: string | null;
+  department: string | null;
+  reporting_to_id: string | null;
+  work_location: string | null;
+  shift: string | null;
+  work_remarks: string | null;
+  ip_whitelist: string[];
+  max_active_sessions: number | null;
+  notes: string | null;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }

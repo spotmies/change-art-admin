@@ -4367,24 +4367,24 @@ html[data-theme='light'] .mb-track {
 
   /* ─ Form fields (matches demo's .fi / .fl) ─ */
   .fl {
-    font-size: 11px;
+    font-size: 9.5px;
     font-weight: 600;
     color: var(--text-muted);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
 
   .fi {
     width: 100%;
-    padding: 10px 13px;
+    padding: 5px 9px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
-    border-radius: 8px;
+    border-radius: 5px;
     color: var(--text-main);
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-    font-size: 12.5px;
+    font-size: 11px;
     outline: none;
     transition: var(--transition);
   }
@@ -5703,6 +5703,7 @@ html[data-theme='light'] .mb-track {
 
   /* ── Upload drop zone ── */
   .qf-upload-zone {
+    display: block;
     border: 1.5px dashed var(--glass-border-bright);
     border-radius: 12px;
     padding: 32px 24px;
@@ -5761,6 +5762,47 @@ html[data-theme='light'] .mb-track {
   .qf-upload-hint {
     font-size: 11px;
     color: var(--text-muted);
+  }
+
+  /* ── Confirm dialog (Submit Quote / Place Order) ── */
+  .qf-confirm-modal {
+    background: rgba(8, 14, 30, 0.96);
+    border: 1px solid var(--glass-border-bright);
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+  }
+
+  html[data-theme='light'] .qf-confirm-modal {
+    background: #fff;
+    border-color: #E4E8F0;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+  }
+
+  .qf-confirm-title,
+  .qf-confirm-highlight {
+    color: #fff;
+  }
+
+  html[data-theme='light'] .qf-confirm-title,
+  html[data-theme='light'] .qf-confirm-highlight {
+    color: #0D1B2A;
+  }
+
+  .qf-confirm-input {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+  }
+
+  html[data-theme='light'] .qf-confirm-input {
+    background: #F8F9FB;
+    color: #0D1B2A;
+  }
+
+  .qf-confirm-footer {
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  html[data-theme='light'] .qf-confirm-footer {
+    background: #F8F9FB;
   }
 
   /* ── Cloud storage helper text ── */
@@ -5962,7 +6004,7 @@ html[data-theme='light'] .mb-track {
     backdrop-filter: blur(32px) saturate(180%);
     -webkit-backdrop-filter: blur(32px) saturate(180%);
     border: 1px solid var(--glass-border-bright);
-    border-radius: 16px;
+    border-radius: 6px;
     width: 840px;
     max-width: 100%;
     box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
@@ -5987,7 +6029,7 @@ html[data-theme='light'] .mb-track {
   }
 
   .modal-top {
-    padding: 18px 22px;
+    padding: 12px 18px;
     border-bottom: 1px solid var(--glass-border);
     display: flex;
     align-items: flex-start;
@@ -6042,7 +6084,7 @@ html[data-theme='light'] .mb-track {
   }
 
   .modal-body {
-    padding: 20px 22px 4px;
+    padding: 12px 18px 4px;
   }
 
   .modal-gallery {
@@ -6076,13 +6118,11 @@ html[data-theme='light'] .mb-track {
   }
 
   .m-sec-title {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    padding-bottom: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #2563eb;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
     border-bottom: 1px solid var(--glass-border);
     display: flex;
     align-items: center;
@@ -6258,7 +6298,7 @@ html[data-theme='light'] .mb-track {
   }
 
   html[data-theme='light'] .m-sec-title {
-    color: #6B7585;
+    color: #2563eb;
     border-bottom-color: #E4E8F0;
   }
 
