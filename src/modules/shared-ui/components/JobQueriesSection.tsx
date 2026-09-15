@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, Send, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useJobQueries, useRaiseQuery } from '@modules/admin-panel/hooks/use-job-queries';
@@ -25,6 +25,7 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
   const { data: queries, isLoading } = useJobQueries(jobId);
   const raiseQuery = useRaiseQuery(jobId);
   const threadRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = () => {
     const msg = text.trim();
@@ -42,6 +43,32 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
       onError: () => toast.error('Failed to send query. Please try again.'),
     });
   };
+
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to 'auto' to accurately measure scrollHeight when text changes
+    textarea.style.height = 'auto';
+
+    // 5 to 6 lines max height:
+    // compact mode: line-height is ~16px, 5-6 lines + padding = ~100px
+    // normal mode: line-height is ~18px, 5-6 lines + padding = ~125px
+    const maxHeight = compact ? 100 : 125;
+    const computedScrollHeight = textarea.scrollHeight;
+
+    if (computedScrollHeight > maxHeight) {
+      textarea.style.height = `${maxHeight}px`;
+      textarea.style.overflowY = 'auto';
+    } else {
+      textarea.style.height = `${computedScrollHeight}px`;
+      textarea.style.overflowY = 'hidden';
+    }
+  }, [compact]);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [text, adjustTextareaHeight]);
 
   useEffect(() => {
     if (threadRef.current) {
@@ -119,14 +146,15 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
 
       {/* WhatsApp-style Compose Input Bar */}
       <div className={`bg-white border-t border-slate-200/80 shrink-0 ${compact ? 'p-1.5' : 'p-2.5'}`}>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-end gap-1.5">
           <textarea
+            ref={textareaRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={1}
             placeholder="Enter query to client..."
             disabled={raiseQuery.isPending}
-            className={`flex-1 rounded-xl border border-slate-200/90 text-slate-800 placeholder:text-slate-400 outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 resize-none transition bg-slate-50/50 focus:bg-white ${compact ? 'px-2 py-1 text-[10.5px] max-h-12' : 'px-3 py-2 text-[12px] max-h-20'}`}
+            className={`flex-1 rounded-xl border border-slate-200/90 text-slate-800 placeholder:text-slate-400 outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 resize-none bg-slate-50/50 focus:bg-white ${compact ? 'px-2.5 py-1.5 text-[11px] leading-relaxed' : 'px-3 py-2 text-[12px] leading-relaxed'}`}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -138,13 +166,13 @@ export function JobQueriesSection({ jobId, compact = false }: JobQueriesSectionP
             type="button"
             onClick={handleSubmit}
             disabled={!text.trim() || raiseQuery.isPending}
-            className={`rounded-xl bg-purple-700 hover:bg-purple-800 disabled:bg-slate-200 text-white disabled:text-slate-400 transition shrink-0 shadow-xs flex items-center justify-center ${compact ? 'p-1.5' : 'p-2.5'}`}
+            className={`rounded-xl bg-purple-700 hover:bg-purple-800 disabled:bg-slate-200 text-white disabled:text-slate-400 transition shrink-0 shadow-xs flex items-center justify-center ${compact ? 'p-2' : 'p-2.5'}`}
             title="Send to Client"
           >
             {raiseQuery.isPending ? (
-              <Loader2 className={compact ? 'w-3.5 h-3.5 animate-spin' : 'w-4 h-4 animate-spin'} />
+              <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-4 h-4 animate-spin'} />
             ) : (
-              <Send className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+              <Send className={compact ? 'w-4 h-4' : 'w-4 h-4'} />
             )}
           </button>
         </div>

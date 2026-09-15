@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
+import toast from 'react-hot-toast';
 import {
   ERROR_CODES,
   ERROR_MESSAGES,
@@ -9,6 +10,7 @@ import {
   type PaginationMeta,
 } from '@contracts';
 import { config } from './config';
+import { useAuthStore } from '@modules/auth/stores/auth-store';
 
 /**
  * Thin wrapper around axios that:
@@ -181,9 +183,47 @@ function normaliseError(err: unknown): ApiClientError {
   });
 }
 
+/**
+ * Auth endpoints are expected to 401 in the ordinary course of things (an
+ * anonymous visitor's session probe, a wrong-password attempt) — those must
+ * never trigger the force-logout below, or every visit to /login would show
+ * a bogus "session expired" toast.
+ */
+function isAuthEndpoint(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.includes('/api/auth/') || url.includes('/api/v1/auth/session');
+}
+
+/**
+ * A session can go invalid mid-use — expiry, a revoked session, the server
+ * restarting — and the *first* sign of that used to be whatever screen the
+ * user happened to be on quietly failing (e.g. an accounting-status update
+ * that silently no-ops), with the actual sign-out only surfacing on the next
+ * full refresh. That's confusing: the action looks like it failed for no
+ * reason, and the forced logout appears to come out of nowhere.
+ *
+ * Instead, the moment ANY authenticated request comes back 401 while we
+ * still think we're logged in, immediately flip the auth store to
+ * `unauthenticated` (RoleGuard reacts to that and redirects to /login) and
+ * tell the user why, right when it happens.
+ */
 axiosInstance.interceptors.response.use(
   (response) => response,
-  (error: unknown) => Promise.reject(normaliseError(error)),
+  (error: unknown) => {
+    const normalised = normaliseError(error);
+    const url = axios.isAxiosError(error) ? error.config?.url : undefined;
+
+    if (
+      normalised.status === 401 &&
+      !isAuthEndpoint(url) &&
+      useAuthStore.getState().status === 'authenticated'
+    ) {
+      useAuthStore.getState().reset();
+      toast.error('Your session has expired. Please sign in again.', { id: 'session-expired' });
+    }
+
+    return Promise.reject(normalised);
+  },
 );
 
 interface RequestOptions extends Omit<AxiosRequestConfig, 'method' | 'url' | 'data' | 'params'> {
