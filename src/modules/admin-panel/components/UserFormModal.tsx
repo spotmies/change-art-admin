@@ -5,8 +5,10 @@ import { ALL_COUNTRY_CODES, ConfirmModal, CountryPicker, DatePicker } from '@mod
 import { UserRole, UserSubType } from '@contracts';
 import type { IUser } from '@contracts';
 import { useCreateUser, useDeactivateUser, useUpdateUser } from '../hooks/use-admin-users';
+import { useShifts } from '../hooks/use-shifts';
 import { useAdminUsers } from '../hooks/use-admin-jobs';
 import { useSessionUser } from '@modules/auth/stores/auth-store';
+import { formatShiftTime } from '@lib/utils';
 
 export type UserModalMode = 'view' | 'edit' | 'create';
 
@@ -37,13 +39,6 @@ const GENDER_OPTIONS: { value: string; label: string }[] = [
   { value: 'MALE', label: 'Male' },
   { value: 'FEMALE', label: 'Female' },
   { value: 'OTHER', label: 'Other' },
-];
-
-const SHIFT_OPTIONS: { value: string; label: string }[] = [
-  { value: 'MORNING', label: 'Morning' },
-  { value: 'GENERAL', label: 'General' },
-  { value: 'EVENING', label: 'Evening' },
-  { value: 'NIGHT', label: 'Night' },
 ];
 
 const OCTET_RE = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
@@ -209,6 +204,7 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
   const update = useUpdateUser();
   const deactivate = useDeactivateUser();
   const { data: managerOptions } = useAdminUsers({ per_page: 200 });
+  const { data: shiftOptions } = useShifts();
   const saving = create.isPending || update.isPending;
   const isSelf = !!user && !!sessionUser && user.id === sessionUser.id;
 
@@ -526,7 +522,14 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
                     <div>
                       <span className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Shift</span>
                       <span className="font-medium text-slate-800">
-                        {user.shift ? user.shift.charAt(0) + user.shift.slice(1).toLowerCase() : '—'}
+                        {user.shift
+                          ? (() => {
+                              const matched = shiftOptions?.find((s) => s.name === user.shift);
+                              return matched
+                                ? `${matched.name} (${formatShiftTime(matched.start_time)} - ${formatShiftTime(matched.end_time)})`
+                                : user.shift;
+                            })()
+                          : '—'}
                       </span>
                     </div>
                   </div>
@@ -769,9 +772,15 @@ export function UserFormModal({ mode, user, onClose }: UserFormModalProps) {
                       <label className="fl">Shift</label>
                       <select className="fi" value={form.shift} onChange={(e) => set('shift', e.target.value)}>
                         <option value="">Select shift</option>
-                        {SHIFT_OPTIONS.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
+                        {/* A user's existing shift value that no longer matches any managed
+                            shift (renamed/deleted) still shows here so it isn't silently
+                            dropped from the form on open. */}
+                        {form.shift && !shiftOptions?.some((s) => s.name === form.shift) && (
+                          <option value={form.shift}>{form.shift}</option>
+                        )}
+                        {(shiftOptions ?? []).map((s) => (
+                          <option key={s.id} value={s.name}>
+                            {s.name} ({formatShiftTime(s.start_time)} - {formatShiftTime(s.end_time)})
                           </option>
                         ))}
                       </select>

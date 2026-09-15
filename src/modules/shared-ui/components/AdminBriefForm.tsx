@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Send, Save, Upload, Check, ArrowRight, ArrowLeft, X, Loader2, FileText, Sparkles, Shirt, Box, Type, Shield, Layers, Palette, Image as ImageIcon, Eye, EyeOff, Copy } from 'lucide-react';
+import { Send, Save, Upload, Check, ArrowRight, ArrowLeft, X, Loader2, FileText, Sparkles, Shirt, Box, Type, Shield, Layers, Palette, Image as ImageIcon, Eye, EyeOff, Copy, Shapes, HardHat, Award, MoreHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   FinalFileFormat,
@@ -42,6 +42,13 @@ interface CreateJobCardBody {
   height_inches?: number;
   num_colors?: number;
   fabric?: string;
+  foam_density?: string;
+  chenille_yarn_type?: string;
+  applique_fabric_type?: string;
+  cap_structure?: string;
+  backing_type?: string;
+  monogram_font_style?: string;
+  border_backing_type?: string;
   sewout_required?: boolean;
   description?: string;
   billing_address?: string;
@@ -130,6 +137,13 @@ export interface ClientBriefData {
   width_inches?: number;
   height_inches?: number;
   fabric?: string;
+  foam_density?: string;
+  chenille_yarn_type?: string;
+  applique_fabric_type?: string;
+  cap_structure?: string;
+  backing_type?: string;
+  monogram_font_style?: string;
+  border_backing_type?: string;
   sewout_required?: boolean;
   description: string;
   final_files: FinalFileFormat[];
@@ -273,6 +287,14 @@ const SPECIFIC_SERVICES: Record<string, SpecificServiceOption[]> = {
   digitizing: [
     { label: 'Embroidery Digitizing', sub: 'High quality embroidery digitizing for logos, monograms & more.', icon: <SvgDigitizing /> },
     { label: 'Embroidery Digitizing - Sewout Swatches', sub: 'Digitizing with sewout swatches for approval before production.', icon: <Shirt className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: '3D / Puff Digitizing', sub: '3D puff digitizing for raised embroidery effects.', icon: <Box className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Chenille Digitizing', sub: 'Chenille digitizing for letters, patches & appliqué.', icon: <Layers className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Appliqué Digitizing', sub: 'Appliqué digitizing for fabric appliqué & patches.', icon: <Shapes className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Cap / Hat Digitizing', sub: 'Specialized digitizing for caps, hats & headwear.', icon: <HardHat className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Jacket Back / Large Digitizing', sub: 'Digitizing for jacket backs, large designs & placements.', icon: <Shirt className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Monogram Digitizing', sub: 'Monogram digitizing for names, initials & elegant lettering.', icon: <Type className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Badge / Patch Digitizing', sub: 'Digitizing for badges, emblems & custom patches.', icon: <Award className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
+    { label: 'Other Digitizing', sub: 'Other custom digitizing requirements not listed here.', icon: <MoreHorizontal className="w-8 h-8" style={{ filter: 'drop-shadow(0px 0px 8px rgba(255, 0, 68, 0.6))', color: 'var(--color-crimson)', margin: '0 auto' }} /> },
   ],
   swatches: [],
   extras: [
@@ -373,11 +395,22 @@ export function AdminBriefForm({
 
   const DESIGN_NAME_MAX = 150;
   const FABRIC_MAX = 60;
+  // Shared max length for every digitizing sub-type's single extra spec field
+  // (Foam Density, Chenille Yarn Type, Appliqué Fabric Type, Cap Structure,
+  // Backing Type, Monogram Font Style, Border & Backing).
+  const SUBTYPE_FIELD_MAX = 60;
   const COLORS_MAX = 20;
   const DIMENSION_MAX_LEN = 7; // e.g. "99999.9"
   const DESCRIPTION_MAX = 1500;
   const [designName, setDesignName] = useState('');
   const [fabricValue, setFabricValue] = useState('');
+  const [foamDensityValue, setFoamDensityValue] = useState('');
+  const [chenilleYarnTypeValue, setChenilleYarnTypeValue] = useState('');
+  const [appliqueFabricTypeValue, setAppliqueFabricTypeValue] = useState('');
+  const [capStructureValue, setCapStructureValue] = useState('');
+  const [backingTypeValue, setBackingTypeValue] = useState('');
+  const [monogramFontStyleValue, setMonogramFontStyleValue] = useState('');
+  const [borderBackingTypeValue, setBorderBackingTypeValue] = useState('');
   const [colorsValue, setColorsValue] = useState('');
   const [widthValue, setWidthValue] = useState('');
   const [heightValue, setHeightValue] = useState('');
@@ -410,7 +443,7 @@ export function AdminBriefForm({
 
   const hasSelection = orderType !== '';
   const specificServices = orderType ? SPECIFIC_SERVICES[orderType] : [];
-  const needsService = specificServices.length > 0;
+  const needsService = specificServices.length > 1;
 
   const selectedService = useMemo(() => {
     if (orderType === 'others') return 'Others';
@@ -522,21 +555,28 @@ export function AdminBriefForm({
     setSelectedProcessType('');
     setSelectedPlacement('');
     setFabricValue('');
+    setFoamDensityValue('');
+    setChenilleYarnTypeValue('');
+    setAppliqueFabricTypeValue('');
+    setCapStructureValue('');
+    setBackingTypeValue('');
+    setMonogramFontStyleValue('');
+    setBorderBackingTypeValue('');
     setColorsValue('');
     setWidthValue('');
     setHeightValue('');
     const services = SPECIFIC_SERVICES[id] ?? [];
-    if (services.length === 0) {
-      if (id === 'swatches') {
+    if (services.length <= 1) {
+      if (services.length === 1) {
+        setSpecificService(services[0].label);
+      } else if (id === 'swatches') {
         setSpecificService('Digitizing Sewout');
-        window.setTimeout(advanceToPhase3, 220);
       } else if (id === 'extras') {
         setSpecificService('Others');
-        window.setTimeout(advanceToPhase3, 220);
       } else if (id === 'others') {
         setSpecificService('Others');
-        window.setTimeout(advanceToPhase3, 220);
       }
+      window.setTimeout(advanceToPhase3, 220);
     } else {
       window.setTimeout(() => {
         setPhase(2);
@@ -581,7 +621,7 @@ export function AdminBriefForm({
       return;
     }
     const services = SPECIFIC_SERVICES[orderType] ?? [];
-    setPhase(services.length === 0 ? 3 : 2);
+    setPhase(services.length <= 1 ? 3 : 2);
     document.getElementById('main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -679,6 +719,27 @@ export function AdminBriefForm({
 
     const fabric = String(fd.get('fabric') ?? '').trim();
     if (fabric && order_type !== OrderType.OTHERS) data.fabric = fabric;
+
+    const foamDensity = String(fd.get('foam_density') ?? '').trim();
+    if (foamDensity && specificService === '3D / Puff Digitizing') data.foam_density = foamDensity;
+
+    const chenilleYarnType = String(fd.get('chenille_yarn_type') ?? '').trim();
+    if (chenilleYarnType && specificService === 'Chenille Digitizing') data.chenille_yarn_type = chenilleYarnType;
+
+    const appliqueFabricType = String(fd.get('applique_fabric_type') ?? '').trim();
+    if (appliqueFabricType && specificService === 'Appliqué Digitizing') data.applique_fabric_type = appliqueFabricType;
+
+    const capStructure = String(fd.get('cap_structure') ?? '').trim();
+    if (capStructure && specificService === 'Cap / Hat Digitizing') data.cap_structure = capStructure;
+
+    const backingType = String(fd.get('backing_type') ?? '').trim();
+    if (backingType && specificService === 'Jacket Back / Large Digitizing') data.backing_type = backingType;
+
+    const monogramFontStyle = String(fd.get('monogram_font_style') ?? '').trim();
+    if (monogramFontStyle && specificService === 'Monogram Digitizing') data.monogram_font_style = monogramFontStyle;
+
+    const borderBackingType = String(fd.get('border_backing_type') ?? '').trim();
+    if (borderBackingType && specificService === 'Badge / Patch Digitizing') data.border_backing_type = borderBackingType;
 
     await onSaveDraft(data);
   }
@@ -846,8 +907,8 @@ export function AdminBriefForm({
     }
 
     const placementLabel = String(fd.get('placement') ?? '');
-    const isEmbDigitizingService = specificService === 'Embroidery Digitizing' || specificService === 'Embroidery Digitizing - Sewout Swatches';
-    if (isEmbDigitizingService) {
+    const isDigitizingService = selectedService === 'Digitizing' || selectedService === 'Digitizing Sewout';
+    if (isDigitizingService) {
       const wVal = toNum(fd.get('width'));
       const hVal = toNum(fd.get('height'));
       const hasPlacement = !!PLACEMENT_MAP[placementLabel];
@@ -903,6 +964,41 @@ export function AdminBriefForm({
       if (fabric) data.fabric = fabric;
     }
 
+    if (specificService === '3D / Puff Digitizing') {
+      const foamDensity = String(fd.get('foam_density') ?? '').trim();
+      if (foamDensity) data.foam_density = foamDensity;
+    }
+
+    if (specificService === 'Chenille Digitizing') {
+      const chenilleYarnType = String(fd.get('chenille_yarn_type') ?? '').trim();
+      if (chenilleYarnType) data.chenille_yarn_type = chenilleYarnType;
+    }
+
+    if (specificService === 'Appliqué Digitizing') {
+      const appliqueFabricType = String(fd.get('applique_fabric_type') ?? '').trim();
+      if (appliqueFabricType) data.applique_fabric_type = appliqueFabricType;
+    }
+
+    if (specificService === 'Cap / Hat Digitizing') {
+      const capStructure = String(fd.get('cap_structure') ?? '').trim();
+      if (capStructure) data.cap_structure = capStructure;
+    }
+
+    if (specificService === 'Jacket Back / Large Digitizing') {
+      const backingType = String(fd.get('backing_type') ?? '').trim();
+      if (backingType) data.backing_type = backingType;
+    }
+
+    if (specificService === 'Monogram Digitizing') {
+      const monogramFontStyle = String(fd.get('monogram_font_style') ?? '').trim();
+      if (monogramFontStyle) data.monogram_font_style = monogramFontStyle;
+    }
+
+    if (specificService === 'Badge / Patch Digitizing') {
+      const borderBackingType = String(fd.get('border_backing_type') ?? '').trim();
+      if (borderBackingType) data.border_backing_type = borderBackingType;
+    }
+
     setPendingOrderData(data);
     setConfirmOrderOpen(true);
   }
@@ -933,6 +1029,13 @@ export function AdminBriefForm({
       ...(pendingOrderData.height_inches != null ? { height_inches: pendingOrderData.height_inches } : {}),
       ...(pendingOrderData.num_colors != null ? { num_colors: pendingOrderData.num_colors } : {}),
       ...(pendingOrderData.fabric ? { fabric: pendingOrderData.fabric } : {}),
+      ...(pendingOrderData.foam_density ? { foam_density: pendingOrderData.foam_density } : {}),
+      ...(pendingOrderData.chenille_yarn_type ? { chenille_yarn_type: pendingOrderData.chenille_yarn_type } : {}),
+      ...(pendingOrderData.applique_fabric_type ? { applique_fabric_type: pendingOrderData.applique_fabric_type } : {}),
+      ...(pendingOrderData.cap_structure ? { cap_structure: pendingOrderData.cap_structure } : {}),
+      ...(pendingOrderData.backing_type ? { backing_type: pendingOrderData.backing_type } : {}),
+      ...(pendingOrderData.monogram_font_style ? { monogram_font_style: pendingOrderData.monogram_font_style } : {}),
+      ...(pendingOrderData.border_backing_type ? { border_backing_type: pendingOrderData.border_backing_type } : {}),
       ...(pendingOrderData.sewout_required != null ? { sewout_required: pendingOrderData.sewout_required } : {}),
       ...(pendingOrderData.billing_address ? { billing_address: pendingOrderData.billing_address } : {}),
       ...(pendingOrderData.shipping_address ? { shipping_address: pendingOrderData.shipping_address } : {}),
@@ -959,6 +1062,50 @@ export function AdminBriefForm({
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  /**
+   * Renders the single extra spec field a digitizing sub-type needs beyond
+   * the shared Fabric/Placement/Width/Height set (e.g. Foam Density for
+   * 3D/Puff, Chenille Yarn Type for Chenille, …). Each sub-type shows at
+   * most one of these, gated by `specificService` at the call site.
+   */
+  function renderSubtypeField(id: string, label: string, placeholder: string, value: string, setValue: (v: string) => void) {
+    return (
+      <div>
+        <label className="fl" htmlFor={id}>
+          {label}
+          <span
+            className="qf-label-suffix"
+            style={{
+              float: 'right',
+              fontWeight: 500,
+              letterSpacing: 0,
+              color: value.length >= SUBTYPE_FIELD_MAX ? '#ff3355' : 'var(--text-faint)',
+              textShadow: value.length >= SUBTYPE_FIELD_MAX ? '0 0 8px rgba(255,51,85,0.5)' : undefined,
+            }}
+          >
+            {value.length}/{SUBTYPE_FIELD_MAX}
+          </span>
+        </label>
+        <input
+          id={id}
+          name={id}
+          className="fi"
+          type="text"
+          placeholder={placeholder}
+          maxLength={SUBTYPE_FIELD_MAX}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          style={value.length >= SUBTYPE_FIELD_MAX ? { borderColor: 'var(--color-crimson)', boxShadow: '0 0 0 2px rgba(196,30,58,0.18)' } : undefined}
+        />
+        {value.length >= SUBTYPE_FIELD_MAX && (
+          <p role="alert" style={{ marginTop: 4, fontSize: 11, fontWeight: 600, color: '#ff3355', textShadow: '0 0 8px rgba(255,51,85,0.5)' }}>
+            Maximum {SUBTYPE_FIELD_MAX} characters reached.
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -1678,9 +1825,6 @@ export function AdminBriefForm({
                       <div>
                         <label className="fl" htmlFor="fabric">
                           FABRIC
-                          {specificService !== 'Embroidery Digitizing' && specificService !== 'Embroidery Digitizing - Sewout Swatches' && (
-                            <span style={{ color: '#c41e3a', marginLeft: 2 }}>*</span>
-                          )}
                           <span
                             className="qf-label-suffix"
                             style={{
@@ -1713,13 +1857,34 @@ export function AdminBriefForm({
                       </div>
                     )}
 
+                    {specificService === '3D / Puff Digitizing' &&
+                      renderSubtypeField('foam_density', 'FOAM DENSITY', 'e.g. 2mm, 3mm, High Density', foamDensityValue, setFoamDensityValue)}
+
+                    {specificService === 'Chenille Digitizing' &&
+                      renderSubtypeField('chenille_yarn_type', 'CHENILLE YARN TYPE', 'e.g. Acrylic, Wool, Rayon', chenilleYarnTypeValue, setChenilleYarnTypeValue)}
+
+                    {specificService === 'Appliqué Digitizing' &&
+                      renderSubtypeField('applique_fabric_type', 'APPLIQUÉ FABRIC TYPE', 'e.g. Twill, Felt, Satin', appliqueFabricTypeValue, setAppliqueFabricTypeValue)}
+
+                    {specificService === 'Cap / Hat Digitizing' &&
+                      renderSubtypeField('cap_structure', 'CAP STRUCTURE', 'e.g. Structured, Unstructured, Foam Front', capStructureValue, setCapStructureValue)}
+
+                    {specificService === 'Jacket Back / Large Digitizing' &&
+                      renderSubtypeField('backing_type', 'BACKING TYPE', 'e.g. Cutaway, Tearaway, No-show Mesh', backingTypeValue, setBackingTypeValue)}
+
+                    {specificService === 'Monogram Digitizing' &&
+                      renderSubtypeField('monogram_font_style', 'MONOGRAM FONT STYLE', 'e.g. Classic, Script, Block, Circle', monogramFontStyleValue, setMonogramFontStyleValue)}
+
+                    {specificService === 'Badge / Patch Digitizing' &&
+                      renderSubtypeField('border_backing_type', 'BORDER & BACKING', 'e.g. Merrowed Border, Iron-on Backing', borderBackingTypeValue, setBorderBackingTypeValue)}
+
                     {(selectedService === 'Digitizing' ||
                       selectedService === 'Digitizing Sewout' ||
                       (selectedService === 'Virtual Proof' && specificService === 'Product / Virtual Mock Ups')) && (
                         <div ref={placementSectionRef}>
                           <label className="fl" htmlFor="placement">
                             SELECT PLACEMENT
-                            {(specificService === 'Embroidery Digitizing' || specificService === 'Embroidery Digitizing - Sewout Swatches') && (
+                            {(selectedService === 'Digitizing' || selectedService === 'Digitizing Sewout') && (
                               <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: 4, fontSize: '11px' }}>(or fill width &amp; height)</span>
                             )}
                           </label>

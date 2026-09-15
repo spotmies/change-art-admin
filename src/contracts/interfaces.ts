@@ -82,6 +82,19 @@ export interface IUser {
   updated_at: IsoDateTime;
 }
 
+/** Admin-managed shift definition (e.g. "Morning" 06:00–14:00). `users.shift` stores the shift's `name`, not its id. */
+export interface IShift {
+  id: string;
+  tenant_id: string;
+  name: string;
+  /** 24-hour "HH:MM". */
+  start_time: string;
+  /** 24-hour "HH:MM". May be earlier than start_time for overnight shifts (e.g. Night 22:00–06:00). */
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface IClientGroup {
   id: string;
   tenant_id: string;
@@ -150,6 +163,8 @@ export interface IClient {
   /** When an admin last sent the Credit Card Authorization Form to this client. */
   cc_form_sent_at: IsoDateTime | null;
   cc_form_sent_by: string | null;
+  /** Admin-set flag: CC form still needs to be sent. Cleared once actually sent. */
+  cc_form_required: boolean;
   accounting_notes: string | null;
   default_instruction?: string | null;
   internal_notes?: string | null;
@@ -236,6 +251,13 @@ export interface IJobCard {
   height_inches: number | null;
   num_colors: number | null;
   fabric: string | null;
+  foam_density: string | null;
+  chenille_yarn_type: string | null;
+  applique_fabric_type: string | null;
+  cap_structure: string | null;
+  backing_type: string | null;
+  monogram_font_style: string | null;
+  border_backing_type: string | null;
   payment: string | null;
   mail_description: string | null;
   sewout_required: boolean | null;

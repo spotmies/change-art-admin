@@ -16,7 +16,6 @@ import { CSDashboardPage } from '@routes/cs/CSDashboardPage';
 import { CSNewQuotesPage } from '@routes/cs/CSNewQuotesPage';
 import { CSNewJobsPage } from '@routes/cs/CSNewJobsPage';
 import { CSProjectsPage } from '@routes/cs/CSProjectsPage';
-import { CSQueuePage } from '@routes/cs/CSQueuePage';
 import { CSDeliverPage } from '@routes/cs/CSDeliverPage';
 import { CSAmendmentsPage } from '@routes/cs/CSAmendmentsPage';
 import { CSCreateQuotePage } from '@routes/cs/CSCreateQuotePage';
@@ -109,7 +108,7 @@ export const router = createBrowserRouter([
       { path: 'new-quotes', element: <CSNewQuotesPage /> },
       { path: 'new-jobs', element: <CSNewJobsPage /> },
       { path: 'projects', element: <CSProjectsPage /> },
-      { path: 'queue', element: <CSQueuePage /> },
+      { path: 'queue', element: <Navigate to="../projects" replace /> },
       { path: 'deliver', element: <CSDeliverPage /> },
       { path: 'amendments', element: <CSAmendmentsPage /> },
       { path: 'create-quote', element: <CSCreateQuotePage /> },
@@ -223,7 +222,7 @@ export const router = createBrowserRouter([
       { path: 'jobs', element: <AdminJobsPage /> },
       { path: 'jobs/:jobCardId', element: <AdminJobDetailPage /> },
       { path: 'projects', element: <CSProjectsPage /> },
-      { path: 'queue', element: <CSQueuePage /> },
+      { path: 'queue', element: <Navigate to="../projects" replace /> },
       { path: 'deliver', element: <CSDeliverPage /> },
       { path: 'new-jobs', element: <AdminNewJobsPage /> },
       { path: 'new-quotes', element: <AdminNewQuotesPage /> },

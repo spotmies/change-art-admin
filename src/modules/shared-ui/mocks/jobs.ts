@@ -96,6 +96,20 @@ export interface Job {
   width?: number;
   height?: number;
   fabric?: string;
+  /** Foam density (e.g. "3mm", "High Density") — relevant to 3D/Puff digitizing only. */
+  foamDensity?: string;
+  /** Chenille yarn type — relevant to Chenille digitizing only. */
+  chenilleYarnType?: string;
+  /** Appliqué fabric type — relevant to Appliqué digitizing only. */
+  appliqueFabricType?: string;
+  /** Cap structure — relevant to Cap/Hat digitizing only. */
+  capStructure?: string;
+  /** Backing type — relevant to Jacket Back/Large digitizing only. */
+  backingType?: string;
+  /** Monogram font style — relevant to Monogram digitizing only. */
+  monogramFontStyle?: string;
+  /** Patch border & backing — relevant to Badge/Patch digitizing only. */
+  borderBackingType?: string;
   stitchCount?: number;
   /** ISO timestamp when admin sent the acknowledgement. Countdown starts from here. */
   acknowledgedAt?: string | null;

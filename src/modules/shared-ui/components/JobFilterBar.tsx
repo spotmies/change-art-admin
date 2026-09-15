@@ -53,6 +53,16 @@ export const JOB_STATUS_OPTIONS = [
   { value: 'Cancelled',        label: 'Cancelled' },
 ];
 
+/**
+ * Display statuses that count as "In Production" for the sidebar's single
+ * aggregate nav item — spans every active work stage (junior/senior/sewout/
+ * QC), not just the top-level "In Production" label. Keep in sync with
+ * job-view.ts's STATUS_MAP: any status whose `stage` is junior/senior/
+ * sewout/qc (excluding 'Pending' and 'Amend', which are their own buckets)
+ * belongs here.
+ */
+export const IN_PRODUCTION_STATUSES = ['In Production', 'Senior Review', 'Sewout', 'In QC'];
+
 export const QUOTE_STATUS_OPTIONS = [
   { value: 'Quote Submitted', label: 'Quote Submitted' },
   { value: 'Quote Approved',  label: 'Quote Sent' },
@@ -80,7 +90,11 @@ export function applyJobFilters<
   }
   if (f.orderType) result = result.filter((j) => j.order === f.orderType);
   if (f.priority)  result = result.filter((j) => j.priority === f.priority);
-  if (f.status)    result = result.filter((j) => j.status === f.status);
+  if (f.status === 'In Production') {
+    result = result.filter((j) => IN_PRODUCTION_STATUSES.includes(j.status));
+  } else if (f.status) {
+    result = result.filter((j) => j.status === f.status);
+  }
   if (f.clientId) {
     const targetClient = clients.find((c) => c.client_id === f.clientId || c.id === f.clientId);
     result = result.filter((j) => {
@@ -121,15 +135,20 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
   function closePanel() { setOpen(false); }
 
   function setField<K extends keyof Draft>(k: K, v: Draft[K]) {
-    setDraft((p) => ({ ...p, [k]: v }));
+    const nextDraft = { ...draft, [k]: v };
+    setDraft(nextDraft);
+    onChange({ search: filters.search, ...nextDraft });
   }
 
-  function handleApply() { onChange({ search: filters.search, ...draft }); closePanel(); }
+  function handleApply() {
+    onChange({ search: filters.search, ...draft });
+    closePanel();
+  }
 
   function handleClear() {
     const empty: Draft = { orderType: '', priority: '', status: '', clientId: '', dateFrom: '', dateTo: '' };
     setDraft(empty);
-    onChange({ search: '', ...empty });
+    onChange({ search: filters.search, ...empty });
     closePanel();
   }
 
@@ -239,21 +258,22 @@ export function JobFilterBar({ filters, onChange, statusOptions = JOB_STATUS_OPT
               </div>
             </div>
 
-            {/* Actions — pushed to the right */}
+            {/* Actions — always visible */}
             <div className="fjb-inline-actions">
-              {(draftDirty || !isFiltersEmpty(filters)) && (
+              <button
+                type="button"
+                className="fjb-apply-btn"
+                onClick={handleApply}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                <span>Apply Filter</span>
+              </button>
+              {(!isFiltersEmpty(filters) || draftDirty) && (
                 <button type="button" className="fjb-clear-btn" onClick={handleClear} aria-label="Clear all filters">
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                   <span>Clear</span>
                 </button>
               )}
-              <button
-                type="button"
-                className={`fjb-apply-btn${draftDirty ? ' fjb-apply-btn--ready' : ''}`}
-                onClick={handleApply}
-              >
-                Apply
-              </button>
             </div>
 
           </div>

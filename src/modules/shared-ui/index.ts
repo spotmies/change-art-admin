@@ -34,7 +34,7 @@ export { Pills } from './components/Pills';
 export type { PillItem } from './components/Pills';
 export { Pagination } from './components/Pagination';
 export { JobTable } from './components/JobTable';
-export { JobFilterBar, applyJobFilters, EMPTY_FILTERS, JOB_STATUS_OPTIONS, QUOTE_STATUS_OPTIONS } from './components/JobFilterBar';
+export { JobFilterBar, applyJobFilters, EMPTY_FILTERS, JOB_STATUS_OPTIONS, QUOTE_STATUS_OPTIONS, IN_PRODUCTION_STATUSES } from './components/JobFilterBar';
 export type { JobFilters } from './components/JobFilterBar';
 export { JobModal } from './components/JobModal';
 export { MiniBars } from './components/MiniBars';

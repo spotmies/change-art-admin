@@ -14,6 +14,15 @@ export interface SignInPayload {
   password: string;
 }
 
+/**
+ * Result of the password step. Staff sign-in is always two-factor: a correct
+ * password never returns a session directly — it returns a challenge id that
+ * `verifyLoginOtp` must be called with, using the code emailed to the user.
+ */
+export type SignInResult =
+  | { status: 'otp_required'; challengeId: string }
+  | { status: 'signed_in'; user: SessionUser };
+
 export interface SignUpPayload {
   email: string;
   password: string;
@@ -26,6 +35,12 @@ interface BetterAuthResponse {
   // error body (Better Auth returns { code, message } on failure)
   code?: string;
   message?: string;
+}
+
+/** Response shape for the password step once OTP-gated (see auth.routes.ts). */
+interface SignInOtpChallengeResponse {
+  otpRequired: true;
+  challengeId: string;
 }
 
 interface BetterAuthUser {
@@ -70,13 +85,21 @@ export const authService = {
     }
   },
 
-  async signIn(payload: SignInPayload): Promise<SessionUser> {
+  /**
+   * Step 1: verify email + password. Staff sign-in never returns a session
+   * here — a correct password gets an emailed OTP and a challenge id; call
+   * `verifyLoginOtp` with it to actually receive the session.
+   */
+  async signIn(payload: SignInPayload): Promise<SignInResult> {
     try {
-      const res = await apiClient.raw.post<BetterAuthResponse>(
+      const res = await apiClient.raw.post<BetterAuthResponse | SignInOtpChallengeResponse>(
         '/api/auth/sign-in/email',
         payload,
       );
-      const user = adaptUser(res.data.user ?? null);
+      if ('otpRequired' in res.data && res.data.otpRequired) {
+        return { status: 'otp_required', challengeId: res.data.challengeId };
+      }
+      const user = adaptUser((res.data as BetterAuthResponse).user ?? null);
       if (!user) {
         throw new ApiClientError({
           code: ERROR_CODES.INVALID_CREDENTIALS,
@@ -92,7 +115,7 @@ export const authService = {
           status: 403,
         });
       }
-      return user;
+      return { status: 'signed_in', user };
     } catch (err) {
       // Our own typed errors (thrown above, or already normalised by the api-client
       // interceptor from Better Auth's { code, message } error body) — remap Better
@@ -109,6 +132,34 @@ export const authService = {
       }
       throw new ApiClientError({ code: ERROR_CODES.INTERNAL_ERROR, message: 'Sign-in failed. Please try again.', status: 500 });
     }
+  },
+
+  /**
+   * Step 2: submit the emailed 6-digit code for a pending challenge. Only on
+   * success does the server attach the session cookie.
+   */
+  async verifyLoginOtp(challengeId: string, code: string): Promise<SessionUser> {
+    const res = await apiClient.raw.post<BetterAuthResponse>('/api/auth/verify-login-otp', {
+      challengeId,
+      code,
+    });
+    const user = adaptUser(res.data.user ?? null);
+    if (!user) {
+      throw new ApiClientError({
+        code: ERROR_CODES.INVALID_CREDENTIALS,
+        message: 'Sign-in succeeded but no session user was returned.',
+        status: 500,
+      });
+    }
+    if (!user.is_active) {
+      await authService.signOut().catch(() => {});
+      throw new ApiClientError({
+        code: ERROR_CODES.ACCOUNT_DEACTIVATED,
+        message: 'Your account has been deactivated. Contact an administrator.',
+        status: 403,
+      });
+    }
+    return user;
   },
 
   async signUp(payload: SignUpPayload): Promise<SessionUser> {

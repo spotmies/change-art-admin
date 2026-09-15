@@ -292,8 +292,8 @@ function DepartmentDropdown({ value, onChange }: DepartmentDropdownProps) {
 }
 
 interface AccountingStatusDropdownProps {
-  value: 'hotlisted' | 'send_cc_form' | 'others';
-  onChange: (value: 'hotlisted' | 'send_cc_form' | 'others') => void;
+  value: 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others';
+  onChange: (value: 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others') => void;
   disabled?: boolean;
 }
 
@@ -322,15 +322,17 @@ function AccountingStatusDropdown({ value, onChange, disabled }: AccountingStatu
     };
   }, [open]);
 
-  const labelMap: Record<'hotlisted' | 'send_cc_form' | 'others', string> = {
+  const labelMap: Record<'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others', string> = {
     hotlisted: 'Hotlisted',
     send_cc_form: 'Send CC Form',
+    updated_cc_required: 'Updated CC Required',
     others: 'Others',
   };
 
-  const styleMap: Record<'hotlisted' | 'send_cc_form' | 'others', string> = {
+  const styleMap: Record<'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others', string> = {
     hotlisted: 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100/70',
-    send_cc_form: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70',
+    send_cc_form: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70',
+    updated_cc_required: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70',
     others: 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100/70',
   };
 
@@ -358,7 +360,7 @@ function AccountingStatusDropdown({ value, onChange, disabled }: AccountingStatu
                 className="fixed z-[60] rounded-[6px] border border-slate-200 bg-white shadow-xl py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100 min-w-[130px]"
                 style={{ top: pos.top, left: pos.left }}
               >
-                {(['hotlisted', 'send_cc_form', 'others'] as const).map((opt) => {
+                {(['hotlisted', 'send_cc_form', 'updated_cc_required', 'others'] as const).map((opt) => {
                   const active = opt === value;
                   return (
                     <button
@@ -375,6 +377,8 @@ function AccountingStatusDropdown({ value, onChange, disabled }: AccountingStatu
                           ? opt === 'hotlisted'
                             ? 'bg-rose-50 text-rose-600 font-bold'
                             : opt === 'send_cc_form'
+                            ? 'bg-amber-50 text-amber-700 font-bold'
+                            : opt === 'updated_cc_required'
                             ? 'bg-purple-50 text-purple-700 font-bold'
                             : 'bg-emerald-50 text-emerald-600 font-bold'
                           : 'text-slate-700 font-semibold hover:bg-slate-50'
@@ -569,10 +573,12 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
   if (client?.is_hotlisted) {
     currentAccountingStatus = 'hotlisted';
   } else if (client?.cc_form_sent_at) {
+    currentAccountingStatus = 'updated_cc_required';
+  } else if (client?.cc_form_required) {
     currentAccountingStatus = 'send_cc_form';
   }
 
-  function handleAccountingStatusChange(selectedVal: 'hotlisted' | 'send_cc_form' | 'others') {
+  function handleAccountingStatusChange(selectedVal: 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others') {
     if (!client) return;
     setAccountingStatus.mutate({ id: client.id, status: selectedVal });
   }
@@ -934,7 +940,13 @@ export function ClientDetailModal({ client, mode = 'view', onClose }: ClientDeta
                         )}
                       </div>
                       <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                        {client.is_hotlisted ? 'Hotlisted' : client.cc_form_sent_at ? 'Updated CC Required' : '-'}
+                        {client.is_hotlisted
+                          ? 'Hotlisted'
+                          : client.cc_form_sent_at
+                          ? 'Updated CC Required'
+                          : client.cc_form_required
+                          ? 'Send CC Form'
+                          : '-'}
                       </span>
                       <span className="text-xs font-bold text-slate-900 whitespace-nowrap">{formatFullDate(client.date)}</span>
                       <span className="text-xs font-bold text-slate-900 whitespace-nowrap">

@@ -13,6 +13,7 @@ import {
 } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
+import { isPipelineActive, isQuoteAwaitingClient } from '../../modules/admin-panel/adapters/job-view';
 import { isJobEtaExpired, getDateRangeFromPreset } from '@lib/utils';
 
 const FETCH_SIZE = 200;
@@ -32,10 +33,27 @@ export function CSProjectsPage() {
   const rawProjectParam = searchParams.get('project') ?? '';
   const projectParam = VALID_PROJECT_VALUES.has(rawProjectParam) ? rawProjectParam : '';
   const { jobs: allJobs, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
-  const allData = useMemo(
-    () => (projectParam ? allJobs.filter((j) => j.project === projectParam) : allJobs),
-    [allJobs, projectParam],
-  );
+  // Project-type nav filters (Live / Live Quote / Quote / Amend) apply a
+  // status boundary on top of the raw project tag so a card only shows up
+  // once it's actually reached that stage of the pipeline:
+  // - Live / Live Quote: hidden while still 'Pending' (ETA not sent yet)
+  //   and once dispatched (done, not "live").
+  // - Quote: priced quotes awaiting client confirmation (QUOTE_APPROVED),
+  //   PLUS quotes the client already confirmed but still awaiting an ETA
+  //   from staff — those cards are already tagged `project: 'Live Quote'`
+  //   (not 'Quote'), so this bucket can't be gated by an exact project
+  //   match like the others; isQuoteAwaitingClient checks status directly.
+  // - Amend: project === 'Amend' is already a single, terminal-ish status
+  //   (MODIFICATION_REQUESTED), no extra boundary needed.
+  const allData = useMemo(() => {
+    if (!projectParam) return allJobs;
+    if (projectParam === 'Quote') return allJobs.filter(isQuoteAwaitingClient);
+    return allJobs.filter((j) => {
+      if (j.project !== projectParam) return false;
+      if (projectParam === 'Live' || projectParam === 'Live Quote') return isPipelineActive(j);
+      return true;
+    });
+  }, [allJobs, projectParam]);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<JobFilters>(() => {
     const rawClientId = searchParams.get('clientId') || searchParams.get('client_id') || '';
@@ -96,7 +114,17 @@ export function CSProjectsPage() {
   }, [filterParam, searchParams]);
 
   const open       = useMemo(() => allData.filter((j) => j.stage !== 'delivered' && !isJobEtaExpired(j)), [allData]);
-  const ready      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
+  const ready      = useMemo(
+    () =>
+      allData
+        .filter((j) => (j.status === 'Ready to Deliver' || isJobEtaExpired(j)) && j.status !== 'On Hold')
+        .map((j) =>
+          isJobEtaExpired(j) && j.status !== 'Dispatched'
+            ? { ...j, status: 'Ready to Deliver' as const, stage: 'delivered' as const }
+            : j
+        ),
+    [allData],
+  );
   const amend      = useMemo(() => allData.filter((j) => j.project === 'Amend'), [allData]);
 
   const filteredData = useMemo(() => applyJobFilters(allData, filters, clients), [allData, filters, clients]);
@@ -138,7 +166,19 @@ export function CSProjectsPage() {
     setSearchParams(nextParams, { replace: true });
   }
 
+  const isAllProjects = !projectParam && !filterParam;
   const activeFilterLabel = filterParam || projectParam;
+
+  const sectionTitle = useMemo(() => {
+    if (projectParam === 'Live') return 'Live (Direct) Projects';
+    if (projectParam === 'Live Quote') return 'Live Quote Projects';
+    if (projectParam === 'Quote') return 'Quote Projects';
+    if (projectParam === 'Amend') return 'Amend Projects';
+    if (filterParam === 'In Production') return 'In Production Projects';
+    if (filterParam) return `${filterParam} Projects`;
+    if (projectParam) return `${projectParam} Projects`;
+    return 'All Projects';
+  }, [projectParam, filterParam]);
 
   const activeClient = useMemo(() => {
     if (!filters.clientId) return null;
@@ -163,7 +203,7 @@ export function CSProjectsPage() {
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="All Projects" subtitle="All jobs across the Client Servicing pipeline." />
+        <GreetingHero title={sectionTitle} subtitle="All jobs across the Client Servicing pipeline." />
         <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load projects. Please refresh and try again.
         </div>
@@ -174,7 +214,7 @@ export function CSProjectsPage() {
   return (
     <div className="page">
       <GreetingHero
-        title="All Projects"
+        title={sectionTitle}
         subtitle={activeFilterSubtitle}
       />
 
@@ -193,12 +233,14 @@ export function CSProjectsPage() {
         </div>
       ) : filteredData.length === 0 ? (
         <>
-          <JobFilterBar
-            filters={filters}
-            onChange={handleFiltersChange}
-            statusOptions={JOB_STATUS_OPTIONS}
-            clients={clients}
-          />
+          {isAllProjects && (
+            <JobFilterBar
+              filters={filters}
+              onChange={handleFiltersChange}
+              statusOptions={JOB_STATUS_OPTIONS}
+              clients={clients}
+            />
+          )}
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
             {activeFilterLabel ? `No ${activeFilterLabel.toLowerCase()} jobs.` : 'No projects match these filters.'}
           </div>
@@ -216,12 +258,14 @@ export function CSProjectsPage() {
               setSearchParams(next, { replace: true });
             }}
             toolbarSlot={
-              <JobFilterBar
-                filters={filters}
-                onChange={handleFiltersChange}
-                statusOptions={JOB_STATUS_OPTIONS}
-                clients={clients}
-              />
+              isAllProjects ? (
+                <JobFilterBar
+                  filters={filters}
+                  onChange={handleFiltersChange}
+                  statusOptions={JOB_STATUS_OPTIONS}
+                  clients={clients}
+                />
+              ) : undefined
             }
           />
           <Pagination

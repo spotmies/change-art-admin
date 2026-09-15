@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GreetingHero,
-  JobFilterBar,
   JobTable,
   Pagination,
   StatGrid,
@@ -30,7 +29,7 @@ function mapPriority(p: string): string | undefined {
 }
 
 export function AdminNewJobsPage() {
-  const [filters, setFilters] = useState<JobFilters>(EMPTY_FILTERS);
+  const [filters] = useState<JobFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounced(filters.search, 300);
@@ -43,19 +42,19 @@ export function AdminNewJobsPage() {
     return clients.find((c) => c.client_id === filters.clientId)?.id;
   }, [filters.clientId, clients]);
 
-  // Show both pending orders (JOB_PLACED, unacknowledged) and quotes the CS
-  // team has already priced (QUOTE_APPROVED — admin_price set, awaiting the
-  // client's confirmation). QUOTE_SUBMITTED (client requested a quote but no
-  // price has been set yet) intentionally excluded — that's not "submitted by
-  // admin" and belongs on the Quotes queue instead.
-  // unacknowledged is safe to apply globally: acknowledgement_sent_at is only
-  // ever set on JOB_PLACED jobs (see cs-panel.service.ts#acknowledge), so it
-  // never excludes QUOTE_APPROVED rows.
+  // New Requests = anything the CS team hasn't acted on yet:
+  // - Direct orders: JOB_PLACED with no ETA sent (unacknowledged).
+  // - Quote requests: QUOTE_SUBMITTED — client asked for a quote, no price
+  //   sent yet.
+  // Once a price is sent (QUOTE_APPROVED) it moves to the Quote queue
+  // instead, and a confirmed-but-not-yet-acknowledged quote (project_type
+  // LIVE_QUOTE) STAYS on the Quote queue until ETA is sent — it doesn't
+  // pass back through here. See job-cards.schemas.ts's `view` doc comment
+  // for the exact bucket definition this mirrors server-side.
   const queryFilters = useMemo(() => ({
     page,
     per_page: PER_PAGE,
-    statuses: 'JOB_PLACED,QUOTE_APPROVED',
-    unacknowledged: true,
+    view: 'new_requests' as const,
     search: debouncedSearch.trim() || undefined,
     order_type: mapOrderType(filters.orderType),
     priority: mapPriority(filters.priority),
@@ -71,15 +70,12 @@ export function AdminNewJobsPage() {
   useEffect(() => { if (!isLoading) hasLoadedOnce.current = true; }, [isLoading]);
   const isFirstLoad = isLoading && !hasLoadedOnce.current;
 
-  function handleFiltersChange(next: JobFilters) {
-    setFilters(next);
-    setPage(1);
-  }
+
 
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="New Jobs" subtitle="Pending orders awaiting acknowledgement." />
+        <GreetingHero title="New Jobs" subtitle="New orders, quote requests, and modification requests awaiting your response." />
         <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load jobs. Please refresh and try again.
         </div>
@@ -91,7 +87,7 @@ export function AdminNewJobsPage() {
     <div className="page">
       <GreetingHero
         title="New Jobs"
-        subtitle="Pending orders awaiting acknowledgement, plus quotes you've priced and sent to the client."
+        subtitle="Direct orders awaiting ETA, quote requests waiting on a price, and modification requests awaiting review."
       />
 
       <StatGrid
@@ -113,14 +109,6 @@ export function AdminNewJobsPage() {
             showActions
             defaultView="grid"
             emptyLabel="No pending jobs."
-            toolbarSlot={
-              <JobFilterBar
-                filters={filters}
-                onChange={handleFiltersChange}
-                statusOptions={[]}
-                clients={clients}
-              />
-            }
           />
           {total > 0 && (
             <Pagination

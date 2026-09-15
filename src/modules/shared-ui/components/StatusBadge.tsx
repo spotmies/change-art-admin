@@ -52,7 +52,9 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
 
 /** True once a job has reached its final dispatched/delivered state. */
 export function isCompletedStatus(status: string, stage: string): boolean {
-  return stage === 'delivered' && status === 'Dispatched';
+  if (!status) return stage === 'delivered';
+  const s = status.toUpperCase();
+  return stage === 'delivered' || s === 'DISPATCHED' || s === 'DELIVERED' || s === 'COMPLETED';
 }
 
 interface CompletedStatusBadgeProps {

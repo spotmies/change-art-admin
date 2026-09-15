@@ -228,6 +228,13 @@ export interface EditFields {
   specificType?: string | null;
   finalFiles?: string[];
   fabric?: string;
+  foamDensity?: string;
+  chenilleYarnType?: string;
+  appliqueFabricType?: string;
+  capStructure?: string;
+  backingType?: string;
+  monogramFontStyle?: string;
+  borderBackingType?: string;
   placement?: string;
   widthInches?: number | null;
   heightInches?: number | null;
@@ -250,6 +257,13 @@ interface FormState {
   specificType: string;
   formatOption: string;
   fabric: string;
+  foamDensity: string;
+  chenilleYarnType: string;
+  appliqueFabricType: string;
+  capStructure: string;
+  backingType: string;
+  monogramFontStyle: string;
+  borderBackingType: string;
   placement: string; // Placement enum value
   widthInches: string;
   heightInches: string;
@@ -276,6 +290,13 @@ function toForm(job: Job): FormState {
     // Digitizing formats stored as OTHERS won't match; user re-selects.
     formatOption: (job.finalFiles ?? []).join(', '),
     fabric: job.fabric ?? '',
+    foamDensity: job.foamDensity ?? '',
+    chenilleYarnType: job.chenilleYarnType ?? '',
+    appliqueFabricType: job.appliqueFabricType ?? '',
+    capStructure: job.capStructure ?? '',
+    backingType: job.backingType ?? '',
+    monogramFontStyle: job.monogramFontStyle ?? '',
+    borderBackingType: job.borderBackingType ?? '',
     placement: job.placement ? (PLACEMENT_DISPLAY_TO_ENUM[job.placement] ?? '') : '',
     widthInches: job.width != null ? String(job.width) : '',
     heightInches: job.height != null ? String(job.height) : '',
@@ -508,6 +529,41 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
       patch.fabric = form.fabric || undefined;
     }
 
+    // Foam density
+    if (form.foamDensity !== (job.foamDensity ?? '')) {
+      patch.foam_density = form.foamDensity || undefined;
+    }
+
+    // Chenille yarn type
+    if (form.chenilleYarnType !== (job.chenilleYarnType ?? '')) {
+      patch.chenille_yarn_type = form.chenilleYarnType || undefined;
+    }
+
+    // Appliqué fabric type
+    if (form.appliqueFabricType !== (job.appliqueFabricType ?? '')) {
+      patch.applique_fabric_type = form.appliqueFabricType || undefined;
+    }
+
+    // Cap structure
+    if (form.capStructure !== (job.capStructure ?? '')) {
+      patch.cap_structure = form.capStructure || undefined;
+    }
+
+    // Backing type
+    if (form.backingType !== (job.backingType ?? '')) {
+      patch.backing_type = form.backingType || undefined;
+    }
+
+    // Monogram font style
+    if (form.monogramFontStyle !== (job.monogramFontStyle ?? '')) {
+      patch.monogram_font_style = form.monogramFontStyle || undefined;
+    }
+
+    // Border & backing
+    if (form.borderBackingType !== (job.borderBackingType ?? '')) {
+      patch.border_backing_type = form.borderBackingType || undefined;
+    }
+
     // Placement: form stores enum value; job.placement is display string
     const origPlacementEnum = job.placement ? (PLACEMENT_DISPLAY_TO_ENUM[job.placement] ?? '') : '';
     if (form.placement !== origPlacementEnum) {
@@ -580,6 +636,13 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
         specificType: form.specificType || null,
         finalFiles: form.formatOption ? parseFinalFiles(form.formatOption) : [],
         fabric: form.fabric,
+        foamDensity: form.foamDensity,
+        chenilleYarnType: form.chenilleYarnType,
+        appliqueFabricType: form.appliqueFabricType,
+        capStructure: form.capStructure,
+        backingType: form.backingType,
+        monogramFontStyle: form.monogramFontStyle,
+        borderBackingType: form.borderBackingType,
         placement: form.placement,
         widthInches: num(form.widthInches),
         heightInches: num(form.heightInches),
@@ -747,6 +810,83 @@ export function EditJobModal({ job, onClose, onBack, onSave }: EditJobModalProps
                         onChange={(e) => set('fabric', e.target.value)}
                       />
                     </Field>
+
+                    {form.specificType === '3D / Puff Digitizing' && (
+                      <Field label="Foam Density">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.foamDensity}
+                          placeholder="e.g. 2mm, 3mm, High Density"
+                          onChange={(e) => set('foamDensity', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Chenille Digitizing' && (
+                      <Field label="Chenille Yarn Type">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.chenilleYarnType}
+                          placeholder="e.g. Acrylic, Wool, Rayon"
+                          onChange={(e) => set('chenilleYarnType', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Appliqué Digitizing' && (
+                      <Field label="Appliqué Fabric Type">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.appliqueFabricType}
+                          placeholder="e.g. Twill, Felt, Satin"
+                          onChange={(e) => set('appliqueFabricType', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Cap / Hat Digitizing' && (
+                      <Field label="Cap Structure">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.capStructure}
+                          placeholder="e.g. Structured, Unstructured, Foam Front"
+                          onChange={(e) => set('capStructure', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Jacket Back / Large Digitizing' && (
+                      <Field label="Backing Type">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.backingType}
+                          placeholder="e.g. Cutaway, Tearaway, No-show Mesh"
+                          onChange={(e) => set('backingType', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Monogram Digitizing' && (
+                      <Field label="Monogram Font Style">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.monogramFontStyle}
+                          placeholder="e.g. Classic, Script, Block, Circle"
+                          onChange={(e) => set('monogramFontStyle', e.target.value)}
+                        />
+                      </Field>
+                    )}
+
+                    {form.specificType === 'Badge / Patch Digitizing' && (
+                      <Field label="Border & Backing">
+                        <input
+                          className={FIELD_CLS}
+                          value={form.borderBackingType}
+                          placeholder="e.g. Merrowed Border, Iron-on Backing"
+                          onChange={(e) => set('borderBackingType', e.target.value)}
+                        />
+                      </Field>
+                    )}
 
                     <Field label="Placement">
                       <select className={FIELD_CLS} value={form.placement} onChange={(e) => set('placement', e.target.value)}>

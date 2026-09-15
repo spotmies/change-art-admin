@@ -55,6 +55,14 @@ export function resolveServiceBucket(
     case 'Carton Box Designing':
       return 'Carton Box Designing';
     case 'Embroidery Digitizing':
+    case '3D / Puff Digitizing':
+    case 'Chenille Digitizing':
+    case 'Appliqué Digitizing':
+    case 'Cap / Hat Digitizing':
+    case 'Jacket Back / Large Digitizing':
+    case 'Monogram Digitizing':
+    case 'Badge / Patch Digitizing':
+    case 'Other Digitizing':
       return 'Digitizing';
     case 'Embroidery Digitizing - Sewout Swatches':
     case 'Digitizing Sewout':
