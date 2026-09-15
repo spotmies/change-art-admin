@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { authService } from '@modules/auth/services';
 import { useAuthStore } from '@modules/auth/stores/auth-store';
 import { ApiClientError } from '@lib/api-client';
-import { ERROR_CODES, ERROR_MESSAGES, UserRole } from '@contracts';
+import { ERROR_CODES, ERROR_MESSAGES, UserRole, type SessionUser } from '@contracts';
 import { pathForRole } from '@/router';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@lib/utils';
@@ -20,6 +20,12 @@ const LoginSchema = z.object({
 
 type LoginValues = z.infer<typeof LoginSchema>;
 
+const OtpSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+type OtpValues = z.infer<typeof OtpSchema>;
+
 export function LoginForm() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +36,7 @@ export function LoginForm() {
     isDeactivated ? 'Your account has been deactivated. Contact an administrator.' : null,
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [challenge, setChallenge] = useState<{ id: string; email: string } | null>(null);
 
   const {
     register,
@@ -40,26 +47,46 @@ export function LoginForm() {
     defaultValues: { email: '', password: '' },
   });
 
+  const {
+    register: registerOtp,
+    handleSubmit: handleOtpSubmit,
+    reset: resetOtpForm,
+    formState: { errors: otpErrors, isSubmitting: isOtpSubmitting },
+  } = useForm<OtpValues>({
+    resolver: zodResolver(OtpSchema),
+    defaultValues: { code: '' },
+  });
+
+  function completeSignIn(user: SessionUser) {
+    if (user.role === UserRole.CLIENT) {
+      void authService.signOut();
+      setServerError('Access denied. This platform is for internal staff only.');
+      setChallenge(null);
+      return;
+    }
+    // Clear stale cache from any previous session before setting the new user.
+    queryClient.clear();
+    setUser(user);
+    const home = pathForRole(user.role);
+    const from = (location.state as { from?: string } | null)?.from;
+    // Only honour `from` if it lives under this user's home section.
+    // Otherwise a previous session (e.g. CS) would send a freshly-signed-in
+    // admin to /cs instead of /admin.
+    const destination = from?.startsWith(home) ? from : home;
+    navigate(destination, { replace: true });
+    toast.success(`Welcome back, ${user.name.split(' ')[0]}`);
+  }
+
   async function onSubmit(values: LoginValues) {
     setServerError(null);
     try {
-      const user = await authService.signIn(values);
-      if (user.role === UserRole.CLIENT) {
-        await authService.signOut();
-        setServerError('Access denied. This platform is for internal staff only.');
+      const result = await authService.signIn(values);
+      if (result.status === 'otp_required') {
+        setChallenge({ id: result.challengeId, email: values.email });
+        resetOtpForm();
         return;
       }
-      // Clear stale cache from any previous session before setting the new user.
-      queryClient.clear();
-      setUser(user);
-      const home = pathForRole(user.role);
-      const from = (location.state as { from?: string } | null)?.from;
-      // Only honour `from` if it lives under this user's home section.
-      // Otherwise a previous session (e.g. CS) would send a freshly-signed-in
-      // admin to /cs instead of /admin.
-      const destination = from?.startsWith(home) ? from : home;
-      navigate(destination, { replace: true });
-      toast.success(`Welcome back, ${user.name.split(' ')[0]}`);
+      completeSignIn(result.user);
     } catch (err) {
       if (err instanceof ApiClientError) {
         if (err.code === ERROR_CODES.INVALID_CREDENTIALS) {
@@ -73,6 +100,93 @@ export function LoginForm() {
         setServerError(ERROR_MESSAGES.UNKNOWN_ERROR);
       }
     }
+  }
+
+  async function onSubmitOtp(values: OtpValues) {
+    if (!challenge) return;
+    setServerError(null);
+    try {
+      const user = await authService.verifyLoginOtp(challenge.id, values.code);
+      completeSignIn(user);
+    } catch (err) {
+      if (err instanceof ApiClientError) {
+        if (err.code === ERROR_CODES.OTP_EXPIRED || err.code === ERROR_CODES.TOO_MANY_OTP_ATTEMPTS) {
+          // The challenge is dead either way — send them back to re-enter
+          // credentials and get a fresh code.
+          setServerError(err.toUserMessage());
+          setChallenge(null);
+        } else if (err.code === ERROR_CODES.INVALID_OTP) {
+          setServerError(ERROR_MESSAGES.INVALID_OTP);
+        } else {
+          setServerError(err.toUserMessage());
+        }
+      } else {
+        setServerError(ERROR_MESSAGES.UNKNOWN_ERROR);
+      }
+    }
+  }
+
+  if (challenge) {
+    return (
+      <form onSubmit={handleOtpSubmit(onSubmitOtp)} noValidate aria-label="Verify sign-in code">
+        <h2 className="text-[18px] font-bold mb-1 flex justify-center">Check your email</h2>
+        <p className="text-[12.5px] text-text-muted mb-6 text-center">
+          We sent a 6-digit code to <span className="text-text-base">{challenge.email}</span>.
+          Enter it below to finish signing in.
+        </p>
+
+        <label className="block">
+          <span className="lbl">Verification code</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            autoFocus
+            className={cn('inp text-center tracking-[0.3em] font-mono', otpErrors.code && 'aria-invalid')}
+            aria-invalid={otpErrors.code ? 'true' : 'false'}
+            aria-describedby={otpErrors.code ? 'otp-code-error' : undefined}
+            {...registerOtp('code')}
+          />
+          {otpErrors.code ? (
+            <p id="otp-code-error" className="text-[11px] text-status-red mt-1" role="alert">
+              {otpErrors.code.message}
+            </p>
+          ) : null}
+        </label>
+
+        <div className="mt-2 mb-5" />
+
+        {serverError ? (
+          <div
+            role="alert"
+            className="text-[12px] mb-3 p-2.5 rounded-lg border border-status-red/30 bg-status-red/10 text-[#fca5a5]"
+          >
+            {serverError}
+          </div>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={isOtpSubmitting}
+          aria-busy={isOtpSubmitting}
+          className="btn btn-crimson w-full"
+        >
+          {isOtpSubmitting ? 'Verifying…' : 'Verify and sign in'}
+        </button>
+
+        <button
+          type="button"
+          className="text-[11.5px] text-text-muted hover:text-text-base transition-colors mt-4 w-full text-center"
+          onClick={() => {
+            setChallenge(null);
+            setServerError(null);
+          }}
+        >
+          Back to sign in
+        </button>
+      </form>
+    );
   }
 
   return (

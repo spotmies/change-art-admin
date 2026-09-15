@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyRound, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Clock, KeyRound, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmModal, GreetingHero, Pagination, Panel, StatGrid } from '@modules/shared-ui';
 import { UserRole, UserSubType } from '@contracts';
@@ -7,6 +7,7 @@ import type { IUser } from '@contracts';
 import { useAdminUsers, useDeleteUser, useResetUserPassword } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { ApiClientError } from '@lib/api-client';
 import { UserFormModal, type UserModalMode } from '../../modules/admin-panel/components/UserFormModal';
+import { ShiftsManagerModal } from '../../modules/admin-panel/components/ShiftsManagerModal';
 
 const PER_PAGE = 20;
 const FETCH_LIMIT = 100;
@@ -44,6 +45,7 @@ export function AdminUsersPage() {
   const [modal, setModal] = useState<{ mode: UserModalMode; user: IUser | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<IUser | null>(null);
   const [resetTarget, setResetTarget] = useState<IUser | null>(null);
+  const [shiftsModalOpen, setShiftsModalOpen] = useState(false);
 
   const { data, isLoading, isError } = useAdminUsers({ per_page: FETCH_LIMIT });
   const deleteMutation = useDeleteUser();
@@ -142,6 +144,14 @@ export function AdminUsersPage() {
             <option value="inactive">Inactive</option>
           </select>
         </div>
+        <button
+          type="button"
+          className="btn btn-outline w-full sm:w-auto shrink-0 justify-center"
+          onClick={() => setShiftsModalOpen(true)}
+        >
+          <Clock className="w-3.5 h-3.5" aria-hidden />
+          Shifts
+        </button>
         <button
           type="button"
           className="btn btn-crimson w-full sm:w-auto shrink-0 justify-center"
@@ -262,6 +272,8 @@ export function AdminUsersPage() {
       {modal ? (
         <UserFormModal mode={modal.mode} user={modal.user} onClose={() => setModal(null)} />
       ) : null}
+
+      {shiftsModalOpen && <ShiftsManagerModal onClose={() => setShiftsModalOpen(false)} />}
 
       {deleteTarget && (
         <div

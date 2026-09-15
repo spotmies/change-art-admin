@@ -17,7 +17,7 @@ import type {
   JobStage,
   JobStatus as JobStatusDisplay,
 } from '@modules/shared-ui';
-import { normalizeRefNumber } from '@lib/utils';
+import { normalizeRefNumber, isJobEtaExpired } from '@lib/utils';
 import { resolveClientCardExpiry } from '@lib/card-expiry';
 
 const ORDER_DISPLAY: Record<OrderType, JobOrderType> = {
@@ -106,6 +106,31 @@ const STATUS_MAP: Record<JobStatus, StageDisplay> = {
   [JobStatus.HOLD]: { status: 'On Hold', stage: 'junior' },
 };
 
+/**
+ * Whether a Live / Live Quote project card belongs in the active pipeline
+ * view (sidebar's Live (Direct) / Live Quote nav items, badges, dashboard
+ * counts). A card tagged `project` Live/Live Quote is excluded once it's
+ * either still awaiting ETA ('Pending' — hasn't moved past New Requests
+ * yet) or already dispatched (`stage === 'delivered'`), so it doesn't
+ * linger in the working queue forever after it's done.
+ */
+export function isPipelineActive(job: Pick<Job, 'stage' | 'status'>): boolean {
+  if (job.status === 'On Hold') return true;
+  return job.stage !== 'delivered' && job.status !== 'Pending';
+}
+
+/**
+ * Whether a card belongs on the "Quote" sidebar section: either a priced
+ * quote awaiting the client's confirmation (QUOTE_APPROVED), or a quote
+ * the client already confirmed but that's still waiting on staff to send
+ * an ETA (`project` flipped to 'Live Quote', status 'Pending'). It only
+ * moves to Live Quote once that ETA is sent — QUOTE_SUBMITTED (not yet
+ * priced) belongs on New Requests instead, so it's excluded here.
+ */
+export function isQuoteAwaitingClient(job: Pick<Job, 'project' | 'status'>): boolean {
+  return job.status === 'Quote Approved' || (job.project === 'Live Quote' && job.status === 'Pending');
+}
+
 export interface ClientInfo {
   name: string;
   clientId: string;
@@ -121,13 +146,11 @@ export function adaptJobCard(
   // JOB_PLACED means CS created the job but the TL hasn't acknowledged it yet.
   // Only flip to "In Production" once the ack has been sent; before that show
   // "Pending" so staff can see the job still needs acknowledgement.
-  const displayStatus: JobStatusDisplay =
+  let displayStatus: JobStatusDisplay =
     card.status === JobStatus.JOB_PLACED && !card.acknowledgement_sent_at
       ? 'Pending'
       : mapped.status;
 
-  // A held job keeps the kanban column it was in before the hold, instead of
-  // jumping to HOLD's fallback stage — only the status label/badge changes.
   const stage: JobStage =
     card.status === JobStatus.HOLD && card.pre_hold_status
       ? (STATUS_MAP[card.pre_hold_status]?.stage ?? mapped.stage)
@@ -136,6 +159,32 @@ export function adaptJobCard(
   const effectiveAcknowledgedAt = card.acknowledgement_sent_at
     ? new Date(new Date(card.acknowledgement_sent_at).getTime() + (card.total_held_ms ?? 0)).toISOString()
     : null;
+
+  if (
+    card.status !== JobStatus.HOLD &&
+    displayStatus !== 'On Hold' &&
+    isJobEtaExpired({
+      effectiveAcknowledgedAt,
+      acknowledgedAt: card.acknowledgement_sent_at ? String(card.acknowledgement_sent_at) : null,
+      etaHours: card.eta_hours,
+      status: displayStatus,
+      rawStatus: card.status,
+      stage,
+      created: card.time_and_date ?? card.created_at,
+    })
+  ) {
+    // Flip the status label to flag the job as overdue, but leave `stage`
+    // alone — it must keep reflecting wherever the job actually sits in the
+    // pipeline (junior/senior/qc/sewout). `stage === 'delivered'` means
+    // "already dispatched to the client" everywhere else in the app
+    // (history pages, badge counts, assign/dispatch button visibility,
+    // isCompletedStatus/isPipelineActive below); forcing it here previously
+    // made an overdue-but-still-in-production job indistinguishable from one
+    // that had actually shipped. The "Ready to Dispatch" queue itself
+    // (CSDeliverPage) already finds these jobs via `isJobEtaExpired`
+    // directly, not via `stage`, so nothing there depends on this override.
+    displayStatus = 'Ready to Deliver';
+  }
 
   const assignedUserId =
     card.current_handler_id ??
@@ -203,6 +252,13 @@ export function adaptJobCard(
     width: card.width_inches ?? undefined,
     height: card.height_inches ?? undefined,
     fabric: card.fabric ?? undefined,
+    foamDensity: card.foam_density ?? undefined,
+    chenilleYarnType: card.chenille_yarn_type ?? undefined,
+    appliqueFabricType: card.applique_fabric_type ?? undefined,
+    capStructure: card.cap_structure ?? undefined,
+    backingType: card.backing_type ?? undefined,
+    monogramFontStyle: card.monogram_font_style ?? undefined,
+    borderBackingType: card.border_backing_type ?? undefined,
     stitchCount: card.stitch_count ?? undefined,
     acknowledgedAt: card.acknowledgement_sent_at
       ? String(card.acknowledgement_sent_at)

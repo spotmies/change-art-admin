@@ -60,8 +60,15 @@ function mapStatusFilter(display: string): {
     case 'Pending':
       return { status: 'JOB_PLACED', unacknowledged: true };
     case 'In Production':
+      // Every status that's actively being worked (junior/senior/sewout/QC),
+      // plus acknowledged-but-not-yet-picked-up JOB_PLACED jobs. Must cover
+      // the full pipeline — previously this excluded senior review, sewout,
+      // and QC stages, so those job cards silently vanished from the sidebar.
       return {
-        statuses: 'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED',
+        statuses:
+          'CS_APPROVED,ASSIGNED,IN_PROGRESS,SENIOR_REJECTED,QC_REJECTED,' +
+          'SUBMITTED_TO_SENIOR,SENIOR_REVIEW,SUBMITTED_TO_SEWOUT,SEWOUT_IN_PROGRESS,' +
+          'SUBMITTED_TO_QC,QC_REVIEW',
         include_ack_placed: true,
       };
     case 'Senior Review':
@@ -220,6 +227,8 @@ export function AdminJobsPage() {
   // display label so e.g. 'Ready to Deliver' reads as "Ready to Dispatch".
   const activeStatusLabel = JOB_STATUS_OPTIONS.find((o) => o.value === filters.status)?.label ?? '';
 
+  const isAllProjects = !searchParams.get('project') && !searchParams.get('filter');
+
   return (
     <div className="page">
       <GreetingHero
@@ -244,12 +253,14 @@ export function AdminJobsPage() {
               setSearchParams(next, { replace: true });
             }}
             toolbarSlot={
-              <JobFilterBar
-                filters={filters}
-                onChange={handleFiltersChange}
-                statusOptions={JOB_STATUS_OPTIONS}
-                clients={clients}
-              />
+              isAllProjects ? (
+                <JobFilterBar
+                  filters={filters}
+                  onChange={handleFiltersChange}
+                  statusOptions={JOB_STATUS_OPTIONS}
+                  clients={clients}
+                />
+              ) : undefined
             }
           />
           <Pagination

@@ -10,7 +10,17 @@ export function CSDeliverPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
-  const readyJobs      = useMemo(() => allData.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)), [allData]);
+  const readyJobs      = useMemo(
+    () =>
+      allData
+        .filter((j) => (j.status === 'Ready to Deliver' || isJobEtaExpired(j)) && j.status !== 'On Hold')
+        .map((j) =>
+          isJobEtaExpired(j) && j.status !== 'Dispatched'
+            ? { ...j, status: 'Ready to Deliver' as const, stage: 'delivered' as const }
+            : j
+        ),
+    [allData],
+  );
   const delivered      = useMemo(() => allData.filter((j) => j.stage === 'delivered' && j.status === 'Dispatched'), [allData]);
   const deliveredToday = useMemo(() => delivered.filter((j) => isToday(j.created)), [delivered]);
 

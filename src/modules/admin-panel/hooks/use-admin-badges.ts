@@ -2,10 +2,11 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { EmailIngestionStatus } from '@contracts';
 import { queryKeys } from '@lib/query-keys';
-import { isJobEtaExpired } from '@lib/utils';
 import { adminService } from '../services/admin.service';
-import { adaptJobCard } from '../adapters/job-view';
 import { useUnreadCount } from '@modules/notifications/hooks/use-notifications';
+import { useAdminJobViews } from './use-admin-jobs';
+import { isJobEtaExpired } from '@lib/utils';
+import { IN_PRODUCTION_STATUSES } from '@modules/shared-ui';
 
 /**
  * Shared across both nav-badge hooks — the Email Inbox badge counts emails
@@ -29,11 +30,6 @@ export function usePendingEmailCount(enabled: boolean): number | undefined {
 // on the Clients page, so they do not share cache and won't conflict.
 const PENDING_CR_FILTERS = { status: 'PENDING' as const, per_page: 1 };
 
-// per_page: 200 — matches the CS dashboard's own job fetch (same query key,
-// same filter shape) so the two share a cache entry and this doesn't cost
-// an extra request whenever the dashboard is open.
-const CS_BADGE_FILTERS = { per_page: 200 };
-
 /**
  * Returns a map of nav-item-id → badge count for the admin sidebar.
  *
@@ -49,15 +45,7 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
     enabled,
   });
 
-  // Live / Live Quote / In Production / Ready to Dispatch counts for the
-  // admin sidebar — shares its query key + cache with useCsNavBadges below,
-  // so having both panels open costs one request, not two.
-  const { data: projectData } = useQuery({
-    queryKey: queryKeys.jobs.list(CS_BADGE_FILTERS),
-    queryFn: () => adminService.getJobCards(CS_BADGE_FILTERS),
-    staleTime: 30 * 1000,
-    enabled,
-  });
+  const { jobs } = useAdminJobViews(enabled ? { per_page: 200 } : { per_page: 1 });
 
   // Shares its cache key with the Profile Requests tab on the Clients page
   // so opening that tab is a cache hit.
@@ -91,14 +79,23 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
       badges['new-quotes'] = data['new-quotes'] ?? 0;
       badges['new-jobs'] = data['new-jobs'] ?? 0;
       if ((data['amendments'] ?? 0) > 0) badges['amendments'] = data['amendments'] ?? 0;
+      badges['live'] = data['live'] ?? 0;
+      badges['live-quote'] = data['live-quote'] ?? 0;
+      badges['in-production'] = data['in-production'] ?? 0;
+      badges['deliver'] = data['deliver'] ?? 0;
     }
-    if (projectData) {
-      const jobs = projectData.items.map((card) => adaptJobCard(card, new Map(), new Map()));
-      badges['live'] = jobs.filter((j) => j.project === 'Live').length;
-      badges['live-quote'] = jobs.filter((j) => j.project === 'Live Quote').length;
-      badges['in-production'] = jobs.filter((j) => j.status === 'In Production').length;
-      badges['deliver'] = jobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)).length;
+
+    if (jobs && jobs.length > 0) {
+      const readyCount = jobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)).length;
+      if (readyCount > 0) {
+        badges['deliver'] = Math.max(badges['deliver'] ?? 0, readyCount);
+      }
+      const activeProdCount = jobs.filter((j) => IN_PRODUCTION_STATUSES.includes(j.status) && !isJobEtaExpired(j)).length;
+      if (activeProdCount >= 0 && data) {
+        badges['in-production'] = activeProdCount;
+      }
     }
+
     if (pendingChangeRequests || pendingSignups) {
       badges['clients'] = (pendingChangeRequests?.meta.total ?? 0) + (pendingSignups?.length ?? 0);
     }
@@ -109,7 +106,7 @@ export function useAdminNavBadges(enabled: boolean): Record<string, number> {
       badges['email-inbox'] = pendingEmailCount;
     }
     return badges;
-  }, [data, projectData, pendingChangeRequests, pendingSignups, unreadData, pendingEmailCount]);
+  }, [data, jobs, pendingChangeRequests, pendingSignups, unreadData, pendingEmailCount]);
 }
 
 /**

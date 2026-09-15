@@ -49,8 +49,8 @@ export interface ClientDisplayRecord {
   last_updated_date: string;
   last_updated_time: string;
   status: 'Active' | 'Inactive';
-  accounting: 'Updated CC Required' | 'Hotlisted' | 'Others' | '-';
-  action: 'Send CC Form' | 'Send Payment Reminder' | '-';
+  accounting: 'Updated CC Required' | 'Send CC Form' | 'Hotlisted' | 'Others' | '-';
+  action: 'Send CC Form' | 'Resend CC Form' | 'Send Payment Reminder' | '-';
   isHotlisted?: boolean;
   isActive?: boolean;
   rawClient?: IClient;
@@ -411,12 +411,15 @@ export function ClientRecordsView({
     return apiItems.map((c, idx) => {
       const isHotlisted = c.is_hotlisted;
       const ccSent = !!c.cc_form_sent_at;
+      const ccRequired = !!c.cc_form_required;
       let accountingVal: ClientDisplayRecord['accounting'] = 'Others';
       if (isHotlisted) accountingVal = 'Hotlisted';
       else if (ccSent) accountingVal = 'Updated CC Required';
+      else if (ccRequired) accountingVal = 'Send CC Form';
 
       let actionVal: ClientDisplayRecord['action'] = '-';
-      if (accountingVal === 'Updated CC Required') actionVal = 'Send CC Form';
+      if (accountingVal === 'Updated CC Required') actionVal = 'Resend CC Form';
+      else if (accountingVal === 'Send CC Form') actionVal = 'Send CC Form';
       else if (accountingVal === 'Hotlisted') actionVal = 'Send Payment Reminder';
 
       const joinedSource = c.date || c.created_at;
@@ -499,6 +502,7 @@ export function ClientRecordsView({
       // Accounting
       if (accountingFilter !== 'all') {
         if (accountingFilter === 'updated_cc' && rec.accounting !== 'Updated CC Required') return false;
+        if (accountingFilter === 'send_cc_form' && rec.accounting !== 'Send CC Form') return false;
         if (accountingFilter === 'hotlisted' && rec.accounting !== 'Hotlisted') return false;
         if (accountingFilter === 'others' && rec.accounting !== 'Others') return false;
       }
@@ -580,7 +584,7 @@ export function ClientRecordsView({
   }
 
   function handleQuickAction(rec: ClientDisplayRecord, action: string) {
-    if (action === 'Send CC Form') {
+    if (action === 'Send CC Form' || action === 'Resend CC Form') {
       if (rec.rawClient?.id) {
         sendCcForm.mutate(rec.rawClient.id);
       } else {
@@ -849,6 +853,7 @@ export function ClientRecordsView({
           >
             <option value="all">All</option>
             <option value="updated_cc">Updated CC Required</option>
+            <option value="send_cc_form">Send CC Form</option>
             <option value="hotlisted">Hotlisted</option>
             <option value="others">Others</option>
           </select>
@@ -1140,10 +1145,18 @@ export function ClientRecordsView({
                     <td className="py-2.5 px-2.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <div className="relative inline-block">
                         <select
-                          value={rec.rawClient?.is_hotlisted ? 'hotlisted' : rec.rawClient?.cc_form_sent_at ? 'send_cc_form' : 'others'}
+                          value={
+                            rec.rawClient?.is_hotlisted
+                              ? 'hotlisted'
+                              : rec.rawClient?.cc_form_sent_at
+                              ? 'updated_cc_required'
+                              : rec.rawClient?.cc_form_required
+                              ? 'send_cc_form'
+                              : 'others'
+                          }
                           disabled={setAccountingStatus.isPending || setClientHotlisted.isPending || sendCcForm.isPending}
                           onChange={(e) => {
-                            const val = e.target.value as 'hotlisted' | 'send_cc_form' | 'others';
+                            const val = e.target.value as 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others';
                             setAccountingStatus.mutate({ id: rec.id, status: val });
                           }}
                           className={`h-6 px-2 pr-6 rounded-[4px] text-[10.5px] font-bold border transition shadow-2xs appearance-none cursor-pointer focus:outline-none focus:ring-1 ${
@@ -1151,11 +1164,14 @@ export function ClientRecordsView({
                               ? 'bg-rose-50 text-rose-600 border-rose-200 focus:ring-rose-400'
                               : rec.rawClient?.cc_form_sent_at
                               ? 'bg-purple-50 text-purple-700 border-purple-200 focus:ring-purple-400'
+                              : rec.rawClient?.cc_form_required
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-amber-400'
                               : 'bg-emerald-50 text-emerald-600 border-emerald-200 focus:ring-emerald-400'
                           }`}
                         >
                           <option value="hotlisted" className="bg-white text-rose-600 font-semibold">Hotlisted</option>
-                          <option value="send_cc_form" className="bg-white text-purple-700 font-semibold">Send CC Form</option>
+                          <option value="send_cc_form" className="bg-white text-amber-700 font-semibold">Send CC Form</option>
+                          <option value="updated_cc_required" className="bg-white text-purple-700 font-semibold">Updated CC Required</option>
                           <option value="others" className="bg-white text-slate-700 font-semibold">Others</option>
                         </select>
                         <ChevronDown className="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
@@ -1169,11 +1185,20 @@ export function ClientRecordsView({
                       ) : rec.action === 'Send CC Form' ? (
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-bold border border-purple-300 text-purple-700 bg-purple-50/50 hover:bg-purple-100/70 transition cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-bold border border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-100/70 transition cursor-pointer"
                           onClick={() => handleQuickAction(rec, 'Send CC Form')}
                         >
-                          <Send className="w-3 h-3 text-purple-600" />
+                          <Send className="w-3 h-3 text-amber-600" />
                           <span>Send CC Form</span>
+                        </button>
+                      ) : rec.action === 'Resend CC Form' ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] text-[11px] font-bold border border-purple-300 text-purple-700 bg-purple-50/50 hover:bg-purple-100/70 transition cursor-pointer"
+                          onClick={() => handleQuickAction(rec, 'Resend CC Form')}
+                        >
+                          <RotateCcw className="w-3 h-3 text-purple-600" />
+                          <span>Resend CC Form</span>
                         </button>
                       ) : (
                         <button

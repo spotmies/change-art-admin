@@ -81,7 +81,6 @@ export const NAV_CONFIG = {
           { id: 'deliver', label: 'Ready to Dispatch', to: '/cs/deliver', icon: Truck, badgeAccent: 'teal' },
           { id: 'projects', label: 'All Projects', to: '/cs/projects', icon: ClipboardList },
           { id: 'email-inbox', label: 'Email Inbox', to: '/cs/email-inbox', icon: Mail, badgeAccent: 'red' },
-          { id: 'queue', label: 'Job Queue', to: '/cs/queue', icon: Gauge },
         ],
       },
       {
@@ -103,7 +102,7 @@ export const NAV_CONFIG = {
     ],
     mobile: [
       { id: 'dashboard', label: 'Home', to: '/cs', icon: LayoutDashboard },
-      { id: 'queue', label: 'Queue', to: '/cs/queue', icon: Gauge },
+      { id: 'projects', label: 'Projects', to: '/cs/projects', icon: ClipboardList },
       { id: 'deliver', label: 'Deliver', to: '/cs/deliver', icon: Truck },
       { id: 'create-quote', label: 'Quote', to: '/cs/create-quote', icon: Sparkles },
       { id: 'clients', label: 'Clients', to: '/cs/clients', icon: Users },
@@ -236,7 +235,6 @@ export const NAV_CONFIG = {
           { id: 'deliver',      label: 'Ready to Dispatch', to: '/admin/deliver',                       icon: Truck, badgeAccent: 'teal' },
           { id: 'projects',     label: 'All Projects',     to: '/admin/projects',                       icon: ClipboardList },
           { id: 'email-inbox',  label: 'Email Inbox',      to: '/admin/email-inbox',                    icon: Mail, badgeAccent: 'red' },
-          { id: 'queue',        label: 'Job Queue',        to: '/admin/queue',                          icon: Gauge },
           { id: 'users',        label: 'User Management',  to: '/admin/users',                          icon: ShieldCheck },
         ],
       },

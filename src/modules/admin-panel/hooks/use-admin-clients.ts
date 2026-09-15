@@ -182,17 +182,18 @@ export function useResetClientPassword() {
   });
 }
 
-/** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
+/** Admin/CS: update accounting status (hotlisted, send_cc_form, updated_cc_required, or others). */
 export function useSetClientAccountingStatus() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: 'hotlisted' | 'send_cc_form' | 'others' }) =>
+    mutationFn: ({ id, status }: { id: string; status: 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others' }) =>
       adminService.setClientAccountingStatus(id, status),
     onMutate: async ({ id, status }) => {
       await qc.cancelQueries({ queryKey: ['clients'] });
 
       const isHotlisted = status === 'hotlisted';
-      const isCcForm = status === 'send_cc_form';
+      const isCcRequired = status === 'send_cc_form';
+      const isCcSent = status === 'updated_cc_required';
 
       qc.setQueriesData<any>(
         { queryKey: ['clients'] },
@@ -204,7 +205,8 @@ export function useSetClientAccountingStatus() {
               ...c,
               is_hotlisted: isHotlisted,
               hotlisted_at: isHotlisted ? new Date().toISOString() : null,
-              cc_form_sent_at: isCcForm ? new Date().toISOString() : null,
+              cc_form_required: isCcRequired,
+              cc_form_sent_at: isCcSent ? new Date().toISOString() : null,
             };
           };
 

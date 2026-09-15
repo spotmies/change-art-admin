@@ -57,6 +57,12 @@ export interface JobCardFilters {
   exclude_stage?: string;
   unacknowledged?: boolean;
   include_ack_placed?: boolean;
+  /**
+   * Admin sidebar section bucket — see the backend schema doc for exact
+   * semantics. Replaces statuses/project_type/unacknowledged when set.
+   * 'new_requests': New Requests page. 'quote_awaiting': Quote page.
+   */
+  view?: 'new_requests' | 'quote_awaiting';
 }
 
 export interface ClientFilters {
@@ -140,6 +146,13 @@ export interface UpdateJobCardBody {
   width_inches?: number;
   height_inches?: number;
   fabric?: string;
+  foam_density?: string;
+  chenille_yarn_type?: string;
+  applique_fabric_type?: string;
+  cap_structure?: string;
+  backing_type?: string;
+  monogram_font_style?: string;
+  border_backing_type?: string;
 }
 
 export interface CreateJobCardBody {
@@ -158,6 +171,13 @@ export interface CreateJobCardBody {
   height_inches?: number;
   num_colors?: number;
   fabric?: string;
+  foam_density?: string;
+  chenille_yarn_type?: string;
+  applique_fabric_type?: string;
+  cap_structure?: string;
+  backing_type?: string;
+  monogram_font_style?: string;
+  border_backing_type?: string;
   sewout_required?: boolean;
   description?: string;
   billing_address?: string;
@@ -351,7 +371,7 @@ export const adminService = {
   },
 
   /** Admin/CS: update accounting status (hotlisted, send_cc_form, or others). */
-  setClientAccountingStatus(id: string, status: 'hotlisted' | 'send_cc_form' | 'others'): Promise<IClient> {
+  setClientAccountingStatus(id: string, status: 'hotlisted' | 'send_cc_form' | 'updated_cc_required' | 'others'): Promise<IClient> {
     return apiClient.patch<IClient, { status: string }>(`/api/v1/clients/${id}/accounting-status`, {
       status,
     });

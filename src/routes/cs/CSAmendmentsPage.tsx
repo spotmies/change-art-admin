@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Callout, GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
+import { GreetingHero, JobTable, Pagination, StatGrid } from '@modules/shared-ui';
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 
 const FETCH_SIZE = 200;
@@ -9,28 +9,25 @@ export function CSAmendmentsPage() {
   const { jobs: allData, isLoading, isError } = useAdminJobViews({ per_page: FETCH_SIZE });
   const [page, setPage] = useState(1);
 
-  // Pending = client requested modification, awaiting CS/Admin action
-  const pendingJobs = useMemo(
-    () => allData.filter((j) => j.rawStatus === 'MODIFICATION_REQUESTED'),
-    [allData],
-  );
-
-  // Active amends = modification approved, job is back in the production workflow
+  // A modification request only becomes an Amend project once staff
+  // approves it (workflow action `cs_amend_reroute`, MODIFICATION_REQUESTED
+  // → CS_APPROVED). A request still awaiting that decision lives on New
+  // Requests instead — see job-cards.schemas.ts's `view` doc comment — so
+  // this page only ever shows already-approved amends back in the pipeline.
   const activeAmendJobs = useMemo(
     () => allData.filter((j) => j.project === 'Amend' && j.rawStatus !== 'MODIFICATION_REQUESTED' && j.rawStatus !== 'DELIVERED' && j.rawStatus !== 'CLOSED' && j.rawStatus !== 'CANCELLED'),
     [allData],
   );
 
-  // All amend jobs for stats
-  const allAmendJobs = useMemo(
-    () => allData.filter((j) => j.project === 'Amend' || j.rawStatus === 'MODIFICATION_REQUESTED'),
-    [allData],
+  const readyToDispatchAmends = useMemo(
+    () => activeAmendJobs.filter((j) => j.status === 'Ready to Deliver'),
+    [activeAmendJobs],
   );
 
-  const totalPages = Math.max(1, Math.ceil(allAmendJobs.length / PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(activeAmendJobs.length / PER_PAGE));
   const pageItems = useMemo(
-    () => allAmendJobs.slice((page - 1) * PER_PAGE, page * PER_PAGE),
-    [allAmendJobs, page],
+    () => activeAmendJobs.slice((page - 1) * PER_PAGE, page * PER_PAGE),
+    [activeAmendJobs, page],
   );
 
   if (isError) {
@@ -48,30 +45,23 @@ export function CSAmendmentsPage() {
     <div className="page">
       <GreetingHero
         title="Amendments"
-        subtitle="Client-requested post-delivery changes. Review pending requests, then route approved ones back to production."
+        subtitle="Approved post-delivery changes back in production. New modification requests are reviewed from New Requests first."
       />
 
       <StatGrid
         stats={[
-          { accent: 'crimson', label: 'Pending Requests', value: isLoading ? '…' : pendingJobs.length },
-          { accent: 'blue',    label: 'In Production',    value: isLoading ? '…' : activeAmendJobs.length },
-          { accent: 'green',   label: 'Total Open',       value: isLoading ? '…' : allAmendJobs.length },
-          { accent: 'purple',  label: 'Avg. Turnaround',  value: '6.4h' },
+          { accent: 'blue',   label: 'In Production',    value: isLoading ? '…' : activeAmendJobs.length },
+          { accent: 'teal',   label: 'Ready to Dispatch', value: isLoading ? '…' : readyToDispatchAmends.length },
+          { accent: 'purple', label: 'Avg. Turnaround',  value: '6.4h' },
         ]}
       />
-
-      {pendingJobs.length > 0 && (
-        <Callout tone="amber">
-          {pendingJobs.length} modification request{pendingJobs.length > 1 ? 's' : ''} awaiting action — review and route or reject from the job detail.
-        </Callout>
-      )}
 
       <div className="mt-3">
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
             Loading amendments…
           </div>
-        ) : allAmendJobs.length === 0 ? (
+        ) : activeAmendJobs.length === 0 ? (
           <div className="flex items-center justify-center py-16 text-text-faint text-sm">
             No amendments — all good!
           </div>
@@ -86,7 +76,7 @@ export function CSAmendmentsPage() {
             <Pagination
               page={page}
               totalPages={totalPages}
-              total={allAmendJobs.length}
+              total={activeAmendJobs.length}
               perPage={PER_PAGE}
               onPageChange={setPage}
             />

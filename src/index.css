@@ -3512,21 +3512,43 @@ html[data-theme='light'] .mb-track {
   /* ── Expanded filter panel ── */
   .fjb-panel {
     margin-top: 8px;
-    border: 1.5px solid var(--glass-border);
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
-    padding: 12px 16px;
-    background: var(--glass-bg);
+    padding: 10px 14px;
+    background: #ffffff;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
     animation: fjbSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* ── Filter row — wraps on small screens, single line on md+ ── */
+  html[data-theme='dark'] .fjb-panel {
+    background: rgba(30, 41, 59, 0.75);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ── Filter row — strictly ONE SINGLE HORIZONTAL FLEX LINE ── */
   .fjb-single-row {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
-    /* mobile: items wrap to next line */
     width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .fjb-single-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .fjb-single-row .fjb-select-inner {
+    flex: 1 1 130px;
+    min-width: 100px;
+    max-width: 155px;
+    flex-shrink: 1;
   }
 
   @media (max-width: 640px) {
@@ -3539,26 +3561,25 @@ html[data-theme='light'] .mb-track {
     }
 
     .fjb-single-row .fjb-select-inner {
-      flex: 1 1 45%;
-      min-width: 0;
-      width: 100%;
+      flex: 0 0 auto;
+      min-width: 90px;
+      max-width: 125px;
     }
 
     .fjb-select {
       font-size: 11.5px;
-      padding-left: 10px;
-      padding-right: 24px;
+      padding-left: 8px;
+      padding-right: 22px;
+      height: 36px;
     }
 
     .fjb-chevron {
-      right: 7px;
+      right: 6px;
     }
   }
 
-  /* desktop single-line layout handled in the consolidated @media (min-width: 1024px) block below */
-
   html[data-theme='light'] .fjb-panel {
-    background: #f8fafc;
+    background: #ffffff;
     border-color: #e2e8f0;
   }
 
@@ -3581,9 +3602,6 @@ html[data-theme='light'] .mb-track {
     gap: 8px;
     width: 100%;
   }
-
-
-
 
   /* Individual select field */
   .fjb-select-wrap {
@@ -3610,67 +3628,74 @@ html[data-theme='light'] .mb-track {
 
   .fjb-select {
     width: 100%;
-    height: 36px;
-    padding: 0 32px 0 12px;
+    height: 38px;
+    padding: 0 28px 0 11px;
     font-size: 12.5px;
     font-weight: 500;
     font-family: inherit;
-    border: 1.5px solid var(--glass-border);
-    border-radius: 8px;
-    background: var(--glass-bg);
-    color: var(--text-main);
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    background: #f8fafc;
+    color: #1e293b;
     outline: none;
     appearance: none;
     -webkit-appearance: none;
     cursor: pointer;
-    transition: border-color 0.14s, background 0.14s;
+    transition: all 0.15s ease;
+  }
+
+  .fjb-select:hover {
+    border-color: #94a3b8;
+    background: #ffffff;
   }
 
   html[data-theme='light'] .fjb-select {
-    background: #fff;
+    background: #f8fafc;
+    border-color: #cbd5e1;
   }
 
   .fjb-select:focus,
   .fjb-select:focus-visible {
-    border-color: var(--color-crimson, #6366f1);
+    border-color: #2563eb;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
     outline: none !important;
   }
 
   .fjb-select-inner.active .fjb-select {
-    border-color: var(--color-crimson, #6366f1);
-    background: rgba(99, 102, 241, 0.06);
-    color: var(--color-crimson, #6366f1);
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
     font-weight: 600;
-    padding-right: 52px;
-    /* make room for clear + chevron */
+    padding-right: 50px;
   }
 
   html[data-theme='light'] .fjb-select-inner.active .fjb-select {
-    background: rgba(99, 102, 241, 0.05);
+    background: #eff6ff;
   }
 
   .fjb-chevron {
     position: absolute;
-    right: 10px;
+    right: 9px;
     top: 50%;
     transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    color: var(--text-faint);
+    width: 13px;
+    height: 13px;
+    color: #94a3b8;
     pointer-events: none;
   }
 
   .fjb-select-inner.active .fjb-chevron {
-    color: var(--color-crimson, #6366f1);
-    right: 30px;
+    color: #2563eb;
+    right: 28px;
   }
 
   .fjb-select-clear {
     position: absolute;
-    right: 8px;
+    right: 7px;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(99, 102, 241, 0.12);
+    background: rgba(37, 99, 235, 0.12);
     border: none;
     border-radius: 50%;
     width: 18px;
@@ -3679,26 +3704,26 @@ html[data-theme='light'] .mb-track {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: var(--color-crimson, #6366f1);
-    transition: background 0.12s;
+    color: #2563eb;
+    transition: all 0.12s ease;
   }
 
   .fjb-select-clear:hover {
-    background: rgba(99, 102, 241, 0.24);
+    background: rgba(37, 99, 235, 0.24);
+    transform: translateY(-50%) scale(1.08);
   }
 
-  /* Date range group — From → To as one horizontal unit */
+  /* Date range group — inline pair on single line */
   .fjb-date-group {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 6px;
-    width: 100%;
-    flex: 1 1 100%;
+    flex: 0 0 auto;
     min-width: 0;
+    width: auto;
   }
 
-  /* legacy row helper (used by pill-style bar) */
   .fjb-date-row {
     display: flex;
     align-items: center;
@@ -3706,98 +3731,116 @@ html[data-theme='light'] .mb-track {
   }
 
   .fjb-date-arrow {
-    font-size: 12px;
-    color: var(--text-faint);
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
     flex-shrink: 0;
     user-select: none;
     padding: 0 2px;
   }
 
-  /* Mobile: actions own full-width row */
+  /* Mobile & Desktop: actions container strictly inline */
   .fjb-inline-actions {
     display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
-    width: 100%;
-    justify-content: flex-end;
+    margin-left: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
-  @media (max-width: 640px) {
-    .fjb-date-group {
-      gap: 4px;
-      width: 100%;
-      min-width: 0;
-    }
+  .fjb-apply-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: inherit;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28);
+    flex-shrink: 0;
+    transition: all 0.15s ease-in-out;
+  }
 
-    .fjb-date-wrap {
-      flex: 1 1 0%;
-      min-width: 0;
-      width: 100%;
-    }
+  .fjb-apply-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.38);
+    transform: translateY(-1px);
+  }
 
-    .fjb-date-icon {
-      left: 6px;
-      width: 12px;
-      height: 12px;
-    }
+  .fjb-apply-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
+  }
 
-    .fjb-date-input {
-      font-size: 11px;
-      padding: 0 2px 0 22px;
-      height: 34px;
-    }
+  .fjb-clear-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 38px;
+    padding: 0 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    font-family: inherit;
+    color: #64748b;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease-in-out;
+  }
 
-    .fjb-date-input::-webkit-calendar-picker-indicator {
-      margin: 0;
-      padding: 0;
-      width: 10px;
-      height: 10px;
-    }
+  html[data-theme='dark'] .fjb-clear-btn {
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
 
-    .fjb-date-arrow {
-      font-size: 10px;
-      padding: 0;
-      flex-shrink: 0;
-    }
-
-    .fjb-inline-actions .fjb-clear-btn,
-    .fjb-inline-actions .fjb-apply-btn {
-      flex: 1;
-      justify-content: center;
-      text-align: center;
-    }
+  .fjb-clear-btn:hover {
+    color: #ef4444;
+    border-color: #fca5a5;
+    background: #fef2f2;
   }
 
   .fjb-date-wrap {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 1 1 0%;
-    min-width: 0;
-    width: 100%;
+    flex: 0 0 138px;
+    width: 138px;
+    min-width: 135px;
   }
 
-  /* ── md+ (≥ 1024px accounts for the ~240px sidebar) — single horizontal line ── */
+  /* ── md+ (≥ 1024px) — strictly single horizontal flex line ── */
   @media (min-width: 1024px) {
     .fjb-single-row {
       flex-wrap: nowrap;
       gap: 10px;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
+      overflow-x: visible;
     }
 
     .fjb-single-row .fjb-select-inner {
-      flex: 0 0 152px;
-      width: 152px;
-      min-width: 152px;
+      flex: 1 1 135px;
+      width: auto;
+      min-width: 100px;
+      max-width: 160px;
     }
 
     .fjb-single-row .fjb-select-inner .fjb-select {
-      width: 152px;
-      min-width: 152px;
+      width: 100%;
+      min-width: 100px;
     }
 
     .fjb-date-group {
@@ -3806,24 +3849,23 @@ html[data-theme='light'] .mb-track {
     }
 
     .fjb-date-wrap {
-      flex: 0 0 152px;
-      width: 152px;
+      flex: 0 0 138px;
+      width: 138px;
     }
 
     .fjb-inline-actions {
       width: auto;
-      justify-content: flex-start;
+      justify-content: flex-end;
       margin-left: auto;
-      padding-left: 4px;
     }
   }
 
   .fjb-date-icon {
     position: absolute;
     left: 10px;
-    width: 13px;
-    height: 13px;
-    color: var(--text-faint);
+    width: 14px;
+    height: 14px;
+    color: #94a3b8;
     pointer-events: none;
     z-index: 1;
   }
@@ -3837,44 +3879,54 @@ html[data-theme='light'] .mb-track {
     z-index: auto;
     /* Panel design */
     width: 100%;
-    height: 36px;
-    padding: 0 10px 0 30px;
-    font-size: 12.5px;
+    height: 38px;
+    padding: 0 4px 0 28px;
+    font-size: 12px;
     font-family: inherit;
     font-weight: 500;
-    border: 1.5px solid var(--glass-border);
-    border-radius: 8px;
-    background: var(--glass-bg);
-    color: var(--text-main);
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    background: #f8fafc;
+    color: #1e293b;
     outline: none;
     cursor: pointer;
-    transition: border-color 0.14s;
+    transition: all 0.15s ease;
+  }
+
+  .fjb-date-input:hover {
+    border-color: #94a3b8;
+    background: #ffffff;
   }
 
   html[data-theme='light'] .fjb-date-input {
-    background: #fff;
+    background: #f8fafc;
+    border-color: #cbd5e1;
   }
 
   .fjb-date-input:focus {
-    border-color: var(--color-crimson, #6366f1);
+    border-color: #2563eb;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
   }
 
   .fjb-date-wrap.active .fjb-date-input {
-    border-color: var(--color-crimson, #6366f1);
-    background: rgba(99, 102, 241, 0.06);
-    color: var(--color-crimson, #6366f1);
+    border-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
     font-weight: 600;
   }
 
   .fjb-date-wrap.active .fjb-date-icon {
-    color: var(--color-crimson, #6366f1);
+    color: #2563eb;
   }
 
   .fjb-date-input::-webkit-calendar-picker-indicator {
-    opacity: 0.4;
+    opacity: 0.5;
     cursor: pointer;
     width: 12px;
     height: 12px;
+    padding: 0;
+    margin-right: 2px;
   }
 
   /* Actions row */

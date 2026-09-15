@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   GreetingHero,
-  JobFilterBar,
   JobTable,
   Pagination,
   SectionHeader,
@@ -33,12 +32,9 @@ function mapPriority(p: string): string | undefined {
 }
 
 export function AdminNewQuotesPage() {
-  const [pendingFilters, setPendingFilters]   = useState<JobFilters>(EMPTY_FILTERS);
-  const [awaitingFilters, setAwaitingFilters] = useState<JobFilters>(EMPTY_FILTERS);
-  const [pendingPage, setPendingPage]         = useState(1);
+  const [awaitingFilters] = useState<JobFilters>(EMPTY_FILTERS);
   const [awaitingPage, setAwaitingPage]       = useState(1);
 
-  const debouncedPendingSearch  = useDebounced(pendingFilters.search,  300);
   const debouncedAwaitingSearch = useDebounced(awaitingFilters.search, 300);
 
   // per_page: 500 — populate client filter dropdowns.
@@ -46,34 +42,22 @@ export function AdminNewQuotesPage() {
   const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
 
-  const pendingClientUuid = useMemo(() => {
-    if (!pendingFilters.clientId) return undefined;
-    return clients.find((c) => c.client_id === pendingFilters.clientId)?.id;
-  }, [pendingFilters.clientId, clients]);
-
   const awaitingClientUuid = useMemo(() => {
     if (!awaitingFilters.clientId) return undefined;
     return clients.find((c) => c.client_id === awaitingFilters.clientId)?.id;
   }, [awaitingFilters.clientId, clients]);
 
-  // ── "Pending Your Review" — QUOTE_SUBMITTED jobs, server-side paginated ──
-  const pendingQuery = useAdminJobViews(useMemo(() => ({
-    page: pendingPage,
-    per_page: PER_PAGE,
-    status: 'QUOTE_SUBMITTED',
-    search: debouncedPendingSearch.trim() || undefined,
-    order_type: mapOrderType(pendingFilters.orderType),
-    priority: mapPriority(pendingFilters.priority),
-    client_id: pendingClientUuid,
-    date_from: pendingFilters.dateFrom || undefined,
-    date_to: pendingFilters.dateTo || undefined,
-  }), [pendingPage, debouncedPendingSearch, pendingFilters.orderType, pendingFilters.priority, pendingClientUuid, pendingFilters.dateFrom, pendingFilters.dateTo]));
-
-  // ── "Price Sent — Awaiting Client" — QUOTE_APPROVED jobs, server-side paginated ──
+  // ── "Awaiting Client" / "Awaiting ETA" — server-side paginated ──
+  // QUOTE_SUBMITTED (not yet priced) lives on the New Requests queue
+  // instead. This page covers everything after a price is sent: quotes
+  // awaiting the client's confirmation (QUOTE_APPROVED) AND quotes the
+  // client already confirmed but that are still waiting on staff to send
+  // an ETA (project_type LIVE_QUOTE, JOB_PLACED, unacknowledged) — those
+  // stay here, not on New Requests, until ETA moves them to Live Quote.
   const awaitingQuery = useAdminJobViews(useMemo(() => ({
     page: awaitingPage,
     per_page: PER_PAGE,
-    status: 'QUOTE_APPROVED',
+    view: 'quote_awaiting' as const,
     search: debouncedAwaitingSearch.trim() || undefined,
     order_type: mapOrderType(awaitingFilters.orderType),
     priority: mapPriority(awaitingFilters.priority),
@@ -82,30 +66,21 @@ export function AdminNewQuotesPage() {
     date_to: awaitingFilters.dateTo || undefined,
   }), [awaitingPage, debouncedAwaitingSearch, awaitingFilters.orderType, awaitingFilters.priority, awaitingClientUuid, awaitingFilters.dateFrom, awaitingFilters.dateTo]));
 
-  const pendingPages  = Math.ceil(pendingQuery.total  / PER_PAGE);
   const awaitingPages = Math.ceil(awaitingQuery.total / PER_PAGE);
 
-  const isLoading = pendingQuery.isLoading || awaitingQuery.isLoading;
-  const isError   = pendingQuery.isError   || awaitingQuery.isError;
+  const isLoading = awaitingQuery.isLoading;
+  const isError   = awaitingQuery.isError;
 
   const hasLoadedOnce = useRef(false);
   useEffect(() => { if (!isLoading) hasLoadedOnce.current = true; }, [isLoading]);
   const isFirstLoad = isLoading && !hasLoadedOnce.current;
 
-  function handlePendingFiltersChange(next: JobFilters) {
-    setPendingFilters(next);
-    setPendingPage(1);
-  }
 
-  function handleAwaitingFiltersChange(next: JobFilters) {
-    setAwaitingFilters(next);
-    setAwaitingPage(1);
-  }
 
   if (isError) {
     return (
       <div className="page">
-        <GreetingHero title="Quote Requests" subtitle="Incoming quote requests across all Client Servicing." />
+        <GreetingHero title="Quotes" subtitle="Priced quotes awaiting client confirmation." />
         <div className="flex items-center justify-center py-16 text-[var(--color-crimson)] text-sm">
           Failed to load quotes. Please refresh and try again.
         </div>
@@ -116,14 +91,13 @@ export function AdminNewQuotesPage() {
   return (
     <div className="page">
       <GreetingHero
-        title="Quote Requests"
-        subtitle="Incoming quote requests across all Client Servicing — track turnaround pressure, value, and conversion rate."
+        title="Quotes"
+        subtitle="Quotes your team has priced and sent — waiting on the client to confirm before they go live."
       />
 
       <StatGrid
         stats={[
-          { accent: 'crimson', label: 'Pending Review',  value: isLoading ? '…' : pendingQuery.total },
-          { accent: 'amber',   label: 'Awaiting Client', value: isLoading ? '…' : awaitingQuery.total },
+          { accent: 'amber', label: 'Awaiting Client', value: isLoading ? '…' : awaitingQuery.total },
         ]}
       />
 
@@ -133,59 +107,23 @@ export function AdminNewQuotesPage() {
         </div>
       ) : (
         <>
-          <SectionHeader title="Pending Your Review" />
+          <SectionHeader title="Price Sent — Awaiting Client" />
           <JobTable
-            jobs={pendingQuery.jobs}
+            jobs={awaitingQuery.jobs}
             showActions
             defaultView="grid"
-            emptyLabel="No pending quotes match the current filters."
             quoteView
-            toolbarSlot={
-              <JobFilterBar
-                filters={pendingFilters}
-                onChange={handlePendingFiltersChange}
-                statusOptions={[]}
-                clients={clients}
-              />
-            }
+            emptyLabel="No quotes awaiting client confirmation."
           />
-          {pendingQuery.total > 0 && (
+          {awaitingQuery.total > 0 && (
             <Pagination
-              page={pendingPage}
-              totalPages={pendingPages}
-              total={pendingQuery.total}
+              page={awaitingPage}
+              totalPages={awaitingPages}
+              total={awaitingQuery.total}
               perPage={PER_PAGE}
-              onPageChange={setPendingPage}
+              onPageChange={setAwaitingPage}
             />
           )}
-
-          <div className="mt-6">
-            <SectionHeader title="Price Sent — Awaiting Client" />
-            <JobTable
-              jobs={awaitingQuery.jobs}
-              showActions
-              defaultView="grid"
-              quoteView
-              emptyLabel="No awaiting client quotes match the current filters."
-              toolbarSlot={
-                <JobFilterBar
-                  filters={awaitingFilters}
-                  onChange={handleAwaitingFiltersChange}
-                  statusOptions={[]}
-                  clients={clients}
-                />
-              }
-            />
-            {awaitingQuery.total > 0 && (
-              <Pagination
-                page={awaitingPage}
-                totalPages={awaitingPages}
-                total={awaitingQuery.total}
-                perPage={PER_PAGE}
-                onPageChange={setAwaitingPage}
-              />
-            )}
-          </div>
         </>
       )}
     </div>

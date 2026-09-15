@@ -11,6 +11,7 @@ import {
   JobFilterBar,
   EMPTY_FILTERS,
   JOB_STATUS_OPTIONS,
+  IN_PRODUCTION_STATUSES,
   applyJobFilters,
   type CsStatCardProps,
   type PillItem,
@@ -34,6 +35,7 @@ import {
 import { useAdminJobViews } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { usePendingEmailCount } from '../../modules/admin-panel/hooks/use-admin-badges';
+import { isPipelineActive, isQuoteAwaitingClient } from '../../modules/admin-panel/adapters/job-view';
 import { isJobEtaExpired } from '@lib/utils';
 
 const PER_PAGE = 12;
@@ -63,13 +65,30 @@ export function CSDashboardPage() {
   const clientsQuery = useAdminClients({ per_page: 500 });
   const clients = clientsQuery.data?.items ?? [];
 
-  const live = useMemo(() => allJobs.filter((j) => j.project === 'Live'), [allJobs]);
-  const liveQuote = useMemo(() => allJobs.filter((j) => j.project === 'Live Quote'), [allJobs]);
-  const quote = useMemo(() => allJobs.filter((j) => j.project === 'Quote'), [allJobs]);
+  const live = useMemo(() => allJobs.filter((j) => j.project === 'Live' && isPipelineActive(j)), [allJobs]);
+  const liveQuote = useMemo(() => allJobs.filter((j) => j.project === 'Live Quote' && isPipelineActive(j)), [allJobs]);
+  // Quote requests not yet priced, or a fresh direct order not yet
+  // acknowledged (New Requests) vs. priced-and-awaiting-confirmation OR
+  // confirmed-but-awaiting-ETA (the "Quote" section proper) — a confirmed
+  // quote is tagged `project: 'Live Quote'` but stays 'Pending' until ETA,
+  // so it must be excluded here even though its status looks the same as
+  // a fresh direct order's.
+  const newRequests = useMemo(
+    () => allJobs.filter((j) => (j.status === 'Pending' && j.project !== 'Live Quote') || j.status === 'Quote Submitted'),
+    [allJobs],
+  );
+  const quote = useMemo(() => allJobs.filter(isQuoteAwaitingClient), [allJobs]);
   const amend = useMemo(() => allJobs.filter((j) => j.project === 'Amend'), [allJobs]);
-  const inProduction = useMemo(() => allJobs.filter((j) => j.status === 'In Production'), [allJobs]);
+  const inProduction = useMemo(() => allJobs.filter((j) => IN_PRODUCTION_STATUSES.includes(j.status) && !isJobEtaExpired(j)), [allJobs]);
   const readyToDispatch = useMemo(
-    () => allJobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)),
+    () =>
+      allJobs
+        .filter((j) => (j.status === 'Ready to Deliver' || isJobEtaExpired(j)) && j.status !== 'On Hold')
+        .map((j) =>
+          isJobEtaExpired(j) && j.status !== 'Dispatched'
+            ? { ...j, status: 'Ready to Deliver' as const, stage: 'delivered' as const }
+            : j
+        ),
     [allJobs],
   );
   const missedDeadlines = useMemo(() => allJobs.filter((j) => isJobEtaExpired(j)).length, [allJobs]);
@@ -167,7 +186,7 @@ export function CSDashboardPage() {
     {
       accent: 'cs-teal',
       tag: 'Ready to Dispatch',
-      description: 'Upload & Dispatch',
+      description: 'Ready to Dispatch',
       value: readyToDispatch.length,
       statusText: 'Ready to Send',
       icon: <Send />,
@@ -176,7 +195,7 @@ export function CSDashboardPage() {
   ];
 
   const overviewItems: OverviewItem[] = [
-    { id: 'new-requests', label: 'New Requests', value: quote.length, href: '/cs/new-quotes', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
+    { id: 'new-requests', label: 'New Requests', value: newRequests.length, href: '/cs/new-jobs', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
     { id: 'waiting-assignment', label: 'Waiting Assignment', value: live.length + liveQuote.length, href: '/cs/projects?project=Live', icon: <Briefcase className="w-3.5 h-3.5" />, accent: '#22c55e' },
     { id: 'waiting-reply', label: 'Waiting Client Reply', value: quote.length, href: '/cs/new-quotes', icon: <MessageSquareText className="w-3.5 h-3.5" />, accent: '#a855f7' },
     { id: 'in-production', label: 'In Production', value: inProduction.length, href: '/cs/projects?filter=In+Production', icon: <Cog className="w-3.5 h-3.5" />, accent: '#f97316' },

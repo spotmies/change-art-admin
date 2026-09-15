@@ -12,6 +12,7 @@ import {
   JobFilterBar,
   EMPTY_FILTERS,
   JOB_STATUS_OPTIONS,
+  IN_PRODUCTION_STATUSES,
   applyJobFilters,
   type PillItem,
   type OverviewItem,
@@ -25,6 +26,7 @@ import {
 } from '../../modules/admin-panel/hooks/use-admin-jobs';
 import { useAdminClients } from '../../modules/admin-panel/hooks/use-admin-clients';
 import { usePendingEmailCount } from '../../modules/admin-panel/hooks/use-admin-badges';
+import { isPipelineActive, isQuoteAwaitingClient } from '../../modules/admin-panel/adapters/job-view';
 import { getCardExpiryStatus, resolveClientCardExpiry } from '@lib/card-expiry';
 
 const PER_PAGE = 12;
@@ -58,13 +60,30 @@ export function AdminDashboardPage() {
   const expiredCount = expiringCards.filter((c) => c.status === 'expired').length;
   const expiringSoonCount = expiringCards.filter((c) => c.status === 'expiring_soon').length;
 
-  const live = useMemo(() => jobs.filter((j) => j.project === 'Live'), [jobs]);
-  const liveQuote = useMemo(() => jobs.filter((j) => j.project === 'Live Quote'), [jobs]);
-  const quote = useMemo(() => jobs.filter((j) => j.project === 'Quote'), [jobs]);
+  const live = useMemo(() => jobs.filter((j) => j.project === 'Live' && isPipelineActive(j)), [jobs]);
+  const liveQuote = useMemo(() => jobs.filter((j) => j.project === 'Live Quote' && isPipelineActive(j)), [jobs]);
+  // Quote requests not yet priced, or a fresh direct order not yet
+  // acknowledged (New Requests) vs. priced-and-awaiting-confirmation OR
+  // confirmed-but-awaiting-ETA (the "Quote" section proper) — a confirmed
+  // quote is tagged `project: 'Live Quote'` but stays 'Pending' until ETA,
+  // so it must be excluded here even though its status looks the same as
+  // a fresh direct order's.
+  const newRequests = useMemo(
+    () => jobs.filter((j) => (j.status === 'Pending' && j.project !== 'Live Quote') || j.status === 'Quote Submitted'),
+    [jobs],
+  );
+  const quote = useMemo(() => jobs.filter(isQuoteAwaitingClient), [jobs]);
   const amend = useMemo(() => jobs.filter((j) => j.project === 'Amend'), [jobs]);
-  const inProduction = useMemo(() => jobs.filter((j) => j.status === 'In Production'), [jobs]);
+  const inProduction = useMemo(() => jobs.filter((j) => IN_PRODUCTION_STATUSES.includes(j.status) && !isJobEtaExpired(j)), [jobs]);
   const readyToDispatch = useMemo(
-    () => jobs.filter((j) => j.status === 'Ready to Deliver' || isJobEtaExpired(j)),
+    () =>
+      jobs
+        .filter((j) => (j.status === 'Ready to Deliver' || isJobEtaExpired(j)) && j.status !== 'On Hold')
+        .map((j) =>
+          isJobEtaExpired(j) && j.status !== 'Dispatched'
+            ? { ...j, status: 'Ready to Deliver' as const, stage: 'delivered' as const }
+            : j
+        ),
     [jobs],
   );
   const missedDeadlines = useMemo(() => jobs.filter((j) => isJobEtaExpired(j)).length, [jobs]);
@@ -112,7 +131,7 @@ export function AdminDashboardPage() {
   );
 
   const overviewItems: OverviewItem[] = [
-    { id: 'new-requests', label: 'New Requests', value: quote.length, href: '/admin/new-quotes', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
+    { id: 'new-requests', label: 'New Requests', value: newRequests.length, href: '/admin/new-jobs', icon: <User className="w-3.5 h-3.5" />, accent: '#3b82f6' },
     { id: 'waiting-assignment', label: 'Waiting Assignment', value: live.length + liveQuote.length, href: '/admin/projects?project=Live', icon: <Briefcase className="w-3.5 h-3.5" />, accent: '#22c55e' },
     { id: 'waiting-reply', label: 'Waiting Client Reply', value: quote.length, href: '/admin/projects?project=Quote', icon: <MessageSquareText className="w-3.5 h-3.5" />, accent: '#a855f7' },
     { id: 'in-production', label: 'In Production', value: inProduction.length, href: '/admin/jobs?filter=In+Production', icon: <Cog className="w-3.5 h-3.5" />, accent: '#f97316' },
@@ -193,7 +212,7 @@ export function AdminDashboardPage() {
           {
             accent: 'cs-teal',
             tag: 'Ready to Dispatch',
-            description: 'Upload & Dispatch',
+            description: 'Ready to Dispatch',
             value: loading(readyToDispatch.length),
             statusText: 'Ready to Send',
             icon: <Send />,

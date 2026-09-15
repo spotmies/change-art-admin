@@ -26,6 +26,17 @@ export function formatCurrency(
   }).format(n);
 }
 
+/** Convert a 24-hour "HH:MM" (a shift's start_time/end_time) into "h:MM AM/PM". Falls back to the raw value if it doesn't parse. */
+export function formatShiftTime(value: string): string {
+  const match = /^(\d{2}):(\d{2})/.exec(value);
+  if (!match) return value;
+  const hour24 = Number(match[1]);
+  const minute = match[2];
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${minute} ${period}`;
+}
+
 /**
  * Convert an `IsoDateTime` string into the user's local formatted string.
  * Returns "—" for null/empty inputs so tables never render "Invalid Date".
@@ -110,8 +121,14 @@ export function isJobEtaExpired(job: {
   created?: string | Date | null;
 }): boolean {
   // A held, dispatched, cancelled, or delivered job is completed/inactive — it cannot be expired or overdue.
+  // A pending modification request is also excluded: `acknowledgedAt`/
+  // `etaHours` here are leftovers from the job's original production run
+  // before it was delivered, so they're stale until staff approves the
+  // request and it re-enters production with a fresh ETA cycle.
   if (
     job.rawStatus === 'HOLD' ||
+    job.status === 'On Hold' ||
+    job.rawStatus === 'MODIFICATION_REQUESTED' ||
     job.status === 'Dispatched' ||
     job.status === 'Cancelled' ||
     job.stage === 'delivered'
